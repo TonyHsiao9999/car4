@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, send_file
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
@@ -126,6 +126,13 @@ def index():
 def reserve():
     success = make_reservation()
     return jsonify({"success": success})
+
+@app.route('/error-screenshot')
+def error_screenshot():
+    try:
+        return send_file('/app/error.png', mimetype='image/png')
+    except Exception as e:
+        return jsonify({"error": "找不到截圖檔案"}), 404
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080))) 
