@@ -5,7 +5,6 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from webdriver_manager.chrome import ChromeDriverManager
 import time
 import os
 from dotenv import load_dotenv
@@ -17,8 +16,11 @@ def setup_driver():
     chrome_options.add_argument('--headless')
     chrome_options.add_argument('--no-sandbox')
     chrome_options.add_argument('--disable-dev-shm-usage')
-    
-    service = Service(ChromeDriverManager().install())
+    chrome_options.add_argument('--disable-gpu')
+    chrome_options.add_argument('--window-size=1920,1080')
+    # chrome_options.add_argument('user-agent=Mozilla/5.0 ...') # 如需偽裝user-agent可取消註解
+
+    service = Service('/usr/bin/chromedriver')
     driver = webdriver.Chrome(service=service, options=chrome_options)
     return driver
 
@@ -108,7 +110,8 @@ def make_reservation():
         return True
         
     except Exception as e:
-        print(f"發生錯誤: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
         return False
         
     finally:
