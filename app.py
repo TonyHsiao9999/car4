@@ -28,13 +28,14 @@ def setup_driver():
 def make_reservation():
     driver = setup_driver()
     try:
-        # 1. 連線到網站
         driver.get("https://www.ntpc.ltc-car.org/")
-        
-        # 2. 點擊「我知道了」
-        WebDriverWait(driver, 30).until(
+        # 等待並用 JS 點擊「我知道了」
+        button = WebDriverWait(driver, 30).until(
             EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), '我知道了')]"))
-        ).click()
+        )
+        driver.save_screenshot('/app/before_click.png')
+        driver.execute_script("arguments[0].click();", button)
+        driver.save_screenshot('/app/after_click.png')
         
         # 3. 輸入登入資訊
         id_input = WebDriverWait(driver, 10).until(
@@ -133,6 +134,20 @@ def reserve():
 def error_screenshot():
     try:
         return send_file('/app/error.png', mimetype='image/png')
+    except Exception as e:
+        return jsonify({"error": "找不到截圖檔案"}), 404
+
+@app.route('/before-click')
+def before_click():
+    try:
+        return send_file('/app/before_click.png', mimetype='image/png')
+    except Exception as e:
+        return jsonify({"error": "找不到截圖檔案"}), 404
+
+@app.route('/after-click')
+def after_click():
+    try:
+        return send_file('/app/after_click.png', mimetype='image/png')
     except Exception as e:
         return jsonify({"error": "找不到截圖檔案"}), 404
 
