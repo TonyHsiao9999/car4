@@ -32,7 +32,7 @@ def make_reservation():
         driver.get("https://www.ntpc.ltc-car.org/")
         
         # 2. 點擊「我知道了」
-        WebDriverWait(driver, 10).until(
+        WebDriverWait(driver, 30).until(
             EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), '我知道了')]"))
         ).click()
         
@@ -113,6 +113,8 @@ def make_reservation():
     except Exception as e:
         import traceback
         print(traceback.format_exc())
+        driver.save_screenshot('/app/error.png')
+        print("error.png exists:", os.path.exists('/app/error.png'))
         return False
         
     finally:
