@@ -5,12 +5,18 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 from .config import USER_AGENT, WAIT_TIMES
+import os
+import time
 
-def setup_driver():
+def setup_driver(test_mode=False):
     """設置並返回 Chrome WebDriver"""
     chrome_options = Options()
     chrome_options.add_argument(f'user-agent={USER_AGENT}')
-    chrome_options.add_argument('--headless')
+    
+    # 測試模式下不使用無頭模式
+    if not test_mode:
+        chrome_options.add_argument('--headless')
+    
     chrome_options.add_argument('--no-sandbox')
     chrome_options.add_argument('--disable-dev-shm-usage')
     
@@ -19,7 +25,17 @@ def setup_driver():
     driver.set_window_size(1920, 1080)
     return driver
 
-def print_debug_info(driver, locator, error=None):
+def take_screenshot(driver, step_name):
+    """擷取螢幕截圖"""
+    if not os.path.exists('screenshots'):
+        os.makedirs('screenshots')
+    
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    filename = f"screenshots/{step_name}_{timestamp}.png"
+    driver.save_screenshot(filename)
+    print(f"已儲存截圖: {filename}")
+
+def print_debug_info(driver, locator, error=None, take_screenshot_on_error=True):
     """印出除錯資訊，限制輸出長度"""
     print("\n=== 除錯資訊 ===")
     print(f"當前頁面標題: {driver.title}")
@@ -28,6 +44,8 @@ def print_debug_info(driver, locator, error=None):
     
     if error:
         print(f"錯誤訊息: {error}")
+        if take_screenshot_on_error:
+            take_screenshot(driver, f"error_{locator[1]}")
     
     # 印出頁面中所有按鈕的數量
     buttons = driver.find_elements("tag name", "button")

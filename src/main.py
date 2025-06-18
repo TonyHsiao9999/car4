@@ -8,10 +8,11 @@ def main():
     parser.add_argument('--password', required=True, help='生日密碼')
     parser.add_argument('--date', required=True, help='預約日期 (YYYY-MM-DD)')
     parser.add_argument('--time', required=True, help='預約時間')
+    parser.add_argument('--test', action='store_true', help='啟用測試模式（顯示瀏覽器視窗）')
     
     args = parser.parse_args()
     
-    driver = setup_driver()
+    driver = setup_driver(test_mode=args.test)
     bot = ReservationBot(driver)
     
     try:
