@@ -905,86 +905,111 @@ def make_reservation():
                 # 等待頁面響應下車地點選擇
                 driver['page'].wait_for_timeout(1500)
                 
-                # 尋找住家地址輸入框
+                # 尋找下車地點地址輸入框（注意：要避開上車地點的地址框）
                 address_input = None
-                address_selectors = [
-                    # 下車地點相關的地址輸入框
-                    'input[placeholder*="地址"]',
-                    'input[placeholder*="住址"]', 
-                    'input[placeholder*="目的地"]',
-                    'input[placeholder*="下車地點"]',
-                    'input[name*="dropoff"]',
-                    'input[name*="destination"]',
-                    'input[name*="address"]',
-                    'input[name*="home"]',
-                    'input[id*="dropoff"]',
-                    'input[id*="destination"]',
-                    'input[id*="address"]',
-                    'input[id*="home"]',
+                
+                # 更精確的下車地點地址框選擇器
+                dropoff_address_selectors = [
+                    # 明確的下車地點地址框
+                    'input[name*="getOff"][name*="address"]',
+                    'input[name*="dropoff"][name*="address"]',
+                    'input[name*="destination"][name*="address"]',
+                    'input[id*="getOff"][id*="address"]',
+                    'input[id*="dropoff"][id*="address"]',
+                    'input[id*="destination"][id*="address"]',
                     
-                    # 通用地址輸入框（通常在下車地點選擇後出現）
-                    'input[type="text"]:nth-of-type(2)',  # 第二個文字輸入框
-                    'input[type="text"]:last-of-type',    # 最後一個文字輸入框
-                    'form input[type="text"]:nth-of-type(2)'
+                    # 根據位置關係找到下車地點附近的地址框
+                    '#getOff_location + input',  # getOff_location 選單後面的輸入框
+                    '#getOff_location ~ input',  # getOff_location 選單同級的輸入框
+                    'select[name="getOff_location"] + input',
+                    'select[name="getOff_location"] ~ input',
                 ]
                 
-                print("尋找住家地址輸入框...")
-                for selector in address_selectors:
+                print("尋找下車地點地址輸入框...")
+                for selector in dropoff_address_selectors:
                     try:
+                        print(f"嘗試下車地點地址選擇器: {selector}")
                         elements = driver['page'].locator(selector).all()
+                        
                         for i, element in enumerate(elements):
                             if element.is_visible() and element.is_enabled():
                                 placeholder = element.get_attribute('placeholder') or ''
                                 name = element.get_attribute('name') or ''
                                 id_attr = element.get_attribute('id') or ''
                                 
-                                print(f"找到地址輸入框候選 {selector}[{i}]: placeholder='{placeholder}', name='{name}', id='{id_attr}'")
+                                print(f"找到地址輸入框 {selector}[{i}]: placeholder='{placeholder}', name='{name}', id='{id_attr}'")
                                 
-                                # 檢查是否為住家/下車地點相關的輸入框
-                                if any(keyword in (placeholder + name + id_attr).lower() 
-                                      for keyword in ['地址', '住址', '目的地', '下車', 'dropoff', 'destination', 'address', 'home']):
-                                    # 檢查輸入框是否為空（應該等待自動填入）
-                                    current_value = element.input_value() or ''
-                                    print(f"地址輸入框當前值: '{current_value}'")
-                                    
-                                    if not current_value.strip():
-                                        print(f"地址輸入框為空，等待自動填入...")
-                                        address_input = element
-                                        break
-                                    else:
-                                        print(f"地址輸入框已有值: '{current_value}'")
-                                        address_input = element
-                                        break
+                                # 確保不是上車地點的地址框
+                                if not any(keyword in (name + id_attr).lower() 
+                                          for keyword in ['pickup', 'pickUp', 'origin', 'from', 'start']):
+                                    address_input = element
+                                    print(f"✅ 確認為下車地點地址框: {selector}[{i}]")
+                                    break
+                                else:
+                                    print(f"❌ 跳過上車地點地址框: {selector}[{i}]")
                         
                         if address_input:
                             break
                             
                     except Exception as e:
-                        print(f"檢查地址輸入框選擇器 {selector} 失敗: {e}")
+                        print(f"檢查下車地點地址選擇器 {selector} 失敗: {e}")
                         continue
                 
-                if address_input:
-                    print("找到住家地址輸入框，檢查自動填入狀態...")
+                # 如果沒找到明確的下車地點地址框，使用通用方法但更謹慎
+                if not address_input:
+                    print("未找到明確的下車地點地址框，檢查所有可見地址輸入框...")
                     
-                    # 等待可能的自動填入
-                    max_wait_attempts = 10
+                    all_inputs = driver['page'].locator('input[type="text"]').all()
+                    for i, element in enumerate(all_inputs):
+                        try:
+                            if element.is_visible() and element.is_enabled():
+                                placeholder = element.get_attribute('placeholder') or ''
+                                name = element.get_attribute('name') or ''
+                                id_attr = element.get_attribute('id') or ''
+                                
+                                print(f"輸入框 {i}: placeholder='{placeholder}', name='{name}', id='{id_attr}'")
+                                
+                                # 檢查是否可能是地址框，但不是上車地點的
+                                is_address_like = any(keyword in (placeholder + name + id_attr).lower() 
+                                                    for keyword in ['地址', '住址', 'address'])
+                                is_pickup_related = any(keyword in (name + id_attr).lower() 
+                                                      for keyword in ['pickup', 'pickUp', 'origin', 'from', 'start'])
+                                
+                                if is_address_like and not is_pickup_related:
+                                    # 額外檢查：如果是第二個或之後的地址框，更可能是下車地點
+                                    if i > 0:  # 不是第一個輸入框
+                                        address_input = element
+                                        print(f"✅ 選擇第 {i} 個地址框作為下車地點地址框")
+                                        break
+                        except Exception as e:
+                            print(f"檢查輸入框 {i} 失敗: {e}")
+                            continue
+                
+                if address_input:
+                    print("找到下車地點地址輸入框，檢查自動填入狀態...")
+                    
+                    # 只檢查自動填入狀態，不手動填入
+                    max_wait_attempts = 8
                     auto_filled = False
                     
                     for attempt in range(max_wait_attempts):
                         try:
                             current_value = address_input.input_value() or ''
-                            print(f"等待自動填入 {attempt+1}/{max_wait_attempts}: 當前值='{current_value}'")
+                            print(f"檢查自動填入 {attempt+1}/{max_wait_attempts}: 當前值='{current_value}'")
                             
-                            if current_value.strip() and len(current_value.strip()) > 5:
-                                print(f"✅ 住家地址已自動填入: '{current_value}'")
+                            # 如果有值且長度合理，認為是自動填入成功
+                            if current_value.strip() and len(current_value.strip()) > 3:
+                                print(f"✅ 下車地點地址已自動填入: '{current_value}'")
                                 auto_filled = True
                                 break
                             
-                            # 嘗試觸發自動填入
+                            # 輕微觸發檢查（但不填入值）
                             if attempt < 3:
-                                print(f"嘗試觸發自動填入...")
-                                address_input.click()
-                                driver['page'].wait_for_timeout(500)
+                                try:
+                                    address_input.click()
+                                    driver['page'].wait_for_timeout(500)
+                                except:
+                                    pass
                                 
                             driver['page'].wait_for_timeout(1000)
                             
@@ -992,38 +1017,20 @@ def make_reservation():
                             print(f"檢查自動填入狀態失敗: {e}")
                             driver['page'].wait_for_timeout(1000)
                     
-                    # 如果沒有自動填入，手動填入預設住家地址
-                    if not auto_filled:
-                        print("⚠️ 住家地址沒有自動填入，嘗試手動填入預設地址...")
-                        try:
-                            # 使用預設住家地址
-                            default_home_address = "新北市板橋區文化路一段266號"
-                            
-                            address_input.click()
-                            driver['page'].wait_for_timeout(500)
-                            address_input.clear()
-                            driver['page'].wait_for_timeout(500)
-                            address_input.fill(default_home_address)
-                            driver['page'].wait_for_timeout(1000)
-                            
-                            # 驗證填入
-                            final_value = address_input.input_value() or ''
-                            if default_home_address in final_value:
-                                print(f"✅ 手動填入住家地址成功: '{final_value}'")
-                            else:
-                                print(f"⚠️ 手動填入可能不完整: '{final_value}'")
-                                
-                        except Exception as e:
-                            print(f"❌ 手動填入住家地址失敗: {e}")
-                    
-                    take_screenshot("home_address_filled")
+                    if auto_filled:
+                        print("✅ 下車地點地址自動填入正常")
+                        take_screenshot("dropoff_address_auto_filled")
+                    else:
+                        print("⚠️ 下車地點地址未自動填入，但這可能是正常情況")
+                        take_screenshot("dropoff_address_empty")
+                        
+                        # 檢查是否真的需要地址（有些情況下選擇住家就夠了）
+                        final_value = address_input.input_value() or ''
+                        print(f"最終地址框狀態: '{final_value}'")
                     
                 else:
-                    print("⚠️ 未找到住家地址輸入框")
-                    take_screenshot("no_address_input_found")
-                
-            else:
-                print("⚠️ 下車地點'住家'選擇失敗")
+                    print("⚠️ 未找到下車地點地址輸入框，可能系統不需要手動輸入地址")
+                    take_screenshot("no_dropoff_address_input_found")
             
             take_screenshot("dropoff_location_final")
             
