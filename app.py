@@ -31,13 +31,24 @@ def make_reservation():
     try:
         driver.get("https://www.ntpc.ltc-car.org/")
         print("已載入網頁，等待「我知道了」按鈕...")
+        WebDriverWait(driver, 30).until(
+            lambda d: d.execute_script("return document.readyState") == "complete"
+        )
         driver.save_screenshot('/app/before_wait.png')
-        buttons = driver.find_elements(By.XPATH, "//button")
-        print("找到按鈕數量：", len(buttons))
-        for button in buttons:
-            print(button.text)
+        elements = driver.find_elements(By.XPATH, "//*[contains(text(), '我知道了')]")
+        print("找到元素數量：", len(elements))
+        for element in elements:
+            print(element.tag_name, element.text)
+        iframes = driver.find_elements(By.TAG_NAME, "iframe")
+        for iframe in iframes:
+            driver.switch_to.frame(iframe)
+            elements = driver.find_elements(By.XPATH, "//*[contains(text(), '我知道了')]")
+            if elements:
+                print("在 iframe 中找到「我知道了」")
+                break
+            driver.switch_to.default_content()
         button = WebDriverWait(driver, 30).until(
-            EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), '我知道了')]"))
+            EC.element_to_be_clickable((By.XPATH, "//*[contains(text(), '我知道了')]"))
         )
         print("找到「我知道了」按鈕，準備點擊...")
         driver.save_screenshot('/app/before_click.png')
