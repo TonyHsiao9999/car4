@@ -55,35 +55,34 @@ def make_reservation():
         driver.execute_script("arguments[0].click();", button)
         print("已點擊「我知道了」按鈕...")
         driver.save_screenshot('/app/after_click.png')
-        
-        # 3. 輸入登入資訊
+
+        # 3. 輸入身分證字號A102574899，密碼visi319VISI，然後點擊「民眾登入」
         id_input = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.ID, "id"))
         )
         id_input.send_keys("A102574899")
-        
         password_input = driver.find_element(By.ID, "password")
         password_input.send_keys("visi319VISI")
-        
         login_button = driver.find_element(By.XPATH, "//button[contains(text(), '民眾登入')]")
         login_button.click()
-        
-        # 4. 點擊「登入成功」確定
+
+        # 4. 看到「登入成功」，點擊「確定」
         WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), '確定')]"))
         ).click()
-        
+
         # 5. 點擊「新增預約」
         WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), '新增預約')]"))
         ).click()
-        
-        # 6-7. 選擇上車地點
+
+        # 6. 上車地點請下拉選擇「醫療院所」
         pickup_type = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.ID, "pickupType"))
         )
         pickup_type.send_keys("醫療院所")
-        
+
+        # 7. 右邊的文字欄位輸入「亞東紀念醫院」，然後文字欄位下方會有Google搜尋結果，點擊第一個結果
         pickup_location = driver.find_element(By.ID, "pickupLocation")
         pickup_location.send_keys("亞東紀念醫院")
         time.sleep(2)  # 等待搜尋結果
@@ -91,52 +90,66 @@ def make_reservation():
             EC.element_to_be_clickable((By.CSS_SELECTOR, ".pac-item"))
         )
         first_result.click()
-        
-        # 8. 選擇下車地點
+
+        # 8. 下車地點請下拉選擇「住家」
         dropoff_type = driver.find_element(By.ID, "dropoffType")
         dropoff_type.send_keys("住家")
-        
-        # 9. 選擇預約時間
+
+        # 9. 預約日期/時段請下拉選擇最後一個選項，右邊請下拉選擇16，再往右邊請下拉選擇40
         date_select = driver.find_element(By.ID, "date")
         date_select.send_keys("最後一個選項")
-        
         hour_select = driver.find_element(By.ID, "hour")
         hour_select.send_keys("16")
-        
         minute_select = driver.find_element(By.ID, "minute")
         minute_select.send_keys("40")
-        
-        # 10-14. 填寫其他選項
-        driver.find_element(By.ID, "flexibleTime").send_keys("不同意")
-        driver.find_element(By.ID, "companionCount").send_keys("1人(免費)")
-        driver.find_element(By.ID, "shareRide").send_keys("否")
-        driver.find_element(By.ID, "wheelchair").send_keys("是")
-        driver.find_element(By.ID, "largeWheelchair").send_keys("否")
-        
-        # 15. 點擊下一步
-        next_button = driver.find_element(By.XPATH, "//button[contains(text(), '下一步，確認預約資訊')]")
-        next_button.click()
-        
-        # 16. 送出預約
-        submit_button = WebDriverWait(driver, 10).until(
+
+        # 10. 於預約時間前後30分鐘到達 選擇「不同意」
+        WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.XPATH, "//input[@value='不同意']"))
+        ).click()
+
+        # 11. 陪同人數 下拉選擇「1人(免費)」
+        companion_select = driver.find_element(By.ID, "companion")
+        companion_select.send_keys("1人(免費)")
+
+        # 12. 同意共乘 選擇「否」
+        WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.XPATH, "//input[@value='否']"))
+        ).click()
+
+        # 13. 搭乘輪椅上車 選擇「是」
+        WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.XPATH, "//input[@value='是']"))
+        ).click()
+
+        # 14. 大型輪椅 選擇「否」
+        WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.XPATH, "//input[@value='否']"))
+        ).click()
+
+        # 15. 點擊「下一步，確認預約資訊」按鈕
+        WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), '下一步，確認預約資訊')]"))
+        ).click()
+
+        # 16. 新的頁面點擊「送出預約」
+        WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), '送出預約')]"))
+        ).click()
+
+        # 17. 跳出「已完成預約」畫面，表示完成
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.XPATH, "//*[contains(text(), '已完成預約')]"))
         )
-        submit_button.click()
-        
-        # 17. 確認預約完成
-        success_message = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.XPATH, "//div[contains(text(), '已完成預約')]"))
-        )
-        
+        print("已完成預約")
         return True
-        
     except Exception as e:
         import traceback
         print(traceback.format_exc())
         driver.save_screenshot('/app/error.png')
+        import os
         print("error.png exists:", os.path.exists('/app/error.png'))
         return False
-        
     finally:
         driver.quit()
 
