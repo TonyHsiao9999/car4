@@ -544,7 +544,7 @@ def make_reservation():
             driver.save_screenshot('/app/login_button_error.png')
             return False
 
-        # 點擊「新增預約」
+        # 等待「新增預約」按鈕出現
         print("等待「新增預約」按鈕...")
         try:
             # 等待一下確保頁面完全載入
@@ -552,89 +552,140 @@ def make_reservation():
             
             # 方法1：使用 XPath 尋找按鈕
             try:
-                new_reservation_button = WebDriverWait(driver, 10).until(
-                    EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), '新增預約')]"))
-                )
-                print("使用 XPath 找到「新增預約」按鈕")
+                reserve_buttons = driver.find_elements(By.XPATH, "//button[contains(text(), '新增預約')]")
+                for button in reserve_buttons:
+                    if button.is_displayed():
+                        reserve_button = button
+                        print("XPath 方式找到「新增預約」按鈕")
+                        break
             except:
                 print("XPath 方式找不到「新增預約」按鈕")
-                new_reservation_button = None
             
             # 方法2：使用 CSS 選擇器尋找按鈕
-            if not new_reservation_button:
+            if not reserve_button:
                 try:
-                    new_reservation_button = WebDriverWait(driver, 10).until(
-                        EC.element_to_be_clickable((By.CSS_SELECTOR, "button.btn-primary"))
-                    )
-                    print("使用 CSS 選擇器找到「新增預約」按鈕")
+                    reserve_buttons = driver.find_elements(By.CSS_SELECTOR, "button.btn-primary, button.btn-default, button.btn")
+                    for button in reserve_buttons:
+                        if button.is_displayed() and "新增預約" in button.text:
+                            reserve_button = button
+                            print("CSS 選擇器方式找到「新增預約」按鈕")
+                            break
                 except:
                     print("CSS 選擇器方式找不到「新增預約」按鈕")
             
-            # 方法3：尋找所有按鈕並檢查文字
-            if not new_reservation_button:
+            # 方法3：尋找所有按鈕
+            if not reserve_button:
                 try:
                     buttons = driver.find_elements(By.TAG_NAME, "button")
                     for button in buttons:
-                        if "新增預約" in button.text and button.is_displayed():
-                            new_reservation_button = button
-                            print("通過按鈕文字找到「新增預約」按鈕")
+                        if button.is_displayed() and "新增預約" in button.text:
+                            reserve_button = button
+                            print("找到「新增預約」按鈕")
                             break
                 except:
-                    print("按鈕文字搜尋失敗")
+                    print("找不到「新增預約」按鈕")
             
             # 方法4：尋找任何包含「新增預約」文字的元素
-            if not new_reservation_button:
+            if not reserve_button:
                 try:
                     elements = driver.find_elements(By.XPATH, "//*[contains(text(), '新增預約')]")
                     for element in elements:
                         if element.is_displayed() and element.is_enabled():
-                            new_reservation_button = element
+                            reserve_button = element
                             print("找到包含「新增預約」文字的元素")
                             break
                 except:
                     print("找不到包含「新增預約」文字的元素")
             
-            # 方法5：尋找任何可點擊的元素
-            if not new_reservation_button:
+            # 方法5：尋找任何可點擊元素
+            if not reserve_button:
                 try:
-                    clickable_elements = driver.find_elements(By.CSS_SELECTOR, "button, a, input[type='button'], input[type='submit']")
-                    for element in clickable_elements:
+                    elements = driver.find_elements(By.CSS_SELECTOR, "button, a, input[type='button'], input[type='submit']")
+                    for element in elements:
                         if element.is_displayed() and element.is_enabled():
-                            new_reservation_button = element
+                            reserve_button = element
                             print("找到可點擊元素")
                             break
                 except:
                     print("找不到可點擊元素")
             
-            if new_reservation_button:
+            if reserve_button:
                 print("準備點擊「新增預約」按鈕...")
-                driver.save_screenshot('/app/before_new_reservation.png')
-                # 使用 JavaScript 點擊，避免被其他元素遮擋
-                driver.execute_script("arguments[0].click();", new_reservation_button)
+                driver.save_screenshot('/app/before_reserve_click.png')
+                
+                # 記錄當前 URL
+                current_url = driver.current_url
+                
+                # 嘗試多種點擊方式
+                try:
+                    # 方法1：使用 JavaScript 點擊
+                    driver.execute_script("arguments[0].click();", reserve_button)
+                    print("使用 JavaScript 點擊「新增預約」按鈕")
+                except:
+                    try:
+                        # 方法2：使用 Actions 點擊
+                        actions = ActionChains(driver)
+                        actions.move_to_element(reserve_button).click().perform()
+                        print("使用 Actions 點擊「新增預約」按鈕")
+                    except:
+                        try:
+                            # 方法3：直接點擊
+                            reserve_button.click()
+                            print("直接點擊「新增預約」按鈕")
+                        except:
+                            print("所有點擊方式都失敗")
+                            driver.save_screenshot('/app/reserve_click_failed.png')
+                            return False
+                
                 print("已點擊「新增預約」按鈕...")
-                driver.save_screenshot('/app/after_new_reservation.png')
+                driver.save_screenshot('/app/after_reserve_click.png')
                 
-                # 等待一下確保點擊事件被處理
-                time.sleep(2)
-                
-                # 檢查是否成功跳轉到預約頁面
-                if "預約" in driver.title or "reservation" in driver.current_url.lower():
-                    print("已成功跳轉到預約頁面")
-                else:
-                    print("可能未成功跳轉到預約頁面")
-                    driver.save_screenshot('/app/reservation_page_not_found.png')
+                # 等待頁面跳轉
+                try:
+                    def is_page_changed(driver):
+                        try:
+                            # 檢查 URL 是否改變
+                            if driver.current_url != current_url:
+                                return True
+                            
+                            # 檢查頁面標題是否改變
+                            if "預約" in driver.title:
+                                return True
+                            
+                            # 檢查是否出現預約相關元素
+                            elements = driver.find_elements(By.XPATH, "//*[contains(text(), '預約')]")
+                            if any(element.is_displayed() for element in elements):
+                                return True
+                            
+                            return False
+                        except:
+                            return False
+                    
+                    # 增加等待時間到 30 秒
+                    WebDriverWait(driver, 30).until(is_page_changed)
+                    print("成功跳轉到預約頁面")
+                    
+                    # 等待一下確保頁面完全載入
+                    time.sleep(2)
+                    
+                    # 再次檢查是否在預約頁面
+                    if "預約" in driver.title or "預約" in driver.current_url:
+                        print("確認在預約頁面，繼續執行...")
+                    else:
+                        print("可能未成功跳轉到預約頁面")
+                        driver.save_screenshot('/app/reserve_page_check_failed.png')
+                        return False
+                except TimeoutException:
+                    print("等待頁面跳轉超時")
+                    driver.save_screenshot('/app/reserve_page_timeout.png')
                     return False
             else:
                 print("找不到「新增預約」按鈕")
-                driver.save_screenshot('/app/new_reservation_button_not_found.png')
+                driver.save_screenshot('/app/reserve_button_not_found.png')
                 return False
-        except TimeoutException:
-            print("等待「新增預約」按鈕超時")
-            driver.save_screenshot('/app/new_reservation_timeout.png')
-            return False
         except Exception as e:
-            print(f"點擊「新增預約」按鈕時發生錯誤：{str(e)}")
-            driver.save_screenshot('/app/new_reservation_error.png')
+            print(f"處理「新增預約」按鈕時發生錯誤：{str(e)}")
+            driver.save_screenshot('/app/reserve_button_error.png')
             return False
 
         # 上車地點請下拉選擇「醫療院所」
