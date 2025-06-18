@@ -782,7 +782,7 @@ def make_reservation():
             if not pickup_type:
                 try:
                     selects = driver.find_elements(By.TAG_NAME, "select")
-                    print(f"找到 {len(selectes)} 個下拉選單")
+                    print(f"找到 {len(selects)} 個下拉選單")
                     for i, select in enumerate(selects):
                         if select.is_displayed():
                             pickup_type = select
@@ -796,8 +796,9 @@ def make_reservation():
                 try:
                     elements = driver.find_elements(By.XPATH, "//*[contains(text(), '上車地點') or contains(text(), '醫療院所')]")
                     print(f"找到 {len(elements)} 個包含相關文字的元素")
-                    for element in elements:
+                    for i, element in enumerate(elements):
                         if element.is_displayed():
+                            print(f"檢查元素 #{i+1}：{element.text}")
                             # 嘗試找到相關的下拉選單
                             try:
                                 nearby_select = element.find_element(By.XPATH, "./following-sibling::select")
@@ -813,7 +814,26 @@ def make_reservation():
                                         print("找到包含相關文字的下拉選單")
                                         break
                                 except:
-                                    continue
+                                    # 如果找不到下拉選單，檢查是否有其他可點擊元素
+                                    try:
+                                        # 尋找單選框
+                                        radio_buttons = element.find_elements(By.XPATH, "./ancestor::div//input[@type='radio']")
+                                        for radio in radio_buttons:
+                                            if radio.is_displayed() and "醫療院所" in radio.get_attribute("value"):
+                                                pickup_type = radio
+                                                print("找到醫療院所單選框")
+                                                break
+                                    except:
+                                        try:
+                                            # 尋找按鈕
+                                            buttons = element.find_elements(By.XPATH, "./ancestor::div//button")
+                                            for button in buttons:
+                                                if button.is_displayed() and "醫療院所" in button.text:
+                                                    pickup_type = button
+                                                    print("找到醫療院所按鈕")
+                                                    break
+                                        except:
+                                            continue
                 except:
                     print("找不到包含相關文字的下拉選單")
             
@@ -855,6 +875,34 @@ def make_reservation():
                 except:
                     print("使用所有選擇器都找不到下拉選單")
             
+            # 方法7：尋找單選框
+            if not pickup_type:
+                try:
+                    radio_buttons = driver.find_elements(By.XPATH, "//input[@type='radio']")
+                    print(f"找到 {len(radio_buttons)} 個單選框")
+                    for radio in radio_buttons:
+                        if radio.is_displayed():
+                            value = radio.get_attribute("value")
+                            if value and "醫療院所" in value:
+                                pickup_type = radio
+                                print("找到醫療院所單選框")
+                                break
+                except:
+                    print("找不到醫療院所單選框")
+            
+            # 方法8：尋找按鈕
+            if not pickup_type:
+                try:
+                    buttons = driver.find_elements(By.TAG_NAME, "button")
+                    print(f"找到 {len(buttons)} 個按鈕")
+                    for button in buttons:
+                        if button.is_displayed() and "醫療院所" in button.text:
+                            pickup_type = button
+                            print("找到醫療院所按鈕")
+                            break
+                except:
+                    print("找不到醫療院所按鈕")
+            
             # 如果還是找不到，檢查頁面結構
             if not pickup_type:
                 print("檢查頁面結構...")
@@ -891,21 +939,22 @@ def make_reservation():
                 print("準備選擇上車地點...")
                 driver.save_screenshot('/app/before_pickup_type_select.png')
                 
-                # 嘗試多種選擇方式
-                try:
-                    # 方法1：使用 Select 類別
-                    from selenium.webdriver.support.ui import Select
-                    select = Select(pickup_type)
-                    select.select_by_visible_text("醫療院所")
-                    print("使用 Select 類別選擇上車地點")
-                except:
+                # 根據元素類型選擇不同的操作方式
+                element_type = pickup_type.tag_name
+                element_input_type = pickup_type.get_attribute("type")
+                
+                if element_type == "select":
+                    # 下拉選單
                     try:
-                        # 方法2：使用 JavaScript 選擇
-                        driver.execute_script("arguments[0].value = '醫療院所'; arguments[0].dispatchEvent(new Event('change'));", pickup_type)
-                        print("使用 JavaScript 選擇上車地點")
+                        from selenium.webdriver.support.ui import Select
+                        select = Select(pickup_type)
+                        select.select_by_visible_text("醫療院所")
+                        print("使用 Select 類別選擇上車地點")
                     except:
                         try:
-                            # 方法3：直接點擊並選擇
+                            driver.execute_script("arguments[0].value = '醫療院所'; arguments[0].dispatchEvent(new Event('change'));", pickup_type)
+                            print("使用 JavaScript 選擇上車地點")
+                        except:
                             pickup_type.click()
                             time.sleep(1)
                             options = pickup_type.find_elements(By.TAG_NAME, "option")
@@ -914,10 +963,30 @@ def make_reservation():
                                     option.click()
                                     print("直接點擊選擇上車地點")
                                     break
-                        except:
-                            print("所有選擇方式都失敗")
-                            driver.save_screenshot('/app/pickup_type_select_failed.png')
-                            return False
+                elif element_input_type == "radio":
+                    # 單選框
+                    try:
+                        pickup_type.click()
+                        print("點擊醫療院所單選框")
+                    except:
+                        driver.execute_script("arguments[0].click();", pickup_type)
+                        print("使用 JavaScript 點擊醫療院所單選框")
+                elif element_type == "button":
+                    # 按鈕
+                    try:
+                        pickup_type.click()
+                        print("點擊醫療院所按鈕")
+                    except:
+                        driver.execute_script("arguments[0].click();", pickup_type)
+                        print("使用 JavaScript 點擊醫療院所按鈕")
+                else:
+                    # 其他元素
+                    try:
+                        pickup_type.click()
+                        print("點擊上車地點元素")
+                    except:
+                        driver.execute_script("arguments[0].click();", pickup_type)
+                        print("使用 JavaScript 點擊上車地點元素")
                 
                 print("已選擇上車地點...")
                 driver.save_screenshot('/app/after_pickup_type_select.png')
@@ -926,8 +995,8 @@ def make_reservation():
                 try:
                     def is_selection_effective(driver):
                         try:
-                            # 檢查下拉選單的值是否改變
-                            if pickup_type.get_attribute("value") == "醫療院所":
+                            # 檢查元素是否被選中
+                            if pickup_type.get_attribute("checked") == "true":
                                 return True
                             
                             # 檢查是否出現相關元素
