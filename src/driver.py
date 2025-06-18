@@ -7,7 +7,6 @@ from selenium.common.exceptions import TimeoutException
 from .config import USER_AGENT, WAIT_TIMES
 import os
 import time
-import base64
 
 def setup_driver(test_mode=False):
     """設置並返回 Chrome WebDriver"""
@@ -35,11 +34,6 @@ def get_page_info(driver):
         # 獲取當前URL
         url = driver.current_url
         
-        # 獲取頁面源碼（限制長度）
-        page_source = driver.page_source
-        if len(page_source) > 1000:
-            page_source = page_source[:1000] + "..."
-        
         # 獲取所有按鈕的文字
         buttons = driver.find_elements("tag name", "button")
         button_texts = [btn.text for btn in buttons if btn.text]
@@ -61,7 +55,6 @@ def get_page_info(driver):
         return {
             "title": title,
             "url": url,
-            "page_source_preview": page_source,
             "button_texts": button_texts,
             "input_elements": input_info
         }
@@ -69,7 +62,7 @@ def get_page_info(driver):
         return {"error": str(e)}
 
 def print_debug_info(driver, locator, error=None):
-    """印出除錯資訊，限制輸出長度"""
+    """印出除錯資訊，只顯示關鍵資訊"""
     print("\n=== 除錯資訊 ===")
     
     # 獲取頁面資訊
@@ -92,10 +85,6 @@ def print_debug_info(driver, locator, error=None):
     print("\n頁面輸入框:")
     for input_elem in page_info['input_elements']:
         print(f"- 類型: {input_elem['type']}, ID: {input_elem['id']}, 名稱: {input_elem['name']}")
-    
-    # 印出頁面源碼預覽
-    print("\n頁面源碼預覽:")
-    print(page_info['page_source_preview'])
     
     print("\n================\n")
 
