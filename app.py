@@ -190,6 +190,34 @@ def make_reservation():
                 except:
                     print("按鈕文字搜尋失敗")
             
+            # 方法4：在 iframe 中尋找
+            if not login_button:
+                print("嘗試在 iframe 中尋找登入按鈕...")
+                iframes = driver.find_elements(By.TAG_NAME, "iframe")
+                for iframe in iframes:
+                    try:
+                        driver.switch_to.frame(iframe)
+                        # 在 iframe 中嘗試所有方法
+                        try:
+                            login_button = driver.find_element(By.XPATH, "//button[contains(text(), '民眾登入')]")
+                            print("在 iframe 中使用 XPath 找到登入按鈕")
+                        except:
+                            try:
+                                login_button = driver.find_element(By.CSS_SELECTOR, "button.btn-primary")
+                                print("在 iframe 中使用 CSS 選擇器找到登入按鈕")
+                            except:
+                                buttons = driver.find_elements(By.TAG_NAME, "button")
+                                for button in buttons:
+                                    if "民眾登入" in button.text:
+                                        login_button = button
+                                        print("在 iframe 中通過按鈕文字找到登入按鈕")
+                                        break
+                        if login_button:
+                            break
+                        driver.switch_to.default_content()
+                    except:
+                        driver.switch_to.default_content()
+            
             if login_button:
                 print("找到登入按鈕，準備點擊...")
                 driver.save_screenshot('/app/before_login.png')
