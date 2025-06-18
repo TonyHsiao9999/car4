@@ -18,6 +18,7 @@ def setup_driver():
     chrome_options.add_argument('--disable-dev-shm-usage')
     chrome_options.add_argument('--disable-gpu')
     chrome_options.add_argument('--window-size=1920,1080')
+    chrome_options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')
     chrome_options.binary_location = '/usr/bin/chromium'  # 指定 chromium 路徑
     # chrome_options.add_argument('user-agent=Mozilla/5.0 ...') # 如需偽裝user-agent可取消註解
 
@@ -30,6 +31,11 @@ def make_reservation():
     try:
         driver.get("https://www.ntpc.ltc-car.org/")
         print("已載入網頁，等待「我知道了」按鈕...")
+        driver.save_screenshot('/app/before_wait.png')
+        buttons = driver.find_elements(By.XPATH, "//button")
+        print("找到按鈕數量：", len(buttons))
+        for button in buttons:
+            print(button.text)
         button = WebDriverWait(driver, 30).until(
             EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), '我知道了')]"))
         )
