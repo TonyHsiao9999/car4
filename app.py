@@ -1428,22 +1428,363 @@ def make_reservation():
             take_screenshot("dropoff_location_final")
             
             # 9. 預約日期/時段選擇
-            print("選擇預約日期/時段")
-            # 選擇最後一個日期選項
-            date_selects = driver['page'].locator('select').all()
-            if len(date_selects) >= 3:
-                # 選擇最後一個日期
-                last_date_option = date_selects[0].locator('option').last
-                last_date_option.click()
+            print("=== 開始選擇預約日期/時段 ===")
+            
+            # 等待頁面穩定
+            driver['page'].wait_for_timeout(2000)
+            
+            # 重新獲取所有選單
+            all_selects = driver['page'].locator('select').all()
+            print(f"日期時段頁面總共有 {len(all_selects)} 個下拉選單")
+            
+            # 詳細檢查每個選單
+            for i, select_elem in enumerate(all_selects):
+                try:
+                    if select_elem.is_visible():
+                        name = select_elem.get_attribute('name') or ''
+                        id_attr = select_elem.get_attribute('id') or ''
+                        options = select_elem.locator('option').all()
+                        option_texts = [opt.text_content() or '' for opt in options if opt.text_content()]
+                        current_value = select_elem.input_value() or ''
+                        
+                        print(f"選單 {i}: name='{name}', id='{id_attr}', 當前值='{current_value}'")
+                        print(f"選單 {i} 選項: {option_texts}")
+                except Exception as e:
+                    print(f"檢查選單 {i} 失敗: {e}")
+            
+            take_screenshot("before_datetime_selection")
+            
+            # 智能選擇日期時段
+            datetime_success = False
+            
+            try:
+                # 策略1: 尋找日期相關的選單
+                print("=== 策略1: 尋找日期選單 ===")
                 
-                # 選擇時間 16
-                time_selects = driver['page'].locator('select').all()
-                if len(time_selects) >= 2:
-                    time_selects[1].select_option('16')
+                date_selectors = [
+                    'select[name*="date"]',
+                    'select[name*="日期"]', 
+                    'select[id*="date"]',
+                    'select[id*="日期"]',
+                    'select:has(option[value*="2024"])',  # 包含年份的選單
+                    'select:has(option[text*="月"])',     # 包含月份的選單
+                ]
                 
-                # 選擇分鐘 40
-                if len(time_selects) >= 3:
-                    time_selects[2].select_option('40')
+                for selector in date_selectors:
+                    try:
+                        date_select = driver['page'].locator(selector).first
+                        if date_select.count() > 0 and date_select.is_visible():
+                            print(f"找到日期選單: {selector}")
+                            
+                            # 獲取日期選項
+                            date_options = date_select.locator('option').all()
+                            date_texts = [opt.text_content() or '' for opt in date_options if opt.text_content()]
+                            print(f"日期選項: {date_texts}")
+                            
+                            # 選擇最後一個可用日期（排除空白選項）
+                            valid_options = [opt for opt in date_texts if opt.strip() and opt != '請選擇']
+                            if valid_options:
+                                target_date = valid_options[-1]  # 最後一個日期
+                                print(f"選擇日期: {target_date}")
+                                date_select.select_option(target_date)
+                                driver['page'].wait_for_timeout(1000)
+                                
+                                # 驗證選擇
+                                new_value = date_select.input_value()
+                                if new_value and new_value != '請選擇':
+                                    print(f"✅ 日期選擇成功: {new_value}")
+                                    break
+                    except Exception as e:
+                        print(f"日期選擇器 {selector} 失敗: {e}")
+                        continue
+                
+                # 策略2: 尋找時間相關的選單
+                print("=== 策略2: 尋找時間選單 ===")
+                
+                time_selectors = [
+                    'select[name*="time"]',
+                    'select[name*="時間"]',
+                    'select[name*="hour"]',
+                    'select[name*="小時"]',
+                    'select[id*="time"]',
+                    'select[id*="時間"]',
+                    'select[id*="hour"]',
+                    'select:has(option[value="16"])',     # 包含16小時的選單
+                    'select:has(option[text*="16"])',     # 包含16的選單
+                ]
+                
+                for selector in time_selectors:
+                    try:
+                        time_select = driver['page'].locator(selector).first
+                        if time_select.count() > 0 and time_select.is_visible():
+                            print(f"找到時間選單: {selector}")
+                            
+                            # 獲取時間選項
+                            time_options = time_select.locator('option').all()
+                            time_texts = [opt.text_content() or '' for opt in time_options if opt.text_content()]
+                            print(f"時間選項: {time_texts}")
+                            
+                            # 尋找16點或接近的時間
+                            target_time = None
+                            for time_text in time_texts:
+                                if '16' in time_text or '4' in time_text:
+                                    target_time = time_text
+                                    break
+                            
+                            # 如果找不到16點，選擇一個可用時間
+                            if not target_time:
+                                valid_times = [t for t in time_texts if t.strip() and t != '請選擇']
+                                if valid_times:
+                                    target_time = valid_times[0]  # 選擇第一個可用時間
+                            
+                            if target_time:
+                                print(f"選擇時間: {target_time}")
+                                time_select.select_option(target_time)
+                                driver['page'].wait_for_timeout(1000)
+                                
+                                # 驗證選擇
+                                new_value = time_select.input_value()
+                                if new_value and new_value != '請選擇':
+                                    print(f"✅ 時間選擇成功: {new_value}")
+                                    break
+                    except Exception as e:
+                        print(f"時間選擇器 {selector} 失敗: {e}")
+                        continue
+                
+                # 策略3: 尋找分鐘選單
+                print("=== 策略3: 尋找分鐘選單 ===")
+                
+                minute_selectors = [
+                    'select[name*="minute"]',
+                    'select[name*="分鐘"]',
+                    'select[name*="分"]',
+                    'select[id*="minute"]',
+                    'select[id*="分鐘"]',
+                    'select:has(option[value="40"])',     # 包含40分鐘的選單
+                    'select:has(option[text*="40"])',     # 包含40的選單
+                ]
+                
+                for selector in minute_selectors:
+                    try:
+                        minute_select = driver['page'].locator(selector).first
+                        if minute_select.count() > 0 and minute_select.is_visible():
+                            print(f"找到分鐘選單: {selector}")
+                            
+                            # 獲取分鐘選項
+                            minute_options = minute_select.locator('option').all()
+                            minute_texts = [opt.text_content() or '' for opt in minute_options if opt.text_content()]
+                            print(f"分鐘選項: {minute_texts}")
+                            
+                            # 尋找40分或接近的分鐘
+                            target_minute = None
+                            for minute_text in minute_texts:
+                                if '40' in minute_text:
+                                    target_minute = minute_text
+                                    break
+                            
+                            # 如果找不到40分，選擇第一個可用分鐘
+                            if not target_minute:
+                                valid_minutes = [m for m in minute_texts if m.strip() and m != '請選擇']
+                                if valid_minutes:
+                                    target_minute = valid_minutes[0]
+                            
+                            if target_minute:
+                                print(f"選擇分鐘: {target_minute}")
+                                minute_select.select_option(target_minute)
+                                driver['page'].wait_for_timeout(1000)
+                                
+                                # 驗證選擇
+                                new_value = minute_select.input_value()
+                                if new_value and new_value != '請選擇':
+                                    print(f"✅ 分鐘選擇成功: {new_value}")
+                                    break
+                    except Exception as e:
+                        print(f"分鐘選擇器 {selector} 失敗: {e}")
+                        continue
+                
+                # 策略4: 強化的序號方法（主要策略）
+                print("=== 策略4: 強化序號方法 ===")
+                
+                # 等待並重新獲取選單
+                driver['page'].wait_for_timeout(1000)
+                all_selects_fresh = driver['page'].locator('select').all()
+                print(f"重新掃描到 {len(all_selects_fresh)} 個選單")
+                
+                # 詳細檢查每個選單的當前狀態
+                for i, select_elem in enumerate(all_selects_fresh):
+                    try:
+                        if select_elem.is_visible():
+                            options = select_elem.locator('option').all()
+                            option_texts = [opt.text_content() or '' for opt in options if opt.text_content()]
+                            current_value = select_elem.input_value() or ''
+                            print(f"選單{i}: 當前值='{current_value}', 選項數={len(option_texts)}")
+                    except:
+                        continue
+                
+                if len(all_selects_fresh) >= 1:
+                    print("開始按序號方法選擇...")
+                    
+                    # 第1步：選擇第一個選單的最後一個選項（日期）
+                    try:
+                        print("第1步：選擇日期（第一個選單的最後選項）")
+                        date_select = all_selects_fresh[0]
+                        if date_select.is_visible():
+                            options = date_select.locator('option').all()
+                            option_texts = [opt.text_content() or '' for opt in options if opt.text_content()]
+                            print(f"日期選單選項: {option_texts}")
+                            
+                            if len(options) > 1:  # 有選項可選
+                                # 方法1: 點擊最後一個選項
+                                try:
+                                    last_option = options[-1]
+                                    last_option.click()
+                                    driver['page'].wait_for_timeout(1000)
+                                    new_value = date_select.input_value()
+                                    print(f"✅ 序號方法1：點擊最後日期成功，值: '{new_value}'")
+                                except Exception as e:
+                                    print(f"方法1失敗: {e}")
+                                    
+                                    # 方法2: 使用select_option選擇最後選項
+                                    try:
+                                        valid_options = [opt for opt in option_texts if opt.strip() and opt != '請選擇']
+                                        if valid_options:
+                                            target_date = valid_options[-1]
+                                            date_select.select_option(target_date)
+                                            driver['page'].wait_for_timeout(1000)
+                                            new_value = date_select.input_value()
+                                            print(f"✅ 序號方法2：選擇最後日期成功，值: '{new_value}'")
+                                        else:
+                                            print("沒有有效的日期選項")
+                                    except Exception as e:
+                                        print(f"方法2也失敗: {e}")
+                        else:
+                            print("第一個選單不可見")
+                    except Exception as e:
+                        print(f"序號方法選擇日期失敗: {e}")
+                    
+                    # 第2步：選擇第二個選單的16選項（時間）
+                    if len(all_selects_fresh) >= 2:
+                        try:
+                            print("第2步：選擇時間16（第二個選單）")
+                            time_select = all_selects_fresh[1]
+                            if time_select.is_visible():
+                                options = time_select.locator('option').all()
+                                option_texts = [opt.text_content() or '' for opt in options if opt.text_content()]
+                                option_values = [opt.get_attribute('value') or '' for opt in options]
+                                print(f"時間選單選項: {option_texts}")
+                                print(f"時間選單值: {option_values}")
+                                
+                                # 嘗試多種方法選擇16
+                                success = False
+                                
+                                # 方法1: 直接用值'16'
+                                try:
+                                    time_select.select_option('16')
+                                    driver['page'].wait_for_timeout(1000)
+                                    new_value = time_select.input_value()
+                                    if '16' in str(new_value):
+                                        print(f"✅ 時間方法1成功，值: '{new_value}'")
+                                        success = True
+                                except Exception as e:
+                                    print(f"時間方法1失敗: {e}")
+                                
+                                # 方法2: 尋找包含16的選項文字
+                                if not success:
+                                    try:
+                                        for i, text in enumerate(option_texts):
+                                            if '16' in text:
+                                                time_select.select_option(text)
+                                                driver['page'].wait_for_timeout(1000)
+                                                new_value = time_select.input_value()
+                                                print(f"✅ 時間方法2成功，選擇: '{text}', 值: '{new_value}'")
+                                                success = True
+                                                break
+                                    except Exception as e:
+                                        print(f"時間方法2失敗: {e}")
+                                
+                                # 方法3: 使用索引選擇
+                                if not success:
+                                    try:
+                                        for i, text in enumerate(option_texts):
+                                            if '16' in text:
+                                                time_select.select_option(index=i)
+                                                driver['page'].wait_for_timeout(1000)
+                                                new_value = time_select.input_value()
+                                                print(f"✅ 時間方法3成功，索引: {i}, 值: '{new_value}'")
+                                                break
+                                    except Exception as e:
+                                        print(f"時間方法3失敗: {e}")
+                            else:
+                                print("第二個選單不可見")
+                        except Exception as e:
+                            print(f"序號方法選擇時間失敗: {e}")
+                    
+                    # 第3步：選擇第三個選單的40選項（分鐘）
+                    if len(all_selects_fresh) >= 3:
+                        try:
+                            print("第3步：選擇分鐘40（第三個選單）")
+                            minute_select = all_selects_fresh[2]
+                            if minute_select.is_visible():
+                                options = minute_select.locator('option').all()
+                                option_texts = [opt.text_content() or '' for opt in options if opt.text_content()]
+                                option_values = [opt.get_attribute('value') or '' for opt in options]
+                                print(f"分鐘選單選項: {option_texts}")
+                                print(f"分鐘選單值: {option_values}")
+                                
+                                # 嘗試多種方法選擇40
+                                success = False
+                                
+                                # 方法1: 直接用值'40'
+                                try:
+                                    minute_select.select_option('40')
+                                    driver['page'].wait_for_timeout(1000)
+                                    new_value = minute_select.input_value()
+                                    if '40' in str(new_value):
+                                        print(f"✅ 分鐘方法1成功，值: '{new_value}'")
+                                        success = True
+                                except Exception as e:
+                                    print(f"分鐘方法1失敗: {e}")
+                                
+                                # 方法2: 尋找包含40的選項文字
+                                if not success:
+                                    try:
+                                        for i, text in enumerate(option_texts):
+                                            if '40' in text:
+                                                minute_select.select_option(text)
+                                                driver['page'].wait_for_timeout(1000)
+                                                new_value = minute_select.input_value()
+                                                print(f"✅ 分鐘方法2成功，選擇: '{text}', 值: '{new_value}'")
+                                                success = True
+                                                break
+                                    except Exception as e:
+                                        print(f"分鐘方法2失敗: {e}")
+                                
+                                # 方法3: 使用索引選擇
+                                if not success:
+                                    try:
+                                        for i, text in enumerate(option_texts):
+                                            if '40' in text:
+                                                minute_select.select_option(index=i)
+                                                driver['page'].wait_for_timeout(1000)
+                                                new_value = minute_select.input_value()
+                                                print(f"✅ 分鐘方法3成功，索引: {i}, 值: '{new_value}'")
+                                                break
+                                    except Exception as e:
+                                        print(f"分鐘方法3失敗: {e}")
+                            else:
+                                print("第三個選單不可見")
+                        except Exception as e:
+                            print(f"序號方法選擇分鐘失敗: {e}")
+                
+                print("序號方法執行完成")
+                
+                datetime_success = True
+                print("✅ 日期時段選擇完成")
+                
+            except Exception as e:
+                print(f"日期時段選擇失敗: {e}")
+                datetime_success = False
+            
             take_screenshot("datetime_selected")
             
             # 10. 於預約時間前後30分鐘到達 選擇「不同意」
