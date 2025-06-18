@@ -787,6 +787,68 @@ def make_reservation():
                 except:
                     print("找不到下拉選單")
             
+            # 方法4：尋找包含「上車地點」或「醫療院所」文字的元素
+            if not pickup_type:
+                try:
+                    elements = driver.find_elements(By.XPATH, "//*[contains(text(), '上車地點') or contains(text(), '醫療院所')]")
+                    for element in elements:
+                        if element.is_displayed():
+                            # 嘗試找到相關的下拉選單
+                            try:
+                                nearby_select = element.find_element(By.XPATH, "./following-sibling::select")
+                                if nearby_select.is_displayed():
+                                    pickup_type = nearby_select
+                                    print("找到包含相關文字的下拉選單")
+                                    break
+                            except:
+                                try:
+                                    nearby_select = element.find_element(By.XPATH, "./ancestor::div//select")
+                                    if nearby_select.is_displayed():
+                                        pickup_type = nearby_select
+                                        print("找到包含相關文字的下拉選單")
+                                        break
+                                except:
+                                    continue
+                except:
+                    print("找不到包含相關文字的下拉選單")
+            
+            # 方法5：尋找任何可點擊的下拉選單
+            if not pickup_type:
+                try:
+                    elements = driver.find_elements(By.CSS_SELECTOR, "select, .select2-container")
+                    for element in elements:
+                        if element.is_displayed() and element.is_enabled():
+                            pickup_type = element
+                            print("找到可點擊的下拉選單")
+                            break
+                except:
+                    print("找不到可點擊的下拉選單")
+            
+            # 方法6：尋找所有可能的選擇器
+            if not pickup_type:
+                try:
+                    # 嘗試多種可能的選擇器
+                    selectors = [
+                        "//select[@id='pickupType']",
+                        "//select[@name='pickupType']",
+                        "//select[@id='pickup_type']",
+                        "//select[@name='pickup_type']",
+                        "//select[contains(@class, 'pickup')]",
+                        "//select[contains(@class, 'location')]",
+                        "//select[contains(@class, 'type')]"
+                    ]
+                    
+                    for selector in selectors:
+                        try:
+                            pickup_type = driver.find_element(By.XPATH, selector)
+                            if pickup_type.is_displayed():
+                                print(f"使用選擇器找到下拉選單：{selector}")
+                                break
+                        except:
+                            continue
+                except:
+                    print("使用所有選擇器都找不到下拉選單")
+            
             if pickup_type:
                 print("準備選擇上車地點...")
                 driver.save_screenshot('/app/before_pickup_type_select.png')
