@@ -218,6 +218,32 @@ def make_reservation():
                     except:
                         driver.switch_to.default_content()
             
+            # 方法5：在表單中尋找
+            if not login_button:
+                print("嘗試在表單中尋找登入按鈕...")
+                try:
+                    # 尋找包含輸入框的表單
+                    form = driver.find_element(By.TAG_NAME, "form")
+                    print("找到表單")
+                    
+                    # 在表單中尋找按鈕
+                    try:
+                        login_button = form.find_element(By.XPATH, ".//button[contains(text(), '民眾登入')]")
+                        print("在表單中使用 XPath 找到登入按鈕")
+                    except:
+                        try:
+                            login_button = form.find_element(By.CSS_SELECTOR, "button.btn-primary")
+                            print("在表單中使用 CSS 選擇器找到登入按鈕")
+                        except:
+                            buttons = form.find_elements(By.TAG_NAME, "button")
+                            for button in buttons:
+                                if "民眾登入" in button.text:
+                                    login_button = button
+                                    print("在表單中通過按鈕文字找到登入按鈕")
+                                    break
+                except:
+                    print("找不到表單或表單中沒有登入按鈕")
+            
             if login_button:
                 print("找到登入按鈕，準備點擊...")
                 driver.save_screenshot('/app/before_login.png')
