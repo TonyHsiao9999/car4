@@ -355,54 +355,114 @@ def make_reservation():
                         
                         # 方法1：直接尋找確定按鈕
                         try:
-                            confirm_buttons = driver.find_elements(By.XPATH, "//button[contains(text(), '確定')]")
-                            print(f"找到 {len(confirm_buttons)} 個確定按鈕")
-                            for button in confirm_buttons:
-                                if button.is_displayed():
-                                    confirm_button = button
-                                    print("找到可見的確定按鈕")
-                                    break
-                        except:
-                            print("直接尋找確定按鈕失敗")
-                        
-                        # 方法2：尋找浮動視窗中的按鈕
-                        if not confirm_button:
-                            try:
-                                # 先找到浮動視窗
-                                popup = None
-                                for text in ["登入成功", "登入完成", "成功登入", "歡迎"]:
-                                    elements = driver.find_elements(By.XPATH, f"//*[contains(text(), '{text}')]")
-                                    for element in elements:
-                                        if element.is_displayed():
-                                            # 找到包含這個文字的父元素（可能是浮動視窗）
+                            # 先找到浮動視窗
+                            popup = None
+                            for text in ["登入成功", "登入完成", "成功登入", "歡迎"]:
+                                elements = driver.find_elements(By.XPATH, f"//*[contains(text(), '{text}')]")
+                                for element in elements:
+                                    if element.is_displayed():
+                                        # 找到包含這個文字的父元素（可能是浮動視窗）
+                                        try:
                                             popup = element.find_element(By.XPATH, "./ancestor::div[contains(@class, 'modal') or contains(@class, 'popup') or contains(@class, 'dialog')]")
                                             if popup:
                                                 break
-                                    if popup:
-                                        break
-                                
-                                if popup:
-                                    print("找到浮動視窗，在其中尋找確定按鈕")
-                                    buttons = popup.find_elements(By.TAG_NAME, "button")
-                                    for button in buttons:
-                                        if button.is_displayed() and ("確定" in button.text or "OK" in button.text):
-                                            confirm_button = button
-                                            print("在浮動視窗中找到確定按鈕")
+                                        except:
+                                            # 如果找不到父元素，可能是浮動視窗本身
+                                            popup = element
                                             break
-                            except:
-                                print("在浮動視窗中尋找確定按鈕失敗")
+                                if popup:
+                                    break
+                            
+                            if popup:
+                                print("找到浮動視窗，在其中尋找確定按鈕")
+                                # 在浮動視窗中尋找按鈕
+                                try:
+                                    # 方法1.1：使用 XPath 尋找按鈕
+                                    buttons = popup.find_elements(By.XPATH, ".//button[contains(text(), '確定')]")
+                                    for button in buttons:
+                                        if button.is_displayed():
+                                            confirm_button = button
+                                            print("在浮動視窗中使用 XPath 找到確定按鈕")
+                                            break
+                                except:
+                                    print("在浮動視窗中使用 XPath 找不到確定按鈕")
+                                
+                                # 方法1.2：使用 CSS 選擇器尋找按鈕
+                                if not confirm_button:
+                                    try:
+                                        buttons = popup.find_elements(By.CSS_SELECTOR, "button.btn-primary, button.btn-default, button.btn")
+                                        for button in buttons:
+                                            if button.is_displayed():
+                                                confirm_button = button
+                                                print("在浮動視窗中使用 CSS 選擇器找到確定按鈕")
+                                                break
+                                    except:
+                                        print("在浮動視窗中使用 CSS 選擇器找不到確定按鈕")
+                                
+                                # 方法1.3：尋找所有按鈕
+                                if not confirm_button:
+                                    try:
+                                        buttons = popup.find_elements(By.TAG_NAME, "button")
+                                        for button in buttons:
+                                            if button.is_displayed():
+                                                confirm_button = button
+                                                print("在浮動視窗中找到任何按鈕")
+                                                break
+                                    except:
+                                        print("在浮動視窗中找不到任何按鈕")
+                                
+                                # 方法1.4：尋找任何可點擊元素
+                                if not confirm_button:
+                                    try:
+                                        elements = popup.find_elements(By.CSS_SELECTOR, "button, a, input[type='button'], input[type='submit']")
+                                        for element in elements:
+                                            if element.is_displayed() and element.is_enabled():
+                                                confirm_button = element
+                                                print("在浮動視窗中找到任何可點擊元素")
+                                                break
+                                    except:
+                                        print("在浮動視窗中找不到任何可點擊元素")
+                            else:
+                                print("找不到浮動視窗")
+                        except:
+                            print("尋找浮動視窗失敗")
                         
-                        # 方法3：尋找任何可點擊的確定按鈕
+                        # 方法2：在整個頁面中尋找確定按鈕
                         if not confirm_button:
                             try:
-                                elements = driver.find_elements(By.XPATH, "//*[contains(text(), '確定') or contains(text(), 'OK')]")
-                                for element in elements:
-                                    if element.is_displayed() and element.is_enabled():
-                                        confirm_button = element
-                                        print("找到任何可點擊的確定按鈕")
+                                # 方法2.1：使用 XPath 尋找按鈕
+                                buttons = driver.find_elements(By.XPATH, "//button[contains(text(), '確定')]")
+                                for button in buttons:
+                                    if button.is_displayed():
+                                        confirm_button = button
+                                        print("在頁面中使用 XPath 找到確定按鈕")
                                         break
                             except:
-                                print("尋找任何可點擊的確定按鈕失敗")
+                                print("在頁面中使用 XPath 找不到確定按鈕")
+                            
+                            # 方法2.2：使用 CSS 選擇器尋找按鈕
+                            if not confirm_button:
+                                try:
+                                    buttons = driver.find_elements(By.CSS_SELECTOR, "button.btn-primary, button.btn-default, button.btn")
+                                    for button in buttons:
+                                        if button.is_displayed():
+                                            confirm_button = button
+                                            print("在頁面中使用 CSS 選擇器找到確定按鈕")
+                                            break
+                                except:
+                                    print("在頁面中使用 CSS 選擇器找不到確定按鈕")
+                            
+                            # 方法2.3：尋找所有按鈕
+                            if not confirm_button:
+                                try:
+                                    buttons = driver.find_elements(By.TAG_NAME, "button")
+                                    for button in buttons:
+                                        if button.is_displayed():
+                                            confirm_button = button
+                                            print("在頁面中找到任何按鈕")
+                                            break
+                                except:
+                                    print("在頁面中找不到任何按鈕")
                         
                         if confirm_button:
                             print("準備點擊確定按鈕...")
