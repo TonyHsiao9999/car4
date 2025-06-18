@@ -120,9 +120,7 @@ def make_reservation():
         
         # 等待頁面完全載入
         print("等待頁面完全載入...")
-        WebDriverWait(driver, 30).until(
-            lambda d: d['execute_script']("return document.readyState") == "complete"
-        )
+        driver['page'].wait_for_load_state('networkidle')
         print("頁面已完全載入")
         take_screenshot("page_complete")
         
