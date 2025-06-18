@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from playwright.sync_api import sync_playwright
 import time
 import os
@@ -11,7 +11,7 @@ def take_screenshot(driver, name):
     """截圖功能"""
     try:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"/app/screenshots/{name}_{timestamp}.png"
+        filename = f"step_{name}_{timestamp}.png"
         driver['page'].screenshot(path=filename)
         print(f"截圖已保存: {filename}")
         
@@ -176,14 +176,67 @@ def make_reservation():
             # 等待登入成功浮動視窗
             print("等待登入成功訊息...")
             try:
-                driver['page'].wait_for_selector('text=登入成功', timeout=10000)
-                print("找到登入成功訊息，點擊確定")
-                driver['page'].click('text=確定')
-                print("登入成功確認完成")
-                take_screenshot("login_success")
+                # 嘗試多種可能的登入成功訊息選擇器
+                success_selectors = [
+                    'text=登入成功',
+                    'text=登录成功', 
+                    'text=Success',
+                    'text=成功',
+                    '.alert:has-text("登入")',
+                    '.modal:has-text("登入")',
+                    '.dialog:has-text("登入")',
+                    '.message:has-text("登入")'
+                ]
+                
+                success_found = False
+                for selector in success_selectors:
+                    try:
+                        print(f"嘗試選擇器: {selector}")
+                        driver['page'].wait_for_selector(selector, timeout=3000)
+                        print(f"找到登入成功訊息: {selector}")
+                        success_found = True
+                        break
+                    except Exception as e:
+                        print(f"選擇器 {selector} 未找到: {e}")
+                        continue
+                
+                if success_found:
+                    # 尋找確定按鈕
+                    confirm_selectors = [
+                        'text=確定',
+                        'text=OK',
+                        'text=好的',
+                        'text=知道了',
+                        'button:has-text("確定")',
+                        'button:has-text("OK")',
+                        '.btn:has-text("確定")'
+                    ]
+                    
+                    confirm_clicked = False
+                    for confirm_selector in confirm_selectors:
+                        try:
+                            print(f"嘗試點擊確定按鈕: {confirm_selector}")
+                            driver['page'].click(confirm_selector, timeout=3000)
+                            print(f"確定按鈕點擊成功: {confirm_selector}")
+                            confirm_clicked = True
+                            break
+                        except Exception as e:
+                            print(f"確定按鈕 {confirm_selector} 點擊失敗: {e}")
+                            continue
+                    
+                    if not confirm_clicked:
+                        print("未找到確定按鈕，嘗試按 ESC 鍵")
+                        driver['page'].keyboard.press('Escape')
+                    
+                    print("登入成功確認完成")
+                    take_screenshot("login_success")
+                else:
+                    print("沒有找到登入成功訊息，可能已經登入成功")
+                    take_screenshot("no_login_success_message")
+                    
             except Exception as e:
-                print(f"沒有找到登入成功訊息: {e}")
-                take_screenshot("no_login_success")
+                print(f"登入成功檢測過程發生錯誤: {e}")
+                take_screenshot("login_success_error")
             
             # 等待登入完成
             print("等待登入完成...")
@@ -417,7 +470,11 @@ def screenshots():
 
 @app.route('/screenshot/<filename>')
 def get_screenshot(filename):
-    return send_from_directory('.', filename)
+    try:
+        return send_from_directory('.', filename)
+    except Exception as e:
+        print(f"讀取截圖失敗: {e}")
+        return f"無法讀取截圖: {filename}", 404
 
 @app.route('/page_source')
 def page_source():
