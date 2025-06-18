@@ -1,13 +1,14 @@
 from flask import Flask, jsonify, send_file, send_from_directory
 from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from selenium.webdriver.support.ui import Select
 import time
 import os
+import base64
+from datetime import datetime
 from dotenv import load_dotenv
 from selenium.webdriver.common.action_chains import ActionChains
 import tempfile
@@ -16,59 +17,61 @@ import subprocess
 
 app = Flask(__name__, static_folder='static')
 
-def setup_driver():
-    """設置 Playwright WebDriver"""
+def take_screenshot(driver, name):
+    """截圖功能"""
     try:
-        print("正在初始化 Playwright...")
-        playwright = sync_playwright().start()
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"/app/screenshots/{name}_{timestamp}.png"
+        driver.save_screenshot(filename)
+        print(f"截圖已保存: {filename}")
         
-        # 使用系統的 Chromium
-        browser = playwright.chromium.launch(
-            headless=True,
-            args=[
-                '--no-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-gpu',
-                '--disable-web-security',
-                '--disable-features=VizDisplayCompositor',
-                '--disable-extensions',
-                '--disable-plugins',
-                '--disable-images',
-                '--disable-javascript',
-                '--disable-background-timer-throttling',
-                '--disable-backgrounding-occluded-windows',
-                '--disable-renderer-backgrounding',
-                '--disable-features=TranslateUI',
-                '--disable-ipc-flooding-protection',
-                '--memory-pressure-off',
-                '--max_old_space_size=4096'
-            ]
-        )
+        # 將截圖轉換為 base64 以便在日誌中查看
+        with open(filename, "rb") as image_file:
+            encoded_string = base64.b64encode(image_file.read()).decode()
+            print(f"截圖 base64: data:image/png;base64,{encoded_string[:100]}...")
+            
+    except Exception as e:
+        print(f"截圖失敗: {e}")
+
+def setup_driver():
+    """設置 Selenium WebDriver"""
+    try:
+        print("正在初始化 Selenium WebDriver...")
         
-        context = browser.new_context(
-            viewport={'width': 1920, 'height': 1080},
-            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        )
+        # 設置 Chrome 選項
+        chrome_options = Options()
+        chrome_options.add_argument('--no-sandbox')
+        chrome_options.add_argument('--disable-dev-shm-usage')
+        chrome_options.add_argument('--disable-gpu')
+        chrome_options.add_argument('--headless')
+        chrome_options.add_argument('--disable-web-security')
+        chrome_options.add_argument('--disable-features=VizDisplayCompositor')
+        chrome_options.add_argument('--disable-extensions')
+        chrome_options.add_argument('--disable-plugins')
+        chrome_options.add_argument('--disable-images')
+        chrome_options.add_argument('--disable-javascript')
+        chrome_options.add_argument('--disable-background-timer-throttling')
+        chrome_options.add_argument('--disable-backgrounding-occluded-windows')
+        chrome_options.add_argument('--disable-renderer-backgrounding')
+        chrome_options.add_argument('--disable-features=TranslateUI')
+        chrome_options.add_argument('--disable-ipc-flooding-protection')
+        chrome_options.add_argument('--memory-pressure-off')
+        chrome_options.add_argument('--max_old_space_size=4096')
+        chrome_options.add_argument('--window-size=1920,1080')
+        chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
         
-        page = context.new_page()
+        # 設置 ChromeDriver 路徑
+        chrome_options.binary_location = '/usr/bin/chromium-browser'
         
-        # 創建 driver 字典
-        driver = {
-            'page': page,
-            'context': context,
-            'browser': browser,
-            'playwright': playwright,
-            'get': lambda url: page.goto(url),
-            'title': lambda: page.title(),
-            'current_url': lambda: page.url,
-            'get_window_size': lambda: {'width': 1920, 'height': 1080}
-        }
+        # 創建 WebDriver
+        driver = webdriver.Chrome(options=chrome_options)
+        driver.set_window_size(1920, 1080)
         
-        print("Playwright 初始化成功")
+        print("Selenium WebDriver 初始化成功")
         return driver
         
     except Exception as e:
-        print(f"Playwright 初始化失敗: {e}")
+        print(f"Selenium WebDriver 初始化失敗: {e}")
         return None
 
 def wait_for_element(driver, by, value, timeout=30):
@@ -93,7 +96,7 @@ def make_reservation():
             screenshot_count += 1
             filename = f'step_{screenshot_count:03d}_{description}.png'
             if driver:
-                driver['save_screenshot'](filename)
+                driver.save_screenshot(filename)
                 print(f"截圖 {screenshot_count}: {description} - {filename}")
             return filename
         except Exception as e:
@@ -108,18 +111,18 @@ def make_reservation():
         
         # 設置視窗大小為高解析度
         print("設置視窗大小為 1920x1080...")
-        driver['set_window_size'](1920, 1080)
-        driver['maximize_window']()
+        driver.set_window_size(1920, 1080)
+        driver.maximize_window()
         print("視窗大小設置完成")
         
         print("正在載入網頁...")
-        driver['get']("https://www.ntpc.ltc-car.org/")
+        driver.get("https://www.ntpc.ltc-car.org/")
         print("網頁載入完成")
         take_screenshot("page_loaded")
         
         # 等待頁面完全載入
         print("等待頁面完全載入...")
-        driver['page'].wait_for_load_state('networkidle')
+        driver.implicitly_wait(10)
         print("頁面已完全載入")
         take_screenshot("page_complete")
         
@@ -127,9 +130,9 @@ def make_reservation():
         print("檢查並處理浮動視窗...")
         try:
             # 等待浮動視窗出現
-            driver['page'].wait_for_selector('text=我知道了', timeout=10000)
+            driver.find_element(By.XPATH, "//button[text()='我知道了']")
             print("找到浮動視窗，點擊「我知道了」按鈕")
-            driver['page'].click('text=我知道了')
+            driver.find_element(By.XPATH, "//button[text()='我知道了']").click()
             print("「我知道了」按鈕點擊成功")
             take_screenshot("popup_closed")
         except Exception as e:
@@ -140,34 +143,34 @@ def make_reservation():
         print("開始登入流程...")
         try:
             # 等待登入表單載入
-            driver['page'].wait_for_selector('input[type="text"]', timeout=10000)
+            driver.find_element(By.XPATH, "//input[@type='text']")
             print("登入表單已載入")
             take_screenshot("login_form")
             
             # 輸入身分證字號
             print("輸入身分證字號: A102574899")
-            driver['page'].fill('input[type="text"]', 'A102574899')
+            driver.find_element(By.XPATH, "//input[@type='text']").send_keys("A102574899")
             
             # 輸入密碼
             print("輸入密碼: visi319VISI")
-            driver['page'].fill('input[type="password"]', 'visi319VISI')
+            driver.find_element(By.XPATH, "//input[@type='password']").send_keys("visi319VISI")
             
             # 點擊民眾登入按鈕 - 使用更精確的選擇器
             print("點擊民眾登入按鈕")
             try:
                 # 嘗試多種選擇器
-                login_button = driver['page'].locator('button:has-text("民眾登入")').first
-                if login_button.is_visible():
+                login_button = driver.find_element(By.XPATH, "//button[contains(text(), '民眾登入')]")
+                if login_button.is_displayed():
                     login_button.click()
                 else:
                     # 備用方法：使用 JavaScript 點擊
-                    driver['page'].evaluate('document.querySelector("button").click()')
+                    driver.execute_script("document.querySelector('button').click()")
             except Exception as e:
                 print(f"點擊登入按鈕失敗，嘗試備用方法: {e}")
                 # 嘗試點擊所有按鈕
-                buttons = driver['page'].locator('button').all()
+                buttons = driver.find_elements(By.XPATH, "//button")
                 for button in buttons:
-                    if "民眾登入" in button.text_content():
+                    if "民眾登入" in button.text:
                         button.click()
                         break
             
@@ -177,9 +180,9 @@ def make_reservation():
             # 等待登入成功浮動視窗
             print("等待登入成功訊息...")
             try:
-                driver['page'].wait_for_selector('text=登入成功', timeout=10000)
+                driver.find_element(By.XPATH, "//div[contains(text(), '登入成功')]")
                 print("找到登入成功訊息，點擊確定")
-                driver['page'].click('text=確定')
+                driver.find_element(By.XPATH, "//button[contains(text(), '確定')]").click()
                 print("登入成功確認完成")
                 take_screenshot("login_success")
             except Exception as e:
@@ -188,7 +191,7 @@ def make_reservation():
             
             # 等待登入完成
             print("等待登入完成...")
-            driver['page'].wait_for_load_state('networkidle')
+            driver.implicitly_wait(10)
             print("登入流程完成")
             take_screenshot("login_complete")
             
@@ -202,93 +205,96 @@ def make_reservation():
         try:
             # 5. 點擊「新增預約」
             print("點擊新增預約")
-            driver['page'].click('text=新增預約')
-            driver['page'].wait_for_load_state('networkidle')
+            driver.find_element(By.XPATH, "//button[contains(text(), '新增預約')]").click()
+            driver.implicitly_wait(10)
             take_screenshot("new_reservation")
             
             # 6. 上車地點選擇「醫療院所」
             print("選擇上車地點：醫療院所")
-            driver['page'].select_option('select', '醫療院所')
+            select = Select(driver.find_element(By.XPATH, "//select[@name='location']"))
+            select.select_by_visible_text("醫療院所")
             take_screenshot("pickup_location")
             
             # 7. 輸入「亞東紀念醫院」並選擇第一個搜尋結果
             print("輸入上車地點：亞東紀念醫院")
-            pickup_input = driver['page'].locator('input[placeholder*="地點"]').first
-            pickup_input.fill('亞東紀念醫院')
-            driver['page'].wait_for_timeout(2000)  # 等待搜尋結果
+            pickup_input = driver.find_element(By.XPATH, "//input[@placeholder='請輸入地點']")
+            pickup_input.send_keys("亞東紀念醫院")
+            driver.implicitly_wait(2000)  # 等待搜尋結果
             
             # 點擊第一個搜尋結果
             print("選擇第一個搜尋結果")
-            search_results = driver['page'].locator('.search-result, .autocomplete-item').first
-            if search_results.is_visible():
-                search_results.click()
+            search_results = driver.find_elements(By.XPATH, "//div[@class='search-result']")
+            if search_results:
+                search_results[0].click()
             take_screenshot("pickup_selected")
             
             # 8. 下車地點選擇「住家」
             print("選擇下車地點：住家")
-            driver['page'].select_option('select', '住家')
+            select = Select(driver.find_element(By.XPATH, "//select[@name='location']"))
+            select.select_by_visible_text("住家")
             take_screenshot("dropoff_location")
             
             # 9. 預約日期/時段選擇
             print("選擇預約日期/時段")
             # 選擇最後一個日期選項
-            date_selects = driver['page'].locator('select').all()
+            date_selects = driver.find_elements(By.XPATH, "//select[@name='date']/option")
             if len(date_selects) >= 3:
                 # 選擇最後一個日期
-                last_date_option = date_selects[0].locator('option').last
+                last_date_option = date_selects[-1]
                 last_date_option.click()
                 
                 # 選擇時間 16
-                time_selects = driver['page'].locator('select').all()
+                time_selects = driver.find_elements(By.XPATH, "//select[@name='time']/option")
                 if len(time_selects) >= 2:
-                    time_selects[1].select_option('16')
+                    time_selects[1].click()
                 
                 # 選擇分鐘 40
                 if len(time_selects) >= 3:
-                    time_selects[2].select_option('40')
+                    time_selects[2].click()
             take_screenshot("datetime_selected")
             
             # 10. 於預約時間前後30分鐘到達 選擇「不同意」
             print("選擇不同意前後30分鐘到達")
-            driver['page'].click('text=不同意')
+            driver.find_element(By.XPATH, "//button[contains(text(), '不同意')]").click()
             take_screenshot("time_window")
             
             # 11. 陪同人數 選擇「1人(免費)」
             print("選擇陪同人數：1人(免費)")
-            driver['page'].select_option('select', '1人(免費)')
+            select = Select(driver.find_element(By.XPATH, "//select[@name='companion']"))
+            select.select_by_visible_text("1人(免費)")
             take_screenshot("companion")
             
             # 12. 同意共乘 選擇「否」
             print("選擇不同意共乘")
-            driver['page'].click('text=否')
+            driver.find_element(By.XPATH, "//button[contains(text(), '否')]").click()
             take_screenshot("carpool")
             
             # 13. 搭乘輪椅上車 選擇「是」
             print("選擇搭乘輪椅上車：是")
-            driver['page'].click('text=是')
+            driver.find_element(By.XPATH, "//button[contains(text(), '是')]").click()
             take_screenshot("wheelchair")
             
             # 14. 大型輪椅 選擇「否」
             print("選擇大型輪椅：否")
-            driver['page'].click('text=否')
+            driver.find_element(By.XPATH, "//button[contains(text(), '否')]").click()
             take_screenshot("large_wheelchair")
             
             # 15. 點擊「下一步，確認預約資訊」
             print("點擊下一步，確認預約資訊")
-            driver['page'].click('text=下一步，確認預約資訊')
-            driver['page'].wait_for_load_state('networkidle')
+            driver.find_element(By.XPATH, "//button[contains(text(), '下一步，確認預約資訊')]").click()
+            driver.implicitly_wait(10)
             take_screenshot("confirm_info")
             
             # 16. 點擊「送出預約」
             print("點擊送出預約")
-            driver['page'].click('text=送出預約')
-            driver['page'].wait_for_load_state('networkidle')
+            driver.find_element(By.XPATH, "//button[contains(text(), '送出預約')]").click()
+            driver.implicitly_wait(10)
             take_screenshot("submit_reservation")
             
             # 17. 檢查「已完成預約」畫面
             print("檢查預約完成狀態...")
             try:
-                driver['page'].wait_for_selector('text=已完成預約', timeout=10000)
+                driver.find_element(By.XPATH, "//div[contains(text(), '已完成預約')]")
                 print("預約成功完成！")
                 take_screenshot("reservation_success")
                 return True
@@ -320,7 +326,7 @@ def make_reservation():
     finally:
         if driver:
             try:
-                driver['quit']()
+                driver.quit()
                 print("WebDriver 已關閉")
             except:
                 pass
