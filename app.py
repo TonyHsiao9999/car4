@@ -204,7 +204,7 @@ def make_reservation():
 def index():
     return jsonify({"status": "running"})
 
-@app.route('/make-reservation')
+@app.route('/reserve')
 def reservation():
     result = make_reservation()
     return jsonify({"success": result})
