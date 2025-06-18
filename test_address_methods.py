@@ -19,7 +19,7 @@ def test_address_methods():
         try:
             # 導航到預約頁面
             print("正在導航到預約系統...")
-            page.goto("https://trms.care.tphd.tpc.gov.tw/TRMS/Html/Index.html")
+            page.goto("https://www.ntpc.ltc-car.org/")
             
             # 等待頁面載入
             page.wait_for_load_state("networkidle")

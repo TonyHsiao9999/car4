@@ -1834,7 +1834,7 @@ def run_address_test():
         try:
             # 基本導航和登入流程
             test_log("導航到預約系統...")
-            driver['page'].goto("https://trms.care.tphd.tpc.gov.tw/TRMS/Html/Index.html")
+            driver['page'].goto("https://www.ntpc.ltc-car.org/")
             driver['page'].wait_for_load_state("networkidle")
             
             # 處理初始彈窗
