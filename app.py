@@ -10,20 +10,17 @@ import time
 import os
 from dotenv import load_dotenv
 from selenium.webdriver.common.action_chains import ActionChains
-from webdriver_manager.chrome import ChromeDriverManager
-import glob
+import tempfile
 
 app = Flask(__name__, static_folder='static')
 
 def setup_driver():
     from selenium.webdriver.chrome.service import Service
     from selenium.webdriver.chrome.options import Options
-    from webdriver_manager.chrome import ChromeDriverManager
-    import os
-    import glob
+    import tempfile
 
     chrome_options = Options()
-    chrome_options.binary_location = "/usr/bin/google-chrome"
+    chrome_options.binary_location = "/usr/bin/chromium"
     chrome_options.add_argument('--headless')
     chrome_options.add_argument('--no-sandbox')
     chrome_options.add_argument('--disable-dev-shm-usage')
@@ -48,33 +45,12 @@ def setup_driver():
     chrome_options.add_argument('--disable-blink-features')
     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
     chrome_options.add_experimental_option("useAutomationExtension", False)
+    
+    # 使用唯一的 user-data-dir
+    user_data_dir = tempfile.mkdtemp(prefix='chrome_user_data_')
+    chrome_options.add_argument(f'--user-data-dir={user_data_dir}')
 
-    # 使用 webdriver-manager 自動下載正確版本的 ChromeDriver
-    chromedriver_path = ChromeDriverManager().install()
-    
-    # 修正路徑：確保指向正確的 chromedriver 執行檔
-    if chromedriver_path.endswith('THIRD_PARTY_NOTICES.chromedriver'):
-        # 修正路徑，移除錯誤的檔案名
-        chromedriver_path = chromedriver_path.replace('THIRD_PARTY_NOTICES.chromedriver', 'chromedriver')
-    
-    # 檢查檔案是否存在且可執行
-    if not os.path.exists(chromedriver_path):
-        # 嘗試在目錄中尋找正確的 chromedriver 檔案
-        chromedriver_dir = os.path.dirname(chromedriver_path)
-        chromedriver_files = glob.glob(os.path.join(chromedriver_dir, 'chromedriver*'))
-        for file_path in chromedriver_files:
-            if os.path.isfile(file_path) and os.access(file_path, os.X_OK):
-                chromedriver_path = file_path
-                break
-    
-    # 設置執行權限
-    try:
-        import stat
-        os.chmod(chromedriver_path, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH)
-    except Exception as e:
-        print(f"設置權限失敗: {e}")
-    
-    service = Service(chromedriver_path)
+    service = Service('/usr/bin/chromedriver')
     driver = webdriver.Chrome(service=service, options=chrome_options)
     return driver
 
