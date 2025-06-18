@@ -1550,11 +1550,35 @@ def make_reservation():
                                 print(f"跳過地點選單: {time_texts}")
                                 continue
                             
-                            # 驗證：確認包含時間相關內容
-                            time_keywords = ['00', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '時', ':']
-                            has_time_content = any(keyword in ' '.join(time_texts) for keyword in time_keywords)
+                            # 驗證：排除日期選單（精確排除）
+                            date_indicators = ['2024', '2025', '/', '月', '日', '今天', '明天']
+                            is_date_menu = any(indicator in ' '.join(time_texts) for indicator in date_indicators)
                             
-                            if has_time_content and len(time_texts) > 1:
+                            if is_date_menu:
+                                print(f"跳過日期選單: {time_texts}")
+                                continue
+                            
+                            # 驗證：確認為純時間選單（只包含小時，不包含日期）
+                            has_hour_format = False
+                            for text in time_texts:
+                                # 檢查是否包含明顯的小時標示
+                                if text.endswith('時') and text[:-1].isdigit():
+                                    has_hour_format = True
+                                    break
+                                # 檢查是否包含時間符號
+                                if ':' in text and len(text) <= 5:  # 如 "16:00"
+                                    has_hour_format = True
+                                    break
+                                # 檢查是否為典型的小時格式（8-19的營業時間，且不是標準分鐘格式）
+                                if text.isdigit():
+                                    hour_val = int(text)
+                                    if hour_val >= 8 and hour_val <= 19:  # 典型的營業時間範圍
+                                        # 檢查是否不是標準分鐘（分鐘應該都是5的倍數且<=55）
+                                        if hour_val % 5 != 0 or hour_val > 55:
+                                            has_hour_format = True
+                                            break
+                            
+                            if has_hour_format and len(time_texts) > 1:
                                 print(f"✅ 確認為時間選單: {time_texts}")
                                 
                                 # 精確尋找16點時間
@@ -1621,11 +1645,53 @@ def make_reservation():
                                 print(f"跳過地點選單: {minute_texts}")
                                 continue
                             
-                            # 驗證：確認包含分鐘相關內容
-                            minute_keywords = ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55', '分']
-                            has_minute_content = any(keyword in ' '.join(minute_texts) for keyword in minute_keywords)
+                            # 驗證：排除日期選單（精確排除）
+                            date_indicators = ['2024', '2025', '/', '月', '日', '今天', '明天']
+                            is_date_menu = any(indicator in ' '.join(minute_texts) for indicator in date_indicators)
                             
-                            if has_minute_content and len(minute_texts) > 1:
+                            if is_date_menu:
+                                print(f"跳過日期選單: {minute_texts}")
+                                continue
+                            
+                            # 驗證：排除時間選單（小時格式）
+                            has_hour_format = False
+                            for text in minute_texts:
+                                # 檢查是否包含明顯的小時標示
+                                if text.endswith('時') and text[:-1].isdigit():
+                                    has_hour_format = True
+                                    break
+                                # 檢查是否包含時間符號
+                                if ':' in text and len(text) <= 5:
+                                    has_hour_format = True
+                                    break
+                                # 檢查是否為典型的小時格式（特定的小時值：8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19）
+                                if text.isdigit():
+                                    hour_val = int(text)
+                                    if hour_val >= 8 and hour_val <= 19:  # 典型的營業時間範圍
+                                        # 但要確保不是分鐘（分鐘應該都是5的倍數）
+                                        if hour_val % 5 != 0 or hour_val > 55:
+                                            has_hour_format = True
+                                            break
+                            
+                            if has_hour_format:
+                                print(f"跳過時間選單: {minute_texts}")
+                                continue
+                            
+                            # 驗證：確認為純分鐘選單（00, 05, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55）
+                            has_minute_format = False
+                            for text in minute_texts:
+                                # 檢查是否為標準分鐘格式
+                                if text.isdigit():
+                                    minute_val = int(text)
+                                    if 0 <= minute_val <= 59 and minute_val % 5 == 0:  # 標準分鐘間隔
+                                        has_minute_format = True
+                                        break
+                                # 檢查是否包含「分」字
+                                if text.endswith('分') and text[:-1].isdigit():
+                                    has_minute_format = True
+                                    break
+                            
+                            if has_minute_format and len(minute_texts) > 1:
                                 print(f"✅ 確認為分鐘選單: {minute_texts}")
                                 
                                 # 尋找40分或接近的分鐘
@@ -1773,11 +1839,35 @@ def make_reservation():
                                 print(f"跳過地點選單 {i}: {option_texts}")
                                 continue
                             
-                            # 檢查是否為時間選單
-                            time_keywords = ['00', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '時', ':']
-                            has_time_content = any(keyword in ' '.join(option_texts) for keyword in time_keywords)
+                            # 排除日期選單（精確排除）
+                            date_indicators = ['2024', '2025', '/', '月', '日', '今天', '明天']
+                            is_date_menu = any(indicator in ' '.join(option_texts) for indicator in date_indicators)
                             
-                            if has_time_content and len(option_texts) > 1:
+                            if is_date_menu:
+                                print(f"跳過日期選單 {i}: {option_texts}")
+                                continue
+                            
+                            # 檢查是否為純時間選單（只包含小時，不包含日期）
+                            has_hour_format = False
+                            for text in option_texts:
+                                # 檢查是否包含明顯的小時標示
+                                if text.endswith('時') and text[:-1].isdigit():
+                                    has_hour_format = True
+                                    break
+                                # 檢查是否包含時間符號
+                                if ':' in text and len(text) <= 5:  # 如 "16:00"
+                                    has_hour_format = True
+                                    break
+                                # 檢查是否為典型的小時格式（8-19的營業時間，且不是標準分鐘格式）
+                                if text.isdigit():
+                                    hour_val = int(text)
+                                    if hour_val >= 8 and hour_val <= 19:  # 典型的營業時間範圍
+                                        # 檢查是否不是標準分鐘（分鐘應該都是5的倍數且<=55）
+                                        if hour_val % 5 != 0 or hour_val > 55:
+                                            has_hour_format = True
+                                            break
+                            
+                            if has_hour_format and len(option_texts) > 1:
                                 print(f"✅ 找到時間選單 {i}: {option_texts}")
                                 time_select = select_elem
                                 time_select_index = i
@@ -1885,11 +1975,53 @@ def make_reservation():
                                 print(f"跳過地點選單 {i}: {option_texts}")
                                 continue
                             
-                            # 檢查是否為分鐘選單
-                            minute_keywords = ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55', '分']
-                            has_minute_content = any(keyword in ' '.join(option_texts) for keyword in minute_keywords)
+                            # 排除日期選單（精確排除）
+                            date_indicators = ['2024', '2025', '/', '月', '日', '今天', '明天']
+                            is_date_menu = any(indicator in ' '.join(option_texts) for indicator in date_indicators)
                             
-                            if has_minute_content and len(option_texts) > 1:
+                            if is_date_menu:
+                                print(f"跳過日期選單 {i}: {option_texts}")
+                                continue
+                            
+                            # 排除時間選單（小時格式）
+                            has_hour_format = False
+                            for text in option_texts:
+                                # 檢查是否包含明顯的小時標示
+                                if text.endswith('時') and text[:-1].isdigit():
+                                    has_hour_format = True
+                                    break
+                                # 檢查是否包含時間符號
+                                if ':' in text and len(text) <= 5:
+                                    has_hour_format = True
+                                    break
+                                # 檢查是否為典型的小時格式（8-19的營業時間，且不是標準分鐘格式）
+                                if text.isdigit():
+                                    hour_val = int(text)
+                                    if hour_val >= 8 and hour_val <= 19:  # 典型的營業時間範圍
+                                        # 檢查是否不是標準分鐘（分鐘應該都是5的倍數且<=55）
+                                        if hour_val % 5 != 0 or hour_val > 55:
+                                            has_hour_format = True
+                                            break
+                            
+                            if has_hour_format:
+                                print(f"跳過時間選單 {i}: {option_texts}")
+                                continue
+                            
+                            # 檢查是否為純分鐘選單（00, 05, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55）
+                            has_minute_format = False
+                            for text in option_texts:
+                                # 檢查是否為標準分鐘格式
+                                if text.isdigit():
+                                    minute_val = int(text)
+                                    if 0 <= minute_val <= 59 and minute_val % 5 == 0:  # 標準分鐘間隔
+                                        has_minute_format = True
+                                        break
+                                # 檢查是否包含「分」字
+                                if text.endswith('分') and text[:-1].isdigit():
+                                    has_minute_format = True
+                                    break
+                            
+                            if has_minute_format and len(option_texts) > 1:
                                 print(f"✅ 找到分鐘選單 {i}: {option_texts}")
                                 minute_select = select_elem
                                 minute_select_index = i
