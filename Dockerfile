@@ -35,15 +35,12 @@ RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearm
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# 下載最新版本的 ChromeDriver
-RUN wget -q "https://chromedriver.storage.googleapis.com/LATEST_RELEASE" -O /tmp/chromedriver_version \
-    && CHROMEDRIVER_VERSION=$(cat /tmp/chromedriver_version) \
-    && echo "ChromeDriver 版本: $CHROMEDRIVER_VERSION" \
-    && wget -q "https://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip" -O /tmp/chromedriver.zip \
+# 下載與 Chrome 137 相容的 ChromeDriver
+RUN wget -q "https://chromedriver.storage.googleapis.com/137.0.7151.119/chromedriver_linux64.zip" -O /tmp/chromedriver.zip \
     && unzip /tmp/chromedriver.zip -d /usr/local/bin/ \
-    && rm /tmp/chromedriver.zip /tmp/chromedriver_version \
+    && rm /tmp/chromedriver.zip \
     && chmod +x /usr/local/bin/chromedriver \
-    && echo "ChromeDriver 安裝完成"
+    && echo "ChromeDriver 137.0.7151.119 安裝完成"
 
 # 設置工作目錄
 WORKDIR /app
