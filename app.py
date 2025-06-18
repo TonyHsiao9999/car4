@@ -94,7 +94,7 @@ def make_reservation():
             screenshot_count += 1
             filename = f'step_{screenshot_count:03d}_{description}.png'
             if driver:
-                driver.save_screenshot(filename)
+                driver['save_screenshot'](filename)
                 print(f"截圖 {screenshot_count}: {description} - {filename}")
             return filename
         except Exception as e:
@@ -109,27 +109,27 @@ def make_reservation():
         
         # 設置視窗大小為高解析度
         print("設置視窗大小為 1920x1080...")
-        driver.set_window_size(1920, 1080)
-        driver.maximize_window()
+        driver['set_window_size'](1920, 1080)
+        driver['maximize_window']()
         print("視窗大小設置完成")
         
         print("正在載入網頁...")
-        driver.get("https://www.ntpc.ltc-car.org/")
+        driver['get']("https://www.ntpc.ltc-car.org/")
         print("網頁載入完成")
         take_screenshot("page_loaded")
         
         # 等待頁面完全載入
         print("等待頁面完全載入...")
         WebDriverWait(driver, 30).until(
-            lambda d: d.execute_script("return document.readyState") == "complete"
+            lambda d: d['execute_script']("return document.readyState") == "complete"
         )
         print("頁面已完全載入")
         take_screenshot("page_complete")
         
         # 檢查頁面狀態
-        print(f"當前頁面標題: {driver.title()}")
-        print(f"當前頁面URL: {driver.current_url()}")
-        print(f"當前視窗大小: {driver.get_window_size()}")
+        print(f"當前頁面標題: {driver['title']()}")
+        print(f"當前頁面URL: {driver['current_url']()}")
+        print(f"當前視窗大小: {driver['get_window_size']()}")
         take_screenshot("main_page")
         
         # 簡化流程，直接返回成功
@@ -154,7 +154,7 @@ def make_reservation():
     finally:
         if driver:
             try:
-                driver.quit()
+                driver['quit']()
                 print("WebDriver 已關閉")
             except:
                 pass
