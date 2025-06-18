@@ -1,33 +1,19 @@
-FROM ubuntu:22.04
+FROM python:3.9-slim
 
 # 避免互動式安裝
 ENV DEBIAN_FRONTEND=noninteractive
 
-# 安裝 Python3、pip、chromium 及相關依賴
+# 安裝最小化的系統依賴
 RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-pip \
     wget \
     gnupg \
     unzip \
     curl \
-    ca-certificates \
-    fonts-liberation \
-    libasound2 \
-    libatk-bridge2.0-0 \
-    libdrm2 \
-    libgtk-3-0 \
-    libnspr4 \
-    libnss3 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxrandr2 \
-    xdg-utils \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# 安裝 Google Chrome（不使用特定版本）
+# 安裝 Google Chrome（最小化安裝）
 RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg \
     && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
     && apt-get update \
@@ -35,12 +21,11 @@ RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearm
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# 下載確實存在的 ChromeDriver 版本
+# 下載 ChromeDriver 114
 RUN wget -q "https://chromedriver.storage.googleapis.com/114.0.5735.90/chromedriver_linux64.zip" -O /tmp/chromedriver.zip \
     && unzip /tmp/chromedriver.zip -d /usr/local/bin/ \
     && rm /tmp/chromedriver.zip \
-    && chmod +x /usr/local/bin/chromedriver \
-    && echo "ChromeDriver 114.0.5735.90 安裝完成"
+    && chmod +x /usr/local/bin/chromedriver
 
 # 設置工作目錄
 WORKDIR /app
@@ -51,7 +36,7 @@ COPY app.py .
 COPY static/ ./static/
 
 # 安裝 Python 依賴
-RUN pip3 install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # 設置環境變數
 ENV DISPLAY=:99
@@ -66,4 +51,4 @@ ENV PYTHONHASHSEED=random
 RUN mkdir -p /app/screenshots
 
 # 啟動應用
-CMD ["python3", "app.py"] 
+CMD ["python", "app.py"] 
