@@ -308,6 +308,10 @@ def page_source():
         </html>
         '''
 
+@app.route('/test')
+def test():
+    return jsonify({"status": "ok", "message": "Flask 應用程式正常運行"})
+
 @app.route('/reserve')
 def reservation():
     try:
