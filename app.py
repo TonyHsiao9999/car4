@@ -152,12 +152,39 @@ def make_reservation():
             print("輸入密碼: visi319VISI")
             driver['page'].fill('input[type="password"]', 'visi319VISI')
             
-            # 點擊民眾登入按鈕
+            # 點擊民眾登入按鈕 - 使用更精確的選擇器
             print("點擊民眾登入按鈕")
-            driver['page'].click('text=民眾登入')
+            try:
+                # 嘗試多種選擇器
+                login_button = driver['page'].locator('button:has-text("民眾登入")').first
+                if login_button.is_visible():
+                    login_button.click()
+                else:
+                    # 備用方法：使用 JavaScript 點擊
+                    driver['page'].evaluate('document.querySelector("button").click()')
+            except Exception as e:
+                print(f"點擊登入按鈕失敗，嘗試備用方法: {e}")
+                # 嘗試點擊所有按鈕
+                buttons = driver['page'].locator('button').all()
+                for button in buttons:
+                    if "民眾登入" in button.text_content():
+                        button.click()
+                        break
             
             print("登入按鈕點擊完成")
             take_screenshot("login_clicked")
+            
+            # 等待登入成功浮動視窗
+            print("等待登入成功訊息...")
+            try:
+                driver['page'].wait_for_selector('text=登入成功', timeout=10000)
+                print("找到登入成功訊息，點擊確定")
+                driver['page'].click('text=確定')
+                print("登入成功確認完成")
+                take_screenshot("login_success")
+            except Exception as e:
+                print(f"沒有找到登入成功訊息: {e}")
+                take_screenshot("no_login_success")
             
             # 等待登入完成
             print("等待登入完成...")
@@ -170,15 +197,110 @@ def make_reservation():
             take_screenshot("login_error")
             return False
         
-        # 檢查頁面狀態
-        print(f"當前頁面標題: {driver['title']()}")
-        print(f"當前頁面URL: {driver['current_url']()}")
-        print(f"當前視窗大小: {driver['get_window_size']()}")
-        take_screenshot("main_page")
-        
-        # 簡化流程，直接返回成功
-        print("預約流程執行完成（簡化版本）")
-        take_screenshot("reservation_complete")
+        # 開始預約流程
+        print("開始預約流程...")
+        try:
+            # 5. 點擊「新增預約」
+            print("點擊新增預約")
+            driver['page'].click('text=新增預約')
+            driver['page'].wait_for_load_state('networkidle')
+            take_screenshot("new_reservation")
+            
+            # 6. 上車地點選擇「醫療院所」
+            print("選擇上車地點：醫療院所")
+            driver['page'].select_option('select', '醫療院所')
+            take_screenshot("pickup_location")
+            
+            # 7. 輸入「亞東紀念醫院」並選擇第一個搜尋結果
+            print("輸入上車地點：亞東紀念醫院")
+            pickup_input = driver['page'].locator('input[placeholder*="地點"]').first
+            pickup_input.fill('亞東紀念醫院')
+            driver['page'].wait_for_timeout(2000)  # 等待搜尋結果
+            
+            # 點擊第一個搜尋結果
+            print("選擇第一個搜尋結果")
+            search_results = driver['page'].locator('.search-result, .autocomplete-item').first
+            if search_results.is_visible():
+                search_results.click()
+            take_screenshot("pickup_selected")
+            
+            # 8. 下車地點選擇「住家」
+            print("選擇下車地點：住家")
+            driver['page'].select_option('select', '住家')
+            take_screenshot("dropoff_location")
+            
+            # 9. 預約日期/時段選擇
+            print("選擇預約日期/時段")
+            # 選擇最後一個日期選項
+            date_selects = driver['page'].locator('select').all()
+            if len(date_selects) >= 3:
+                # 選擇最後一個日期
+                last_date_option = date_selects[0].locator('option').last
+                last_date_option.click()
+                
+                # 選擇時間 16
+                time_selects = driver['page'].locator('select').all()
+                if len(time_selects) >= 2:
+                    time_selects[1].select_option('16')
+                
+                # 選擇分鐘 40
+                if len(time_selects) >= 3:
+                    time_selects[2].select_option('40')
+            take_screenshot("datetime_selected")
+            
+            # 10. 於預約時間前後30分鐘到達 選擇「不同意」
+            print("選擇不同意前後30分鐘到達")
+            driver['page'].click('text=不同意')
+            take_screenshot("time_window")
+            
+            # 11. 陪同人數 選擇「1人(免費)」
+            print("選擇陪同人數：1人(免費)")
+            driver['page'].select_option('select', '1人(免費)')
+            take_screenshot("companion")
+            
+            # 12. 同意共乘 選擇「否」
+            print("選擇不同意共乘")
+            driver['page'].click('text=否')
+            take_screenshot("carpool")
+            
+            # 13. 搭乘輪椅上車 選擇「是」
+            print("選擇搭乘輪椅上車：是")
+            driver['page'].click('text=是')
+            take_screenshot("wheelchair")
+            
+            # 14. 大型輪椅 選擇「否」
+            print("選擇大型輪椅：否")
+            driver['page'].click('text=否')
+            take_screenshot("large_wheelchair")
+            
+            # 15. 點擊「下一步，確認預約資訊」
+            print("點擊下一步，確認預約資訊")
+            driver['page'].click('text=下一步，確認預約資訊')
+            driver['page'].wait_for_load_state('networkidle')
+            take_screenshot("confirm_info")
+            
+            # 16. 點擊「送出預約」
+            print("點擊送出預約")
+            driver['page'].click('text=送出預約')
+            driver['page'].wait_for_load_state('networkidle')
+            take_screenshot("submit_reservation")
+            
+            # 17. 檢查「已完成預約」畫面
+            print("檢查預約完成狀態...")
+            try:
+                driver['page'].wait_for_selector('text=已完成預約', timeout=10000)
+                print("預約成功完成！")
+                take_screenshot("reservation_success")
+                return True
+            except Exception as e:
+                print(f"沒有找到預約完成訊息: {e}")
+                take_screenshot("reservation_unknown")
+                return False
+                
+        except Exception as e:
+            print(f"預約過程發生錯誤: {e}")
+            take_screenshot("reservation_error")
+            return False
         
         return True
         
