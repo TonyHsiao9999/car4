@@ -36,8 +36,8 @@ COPY requirements.txt .
 COPY app.py .
 COPY static/ ./static/
 
-# 安裝 Python 依賴（減少快取）
-RUN pip install --no-cache-dir --no-deps -r requirements.txt
+# 安裝 Python 依賴（修正安裝參數）
+RUN pip install --no-cache-dir -r requirements.txt
 
 # 設置環境變數
 ENV DISPLAY=:99
