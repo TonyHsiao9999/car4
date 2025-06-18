@@ -17,6 +17,7 @@ app = Flask(__name__, static_folder='static')
 
 def setup_driver():
     """設置 WebDriver - 使用 Playwright 替代 Selenium"""
+    from playwright.sync_api import sync_playwright
     import tempfile
     import os
     
@@ -28,23 +29,9 @@ def setup_driver():
             '--no-sandbox',
             '--disable-dev-shm-usage',
             '--disable-gpu',
-            '--window-size=1280,720',
             '--disable-extensions',
             '--disable-plugins',
-            '--disable-images',
-            '--disable-javascript',
             '--disable-blink-features=AutomationControlled',
-            '--single-process',
-            '--disable-background-timer-throttling',
-            '--disable-backgrounding-occluded-windows',
-            '--disable-renderer-backgrounding',
-            '--disable-features=TranslateUI',
-            '--disable-ipc-flooding-protection',
-            '--disable-features=VizDisplayCompositor',
-            '--ignore-certificate-errors',
-            '--ignore-ssl-errors',
-            '--disable-web-security',
-            '--allow-running-insecure-content',
         ]
     )
     
@@ -104,6 +91,7 @@ def make_reservation():
             return None
     
     try:
+        print("=== 開始執行預約流程 ===")
         print("開始初始化 WebDriver...")
         driver = setup_driver()
         print("WebDriver 初始化完成")
