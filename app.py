@@ -153,25 +153,152 @@ def make_reservation():
             
             # 點擊民眾登入按鈕 - 使用更精確的選擇器
             print("點擊民眾登入按鈕")
-            try:
-                # 嘗試多種選擇器
-                login_button = driver['page'].locator('button:has-text("民眾登入")').first
-                if login_button.is_visible():
-                    login_button.click()
-                else:
-                    # 備用方法：使用 JavaScript 點擊
-                    driver['page'].evaluate('document.querySelector("button").click()')
-            except Exception as e:
-                print(f"點擊登入按鈕失敗，嘗試備用方法: {e}")
-                # 嘗試點擊所有按鈕
-                buttons = driver['page'].locator('button').all()
-                for button in buttons:
-                    if "民眾登入" in button.text_content():
-                        button.click()
-                        break
+            take_screenshot("before_login_click")
             
-            print("登入按鈕點擊完成")
-            take_screenshot("login_clicked")
+            # 嘗試多種不同類型的登入按鈕選擇器
+            login_selectors = [
+                # 一般按鈕
+                'button:has-text("民眾登入")',
+                'button[value*="民眾登入"]',
+                'button[name*="login"]',
+                
+                # input 按鈕
+                'input[type="submit"]:has-value("民眾登入")',
+                'input[type="button"]:has-value("民眾登入")',
+                'input[value="民眾登入"]',
+                'input[value*="登入"]',
+                
+                # 連結
+                'a:has-text("民眾登入")',
+                'a[href*="login"]',
+                
+                # 表單提交
+                'form input[type="submit"]',
+                'form button[type="submit"]',
+                
+                # 通用文字匹配
+                'text=民眾登入',
+                ':text("民眾登入")',
+                '*:has-text("民眾登入")',
+                
+                # CSS 類別
+                '.login-btn',
+                '.btn-login',
+                '.submit-btn',
+                '.btn[onclick*="login"]',
+                
+                # ID 選擇器
+                '#login-btn',
+                '#loginBtn',
+                '#submit',
+                '#login',
+                
+                # 更廣泛的匹配
+                '[onclick*="login"]',
+                '[onclick*="submit"]'
+            ]
+            
+            login_clicked = False
+            
+            for selector in login_selectors:
+                try:
+                    print(f"嘗試登入按鈕選擇器: {selector}")
+                    
+                    # 檢查元素是否存在
+                    element = driver['page'].locator(selector).first
+                    if element.count() > 0:
+                        print(f"找到元素: {selector}")
+                        
+                        # 檢查元素是否可見
+                        if element.is_visible():
+                            print(f"元素可見，嘗試點擊: {selector}")
+                            element.click()
+                            print(f"登入按鈕點擊成功: {selector}")
+                            login_clicked = True
+                            break
+                        else:
+                            print(f"元素存在但不可見: {selector}")
+                    else:
+                        print(f"元素不存在: {selector}")
+                        
+                except Exception as e:
+                    print(f"登入按鈕選擇器 {selector} 失敗: {e}")
+                    continue
+            
+            # 如果還是沒點擊成功，嘗試更激進的方法
+            if not login_clicked:
+                print("所有標準方法失敗，嘗試更激進的方法...")
+                
+                try:
+                    # 方法1: 檢查所有按鈕的文字內容
+                    print("檢查所有按鈕...")
+                    all_buttons = driver['page'].locator('button, input[type="button"], input[type="submit"]').all()
+                    for i, button in enumerate(all_buttons):
+                        try:
+                            if button.is_visible():
+                                button_text = button.text_content() or button.get_attribute('value') or ''
+                                print(f"按鈕 {i}: '{button_text}'")
+                                if '登入' in button_text or 'login' in button_text.lower():
+                                    print(f"找到疑似登入按鈕，點擊: {button_text}")
+                                    button.click()
+                                    login_clicked = True
+                                    break
+                        except Exception as e:
+                            print(f"檢查按鈕 {i} 失敗: {e}")
+                            continue
+                except Exception as e:
+                    print(f"檢查所有按鈕失敗: {e}")
+                
+                # 方法2: 嘗試提交表單
+                if not login_clicked:
+                    try:
+                        print("嘗試直接提交登入表單...")
+                        forms = driver['page'].locator('form').all()
+                        for i, form in enumerate(forms):
+                            try:
+                                print(f"提交表單 {i}")
+                                # 使用 JavaScript 提交表單
+                                driver['page'].evaluate(f'document.forms[{i}].submit()')
+                                login_clicked = True
+                                break
+                            except Exception as e:
+                                print(f"提交表單 {i} 失敗: {e}")
+                                continue
+                    except Exception as e:
+                        print(f"表單提交失敗: {e}")
+                
+                # 方法3: 使用 JavaScript 尋找並點擊
+                if not login_clicked:
+                    try:
+                        print("使用 JavaScript 尋找登入按鈕...")
+                        js_script = """
+                        // 尋找包含"登入"文字的元素
+                        const elements = Array.from(document.querySelectorAll('*'));
+                        for (let elem of elements) {
+                            const text = elem.textContent || elem.value || '';
+                            if (text.includes('登入') || text.includes('民眾')) {
+                                if (elem.tagName === 'BUTTON' || elem.tagName === 'INPUT' || elem.tagName === 'A') {
+                                    console.log('找到登入元素:', elem);
+                                    elem.click();
+                                    return true;
+                                }
+                            }
+                        }
+                        return false;
+                        """
+                        result = driver['page'].evaluate(js_script)
+                        if result:
+                            print("JavaScript 點擊成功")
+                            login_clicked = True
+                    except Exception as e:
+                        print(f"JavaScript 點擊失敗: {e}")
+            
+            if login_clicked:
+                print("登入按鈕點擊完成")
+                take_screenshot("login_clicked")
+            else:
+                print("警告：無法找到或點擊登入按鈕")
+                take_screenshot("login_click_failed")
             
             # 等待登入成功浮動視窗
             print("等待登入成功訊息...")
