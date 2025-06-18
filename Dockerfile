@@ -15,10 +15,12 @@ RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add
     && apt-get install -y google-chrome-stable \
     && rm -rf /var/lib/apt/lists/*
 
-# 安裝 ChromeDriver (使用固定版本)
-RUN wget -q "https://chromedriver.storage.googleapis.com/114.0.5735.90/chromedriver_linux64.zip" -O /tmp/chromedriver.zip \
+# 安裝 ChromeDriver (使用最新版本)
+RUN wget -q "https://chromedriver.storage.googleapis.com/LATEST_RELEASE" -O /tmp/chromedriver_version \
+    && CHROMEDRIVER_VERSION=$(cat /tmp/chromedriver_version) \
+    && wget -q "https://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip" -O /tmp/chromedriver.zip \
     && unzip /tmp/chromedriver.zip -d /usr/local/bin/ \
-    && rm /tmp/chromedriver.zip \
+    && rm /tmp/chromedriver.zip /tmp/chromedriver_version \
     && chmod +x /usr/local/bin/chromedriver
 
 # 設置工作目錄

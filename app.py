@@ -68,6 +68,24 @@ def setup_driver():
         
     except Exception as e:
         print(f"設置 WebDriver 時發生錯誤: {e}")
+        
+        # 如果是版本不匹配錯誤，嘗試使用 webdriver-manager
+        if "version" in str(e).lower() or "chrome" in str(e).lower():
+            print("檢測到版本不匹配，嘗試使用 webdriver-manager...")
+            try:
+                from webdriver_manager.chrome import ChromeDriverManager
+                chrome_options = Options()
+                chrome_options.add_argument('--headless')
+                chrome_options.add_argument('--no-sandbox')
+                chrome_options.add_argument('--disable-dev-shm-usage')
+                chrome_options.add_argument('--disable-gpu')
+                service = Service(ChromeDriverManager().install())
+                driver = webdriver.Chrome(service=service, options=chrome_options)
+                print("使用 webdriver-manager 初始化 WebDriver 成功")
+                return driver
+            except Exception as e2:
+                print(f"webdriver-manager 也失敗: {e2}")
+        
         # 嘗試使用最基本的設定
         try:
             chrome_options = Options()
