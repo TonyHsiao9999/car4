@@ -72,8 +72,14 @@ def setup_driver():
             chrome_options.add_argument('--window-size=1920,1080')
             chrome_options.add_argument('--start-maximized')
             chrome_options.add_argument('--force-device-scale-factor=1')
+            # 減少記憶體使用的選項
+            chrome_options.add_argument('--single-process')
+            chrome_options.add_argument('--disable-background-timer-throttling')
+            chrome_options.add_argument('--disable-backgrounding-occluded-windows')
+            chrome_options.add_argument('--disable-renderer-backgrounding')
+            chrome_options.add_argument('--disable-features=TranslateUI')
+            chrome_options.add_argument('--disable-ipc-flooding-protection')
             chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-            chrome_options.add_experimental_option('useAutomationExtension', False)
             
             service = Service(chromedriver_path)
             driver = webdriver.Chrome(service=service, options=chrome_options)
@@ -122,8 +128,14 @@ def setup_driver():
             chrome_options.add_argument('--window-size=1920,1080')
             chrome_options.add_argument('--start-maximized')
             chrome_options.add_argument('--force-device-scale-factor=1')
+            # 減少記憶體使用的選項
+            chrome_options.add_argument('--single-process')
+            chrome_options.add_argument('--disable-background-timer-throttling')
+            chrome_options.add_argument('--disable-backgrounding-occluded-windows')
+            chrome_options.add_argument('--disable-renderer-backgrounding')
+            chrome_options.add_argument('--disable-features=TranslateUI')
+            chrome_options.add_argument('--disable-ipc-flooding-protection')
             chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-            chrome_options.add_experimental_option('useAutomationExtension', False)
             
             service = Service(chromedriver_path)
             driver = webdriver.Chrome(service=service, options=chrome_options)
@@ -155,8 +167,14 @@ def setup_driver():
         chrome_options.add_argument('--window-size=1920,1080')
         chrome_options.add_argument('--start-maximized')
         chrome_options.add_argument('--force-device-scale-factor=1')
+        # 減少記憶體使用的選項
+        chrome_options.add_argument('--single-process')
+        chrome_options.add_argument('--disable-background-timer-throttling')
+        chrome_options.add_argument('--disable-backgrounding-occluded-windows')
+        chrome_options.add_argument('--disable-renderer-backgrounding')
+        chrome_options.add_argument('--disable-features=TranslateUI')
+        chrome_options.add_argument('--disable-ipc-flooding-protection')
         chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        chrome_options.add_experimental_option('useAutomationExtension', False)
         
         # 檢查是否有環境變數指定的 ChromeDriver 路徑
         chromedriver_path = os.environ.get('CHROMEDRIVER_PATH', '/usr/local/bin/chromedriver')

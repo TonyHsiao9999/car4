@@ -1,19 +1,22 @@
 FROM python:3.9-slim
 
-# 安裝系統依賴
+# 安裝系統依賴（減少記憶體使用）
 RUN apt-get update && apt-get install -y \
     wget \
     gnupg \
     unzip \
     curl \
-    && rm -rf /var/lib/apt/lists/*
+    --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
-# 安裝 Chrome
+# 安裝 Chrome（最小化安裝）
 RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - \
     && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list \
     && apt-get update \
-    && apt-get install -y google-chrome-stable \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get install -y google-chrome-stable --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
 # 下載 ChromeDriver (使用穩定版本，讓 webdriver-manager 處理版本匹配)
 RUN wget -q "https://chromedriver.storage.googleapis.com/LATEST_RELEASE" -O /tmp/chromedriver_version \
@@ -33,14 +36,17 @@ COPY requirements.txt .
 COPY app.py .
 COPY static/ ./static/
 
-# 安裝 Python 依賴
-RUN pip install --no-cache-dir -r requirements.txt
+# 安裝 Python 依賴（減少快取）
+RUN pip install --no-cache-dir --no-deps -r requirements.txt
 
 # 設置環境變數
 ENV DISPLAY=:99
 ENV PYTHONUNBUFFERED=1
 ENV CHROME_BIN=/usr/bin/google-chrome
 ENV CHROMEDRIVER_PATH=/usr/local/bin/chromedriver
+# 減少記憶體使用的環境變數
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONHASHSEED=random
 
 # 創建截圖目錄
 RUN mkdir -p /app/screenshots
