@@ -77,49 +77,22 @@ def setup_driver():
     except Exception as e:
         print(f"設置 WebDriver 時發生錯誤: {e}")
         
-        # 最後嘗試：手動下載並設置正確版本的 ChromeDriver
+        # 最後嘗試：使用最基本的設定
         try:
-            print("嘗試手動下載正確版本的 ChromeDriver...")
-            import subprocess
-            import json
-            
-            # 獲取 Chrome 版本
-            try:
-                chrome_version_output = subprocess.check_output(['google-chrome', '--version'], stderr=subprocess.STDOUT, text=True)
-                chrome_version = chrome_version_output.strip().split()[-1].split('.')[0]
-                print(f"檢測到 Chrome 版本: {chrome_version}")
-            except:
-                chrome_version = "137"  # 預設版本
-            
-            # 下載對應版本的 ChromeDriver
-            chromedriver_url = f"https://chromedriver.storage.googleapis.com/LATEST_RELEASE_{chrome_version}"
-            try:
-                response = subprocess.check_output(['curl', '-s', chromedriver_url], text=True)
-                chromedriver_version = response.strip()
-                print(f"下載 ChromeDriver 版本: {chromedriver_version}")
-            except:
-                chromedriver_version = f"{chrome_version}.0.7151.119"
-                print(f"使用預設 ChromeDriver 版本: {chromedriver_version}")
-            
-            # 下載並設置 ChromeDriver
-            chromedriver_download_url = f"https://chromedriver.storage.googleapis.com/{chromedriver_version}/chromedriver_linux64.zip"
-            subprocess.run(['wget', '-O', '/tmp/chromedriver.zip', chromedriver_download_url], check=True)
-            subprocess.run(['unzip', '-o', '/tmp/chromedriver.zip', '-d', '/tmp/'], check=True)
-            subprocess.run(['chmod', '+x', '/tmp/chromedriver'], check=True)
-            
+            print("嘗試使用最基本的設定...")
             chrome_options = Options()
             chrome_options.add_argument('--headless')
             chrome_options.add_argument('--no-sandbox')
             chrome_options.add_argument('--disable-dev-shm-usage')
             chrome_options.add_argument('--disable-gpu')
             
-            service = Service('/tmp/chromedriver')
+            service = Service()
             driver = webdriver.Chrome(service=service, options=chrome_options)
-            print("手動下載 ChromeDriver 初始化成功")
+            print("使用基本設定初始化 WebDriver 成功")
             return driver
             
         except Exception as e2:
-            print(f"手動下載 ChromeDriver 也失敗: {e2}")
+            print(f"基本設定也失敗: {e2}")
             raise Exception(f"無法初始化 WebDriver: {e} -> {e2}")
 
 def wait_for_element(driver, by, value, timeout=30):
