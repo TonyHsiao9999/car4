@@ -2097,13 +2097,21 @@ def make_reservation():
             driver['page'].wait_for_timeout(1500)
             
             try:
+                # 先向下捲動頁面，確保不同意按鈕可見
+                print("向下捲動頁面尋找不同意按鈕...")
+                driver['page'].evaluate("window.scrollBy(0, 300)")
+                driver['page'].wait_for_timeout(1000)
+                take_screenshot("after_scroll_disagree")
+                
                 # 尋找不同意按鈕的多種方法
                 disagree_selectors = [
                     'text=不同意',
                     'input[value="不同意"]',
                     'button:has-text("不同意")',
                     'label:has-text("不同意")',
-                    '[type="radio"][value*="不同意"]'
+                    '[type="radio"][value*="不同意"]',
+                    '[name*="agree"]:not([value*="同意"])',  # 不包含「同意」的選項
+                    'input[type="radio"]:has-text("不同意")'
                 ]
                 
                 clicked = False
@@ -2111,6 +2119,10 @@ def make_reservation():
                     try:
                         element = driver['page'].locator(selector).first
                         if element.count() > 0 and element.is_visible():
+                            print(f"找到不同意按鈕，選擇器: {selector}")
+                            # 確保按鈕在視窗內
+                            element.scroll_into_view_if_needed()
+                            driver['page'].wait_for_timeout(500)
                             element.click()
                             print(f"✅ 使用選擇器 {selector} 點擊不同意成功")
                             clicked = True
@@ -2119,8 +2131,62 @@ def make_reservation():
                         print(f"選擇器 {selector} 失敗: {e}")
                         continue
                 
+                # 如果還是找不到，嘗試更廣泛的搜尋
                 if not clicked:
-                    print("⚠️ 未找到不同意選項，可能已經是預設值")
+                    print("嘗試更廣泛的搜尋不同意選項...")
+                    
+                    # 繼續向下捲動
+                    driver['page'].evaluate("window.scrollBy(0, 200)")
+                    driver['page'].wait_for_timeout(1000)
+                    
+                    # 尋找所有包含「不同意」文字的元素
+                    all_elements = driver['page'].locator('*:has-text("不同意")').all()
+                    print(f"找到 {len(all_elements)} 個包含「不同意」的元素")
+                    
+                    for i, elem in enumerate(all_elements):
+                        try:
+                            if elem.is_visible():
+                                text = elem.text_content() or ''
+                                tag = elem.evaluate('el => el.tagName')
+                                print(f"元素 {i}: {tag}, 文字: '{text}'")
+                                
+                                # 嘗試點擊該元素
+                                elem.scroll_into_view_if_needed()
+                                driver['page'].wait_for_timeout(300)
+                                elem.click()
+                                print(f"✅ 點擊「不同意」元素 {i} 成功")
+                                clicked = True
+                                break
+                        except Exception as e:
+                            print(f"點擊元素 {i} 失敗: {e}")
+                            continue
+                
+                if not clicked:
+                    print("⚠️ 未找到不同意選項，嘗試所有radio按鈕...")
+                    
+                    # 最後手段：檢查所有radio按鈕
+                    radio_buttons = driver['page'].locator('input[type="radio"]').all()
+                    for i, radio in enumerate(radio_buttons):
+                        try:
+                            if radio.is_visible():
+                                value = radio.get_attribute('value') or ''
+                                name = radio.get_attribute('name') or ''
+                                print(f"Radio {i}: name='{name}', value='{value}'")
+                                
+                                # 如果value包含拒絕相關詞彙
+                                if any(word in value.lower() for word in ['不同意', '否', 'no', 'disagree']):
+                                    radio.scroll_into_view_if_needed()
+                                    driver['page'].wait_for_timeout(300)
+                                    radio.click()
+                                    print(f"✅ 點擊radio按鈕 {i} (value='{value}') 成功")
+                                    clicked = True
+                                    break
+                        except Exception as e:
+                            print(f"檢查radio {i} 失敗: {e}")
+                            continue
+                
+                if not clicked:
+                    print("⚠️ 所有方法都失敗，可能不同意已經是預設值或該選項不存在")
                     
             except Exception as e:
                 print(f"選擇不同意選項失敗: {e}")
@@ -2213,30 +2279,216 @@ def make_reservation():
             take_screenshot("companion")
             
             # 12. 同意共乘 選擇「否」
-            print("選擇不同意共乘")
-            driver['page'].click('text=否')
+            print("=== 第12步：選擇不同意共乘 ===")
+            
+            try:
+                # 先向下捲動確保按鈕可見
+                print("向下捲動頁面尋找共乘選項...")
+                driver['page'].evaluate("window.scrollBy(0, 300)")
+                driver['page'].wait_for_timeout(1000)
+                
+                # 嘗試多種方法找到「否」按鈕
+                carpool_selectors = [
+                    'text=否',
+                    'input[value="否"]',
+                    'button:has-text("否")',
+                    'label:has-text("否")',
+                    '[type="radio"][value="否"]',
+                    '[type="radio"][value="no"]'
+                ]
+                
+                clicked = False
+                for selector in carpool_selectors:
+                    try:
+                        element = driver['page'].locator(selector).first
+                        if element.count() > 0 and element.is_visible():
+                            print(f"找到共乘「否」按鈕，選擇器: {selector}")
+                            element.scroll_into_view_if_needed()
+                            driver['page'].wait_for_timeout(500)
+                            element.click()
+                            print(f"✅ 點擊共乘「否」成功")
+                            clicked = True
+                            break
+                    except Exception as e:
+                        print(f"共乘選擇器 {selector} 失敗: {e}")
+                        continue
+                
+                if not clicked:
+                    print("⚠️ 未找到共乘「否」選項，可能已經是預設值")
+                    
+            except Exception as e:
+                print(f"選擇共乘「否」失敗: {e}")
+                
             take_screenshot("carpool")
             
             # 13. 搭乘輪椅上車 選擇「是」
-            print("選擇搭乘輪椅上車：是")
-            driver['page'].click('text=是')
+            print("=== 第13步：選擇搭乘輪椅上車：是 ===")
+            
+            try:
+                # 向下捲動確保按鈕可見
+                driver['page'].evaluate("window.scrollBy(0, 200)")
+                driver['page'].wait_for_timeout(1000)
+                
+                wheelchair_selectors = [
+                    'text=是',
+                    'input[value="是"]',
+                    'button:has-text("是")',
+                    'label:has-text("是")',
+                    '[type="radio"][value="是"]',
+                    '[type="radio"][value="yes"]'
+                ]
+                
+                clicked = False
+                for selector in wheelchair_selectors:
+                    try:
+                        element = driver['page'].locator(selector).first
+                        if element.count() > 0 and element.is_visible():
+                            print(f"找到輪椅上車「是」按鈕，選擇器: {selector}")
+                            element.scroll_into_view_if_needed()
+                            driver['page'].wait_for_timeout(500)
+                            element.click()
+                            print(f"✅ 點擊輪椅上車「是」成功")
+                            clicked = True
+                            break
+                    except Exception as e:
+                        print(f"輪椅選擇器 {selector} 失敗: {e}")
+                        continue
+                
+                if not clicked:
+                    print("⚠️ 未找到輪椅上車「是」選項")
+                    
+            except Exception as e:
+                print(f"選擇輪椅上車「是」失敗: {e}")
+                
             take_screenshot("wheelchair")
             
             # 14. 大型輪椅 選擇「否」
-            print("選擇大型輪椅：否")
-            driver['page'].click('text=否')
+            print("=== 第14步：選擇大型輪椅：否 ===")
+            
+            try:
+                # 向下捲動確保按鈕可見
+                driver['page'].evaluate("window.scrollBy(0, 200)")
+                driver['page'].wait_for_timeout(1000)
+                
+                large_wheelchair_selectors = [
+                    'text=否',
+                    'input[value="否"]',
+                    'button:has-text("否")',
+                    'label:has-text("否")',
+                    '[type="radio"][value="否"]',
+                    '[type="radio"][value="no"]'
+                ]
+                
+                clicked = False
+                for selector in large_wheelchair_selectors:
+                    try:
+                        element = driver['page'].locator(selector).first
+                        if element.count() > 0 and element.is_visible():
+                            print(f"找到大型輪椅「否」按鈕，選擇器: {selector}")
+                            element.scroll_into_view_if_needed()
+                            driver['page'].wait_for_timeout(500)
+                            element.click()
+                            print(f"✅ 點擊大型輪椅「否」成功")
+                            clicked = True
+                            break
+                    except Exception as e:
+                        print(f"大型輪椅選擇器 {selector} 失敗: {e}")
+                        continue
+                
+                if not clicked:
+                    print("⚠️ 未找到大型輪椅「否」選項")
+                    
+            except Exception as e:
+                print(f"選擇大型輪椅「否」失敗: {e}")
+                
             take_screenshot("large_wheelchair")
             
             # 15. 點擊「下一步，確認預約資訊」
-            print("點擊下一步，確認預約資訊")
-            driver['page'].click('text=下一步，確認預約資訊')
-            driver['page'].wait_for_load_state("networkidle")
+            print("=== 第15步：點擊下一步，確認預約資訊 ===")
+            
+            try:
+                # 向下捲動確保按鈕可見
+                driver['page'].evaluate("window.scrollBy(0, 300)")
+                driver['page'].wait_for_timeout(1000)
+                
+                next_selectors = [
+                    'text=下一步，確認預約資訊',
+                    'button:has-text("下一步")',
+                    'input[value*="下一步"]',
+                    '[type="submit"]:has-text("下一步")',
+                    'button:has-text("確認預約資訊")'
+                ]
+                
+                clicked = False
+                for selector in next_selectors:
+                    try:
+                        element = driver['page'].locator(selector).first
+                        if element.count() > 0 and element.is_visible():
+                            print(f"找到下一步按鈕，選擇器: {selector}")
+                            element.scroll_into_view_if_needed()
+                            driver['page'].wait_for_timeout(500)
+                            element.click()
+                            print(f"✅ 點擊下一步成功")
+                            clicked = True
+                            break
+                    except Exception as e:
+                        print(f"下一步選擇器 {selector} 失敗: {e}")
+                        continue
+                
+                if not clicked:
+                    print("⚠️ 未找到下一步按鈕")
+                else:
+                    driver['page'].wait_for_load_state("networkidle")
+                    
+            except Exception as e:
+                print(f"點擊下一步失敗: {e}")
+                
             take_screenshot("confirm_info")
             
             # 16. 點擊「送出預約」
-            print("點擊送出預約")
-            driver['page'].click('text=送出預約')
-            driver['page'].wait_for_load_state("networkidle")
+            print("=== 第16步：點擊送出預約 ===")
+            
+            try:
+                # 等待頁面載入
+                driver['page'].wait_for_timeout(2000)
+                
+                # 向下捲動確保按鈕可見
+                driver['page'].evaluate("window.scrollBy(0, 300)")
+                driver['page'].wait_for_timeout(1000)
+                
+                submit_selectors = [
+                    'text=送出預約',
+                    'button:has-text("送出預約")',
+                    'input[value*="送出預約"]',
+                    '[type="submit"]:has-text("送出")',
+                    'button:has-text("送出")',
+                    '[type="submit"]'
+                ]
+                
+                clicked = False
+                for selector in submit_selectors:
+                    try:
+                        element = driver['page'].locator(selector).first
+                        if element.count() > 0 and element.is_visible():
+                            print(f"找到送出預約按鈕，選擇器: {selector}")
+                            element.scroll_into_view_if_needed()
+                            driver['page'].wait_for_timeout(500)
+                            element.click()
+                            print(f"✅ 點擊送出預約成功")
+                            clicked = True
+                            break
+                    except Exception as e:
+                        print(f"送出預約選擇器 {selector} 失敗: {e}")
+                        continue
+                
+                if not clicked:
+                    print("⚠️ 未找到送出預約按鈕")
+                else:
+                    driver['page'].wait_for_load_state("networkidle")
+                    
+            except Exception as e:
+                print(f"點擊送出預約失敗: {e}")
+                
             take_screenshot("submit_reservation")
             
             # 17. 檢查「已完成預約」畫面
