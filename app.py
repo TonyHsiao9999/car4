@@ -753,25 +753,204 @@ def make_reservation():
             driver.save_screenshot('/app/reserve_button_error.png')
             return False
 
-        # 上車地點請下拉選擇「醫療院所」
+        # 選擇上車地點
         print("選擇上車地點「醫療院所」...")
-        pickup_type = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.ID, "pickupType"))
-        )
-        pickup_type.send_keys("醫療院所")
-        driver.save_screenshot('/app/after_pickup_type.png')
-
-        # 右邊的文字欄位輸入「亞東紀念醫院」，然後文字欄位下方會有Google搜尋結果，點擊第一個結果
-        print("輸入上車地點「亞東紀念醫院」...")
-        pickup_location = driver.find_element(By.ID, "pickupLocation")
-        pickup_location.send_keys("亞東紀念醫院")
-        time.sleep(2)  # 等待搜尋結果
-        first_result = WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, ".pac-item"))
-        )
-        first_result.click()
-        print("已點擊第一個搜尋結果...")
-        driver.save_screenshot('/app/after_pickup_location.png')
+        try:
+            # 等待一下確保頁面完全載入
+            time.sleep(2)
+            
+            # 方法1：使用 XPath 尋找下拉選單
+            try:
+                pickup_type = driver.find_element(By.XPATH, "//select[contains(@name, 'pickup_type') or contains(@id, 'pickup_type')]")
+                print("使用 XPath 找到上車地點下拉選單")
+            except:
+                print("使用 XPath 找不到上車地點下拉選單")
+                pickup_type = None
+            
+            # 方法2：使用 CSS 選擇器尋找下拉選單
+            if not pickup_type:
+                try:
+                    pickup_type = driver.find_element(By.CSS_SELECTOR, "select.form-control, select.select2-hidden-accessible")
+                    print("使用 CSS 選擇器找到上車地點下拉選單")
+                except:
+                    print("使用 CSS 選擇器找不到上車地點下拉選單")
+            
+            # 方法3：尋找所有下拉選單
+            if not pickup_type:
+                try:
+                    selects = driver.find_elements(By.TAG_NAME, "select")
+                    for select in selects:
+                        if select.is_displayed():
+                            pickup_type = select
+                            print("找到可見的下拉選單")
+                            break
+                except:
+                    print("找不到下拉選單")
+            
+            if pickup_type:
+                print("準備選擇上車地點...")
+                driver.save_screenshot('/app/before_pickup_type_select.png')
+                
+                # 嘗試多種選擇方式
+                try:
+                    # 方法1：使用 Select 類別
+                    from selenium.webdriver.support.ui import Select
+                    select = Select(pickup_type)
+                    select.select_by_visible_text("醫療院所")
+                    print("使用 Select 類別選擇上車地點")
+                except:
+                    try:
+                        # 方法2：使用 JavaScript 選擇
+                        driver.execute_script("arguments[0].value = '醫療院所'; arguments[0].dispatchEvent(new Event('change'));", pickup_type)
+                        print("使用 JavaScript 選擇上車地點")
+                    except:
+                        try:
+                            # 方法3：直接點擊並選擇
+                            pickup_type.click()
+                            time.sleep(1)
+                            options = pickup_type.find_elements(By.TAG_NAME, "option")
+                            for option in options:
+                                if "醫療院所" in option.text:
+                                    option.click()
+                                    print("直接點擊選擇上車地點")
+                                    break
+                        except:
+                            print("所有選擇方式都失敗")
+                            driver.save_screenshot('/app/pickup_type_select_failed.png')
+                            return False
+                
+                print("已選擇上車地點...")
+                driver.save_screenshot('/app/after_pickup_type_select.png')
+                
+                # 等待選擇生效
+                try:
+                    def is_selection_effective(driver):
+                        try:
+                            # 檢查下拉選單的值是否改變
+                            if pickup_type.get_attribute("value") == "醫療院所":
+                                return True
+                            
+                            # 檢查是否出現相關元素
+                            elements = driver.find_elements(By.XPATH, "//*[contains(text(), '醫療院所')]")
+                            if any(element.is_displayed() for element in elements):
+                                return True
+                            
+                            return False
+                        except:
+                            return False
+                    
+                    # 增加等待時間到 30 秒
+                    WebDriverWait(driver, 30).until(is_selection_effective)
+                    print("上車地點選擇已生效")
+                    
+                    # 等待一下確保選擇生效
+                    time.sleep(2)
+                    
+                    # 尋找醫院名稱輸入框
+                    print("尋找醫院名稱輸入框...")
+                    hospital_input = None
+                    
+                    # 方法1：使用 XPath 尋找輸入框
+                    try:
+                        hospital_input = driver.find_element(By.XPATH, "//input[contains(@name, 'hospital') or contains(@id, 'hospital') or contains(@placeholder, '醫院')]")
+                        print("使用 XPath 找到醫院名稱輸入框")
+                    except:
+                        print("使用 XPath 找不到醫院名稱輸入框")
+                    
+                    # 方法2：使用 CSS 選擇器尋找輸入框
+                    if not hospital_input:
+                        try:
+                            hospital_input = driver.find_element(By.CSS_SELECTOR, "input.form-control, input[type='text']")
+                            print("使用 CSS 選擇器找到醫院名稱輸入框")
+                        except:
+                            print("使用 CSS 選擇器找不到醫院名稱輸入框")
+                    
+                    # 方法3：尋找所有輸入框
+                    if not hospital_input:
+                        try:
+                            inputs = driver.find_elements(By.TAG_NAME, "input")
+                            for input_field in inputs:
+                                if input_field.is_displayed() and input_field.get_attribute("type") == "text":
+                                    hospital_input = input_field
+                                    print("找到可見的文字輸入框")
+                                    break
+                        except:
+                            print("找不到文字輸入框")
+                    
+                    if hospital_input:
+                        print("準備輸入醫院名稱...")
+                        driver.save_screenshot('/app/before_hospital_input.png')
+                        
+                        # 清空輸入框
+                        hospital_input.clear()
+                        
+                        # 輸入醫院名稱
+                        hospital_input.send_keys("亞東紀念醫院")
+                        print("已輸入醫院名稱")
+                        
+                        # 等待一下確保輸入完成
+                        time.sleep(2)
+                        
+                        # 等待 Google 搜尋結果出現
+                        print("等待 Google 搜尋結果...")
+                        try:
+                            def wait_for_google_results(driver):
+                                try:
+                                    # 尋找搜尋結果列表
+                                    results = driver.find_elements(By.CSS_SELECTOR, ".pac-item, .pac-container")
+                                    if results and any(result.is_displayed() for result in results):
+                                        return True
+                                    return False
+                                except:
+                                    return False
+                            
+                            # 等待搜尋結果出現
+                            WebDriverWait(driver, 10).until(wait_for_google_results)
+                            print("Google 搜尋結果已出現")
+                            
+                            # 點擊第一個搜尋結果
+                            results = driver.find_elements(By.CSS_SELECTOR, ".pac-item, .pac-container")
+                            for result in results:
+                                if result.is_displayed():
+                                    print("準備點擊第一個搜尋結果...")
+                                    driver.save_screenshot('/app/before_click_result.png')
+                                    
+                                    # 嘗試點擊搜尋結果
+                                    try:
+                                        result.click()
+                                        print("已點擊第一個搜尋結果")
+                                        driver.save_screenshot('/app/after_click_result.png')
+                                        break
+                                    except:
+                                        try:
+                                            # 使用 JavaScript 點擊
+                                            driver.execute_script("arguments[0].click();", result)
+                                            print("使用 JavaScript 點擊第一個搜尋結果")
+                                            driver.save_screenshot('/app/after_click_result.png')
+                                            break
+                                        except:
+                                            print("點擊搜尋結果失敗")
+                                            continue
+                        except TimeoutException:
+                            print("等待 Google 搜尋結果超時")
+                            driver.save_screenshot('/app/google_results_timeout.png')
+                            return False
+                    else:
+                        print("找不到醫院名稱輸入框")
+                        driver.save_screenshot('/app/hospital_input_not_found.png')
+                        return False
+                except TimeoutException:
+                    print("等待上車地點選擇生效超時")
+                    driver.save_screenshot('/app/pickup_type_timeout.png')
+                    return False
+            else:
+                print("找不到上車地點下拉選單")
+                driver.save_screenshot('/app/pickup_type_not_found.png')
+                return False
+        except Exception as e:
+            print(f"選擇上車地點時發生錯誤：{str(e)}")
+            driver.save_screenshot('/app/pickup_type_error.png')
+            return False
 
         # 下車地點請下拉選擇「住家」
         print("選擇下車地點「住家」...")
