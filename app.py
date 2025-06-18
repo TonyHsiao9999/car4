@@ -5,6 +5,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
 import time
 import os
 from dotenv import load_dotenv
@@ -19,86 +20,178 @@ def setup_driver():
     chrome_options.add_argument('--disable-gpu')
     chrome_options.add_argument('--window-size=1920,1080')
     chrome_options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')
-    chrome_options.binary_location = '/usr/bin/chromium'  # 指定 chromium 路徑
-    chrome_options.add_argument('--log-level=3')  # 只顯示致命錯誤
+    chrome_options.binary_location = '/usr/bin/chromium'
+    chrome_options.add_argument('--log-level=3')
     chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])
 
     service = Service('/usr/bin/chromedriver')
     driver = webdriver.Chrome(service=service, options=chrome_options)
     return driver
 
+def wait_for_element(driver, by, value, timeout=30):
+    """等待元素出現並返回"""
+    try:
+        element = WebDriverWait(driver, timeout).until(
+            EC.presence_of_element_located((by, value))
+        )
+        return element
+    except TimeoutException:
+        print(f"等待元素超時: {by}={value}")
+        driver.save_screenshot('/app/timeout.png')
+        return None
+
 def make_reservation():
     driver = setup_driver()
     try:
         driver.get("https://www.ntpc.ltc-car.org/")
-        print("已載入網頁，等待「我知道了」按鈕...")
+        print("已載入網頁，等待頁面載入...")
+        
+        # 等待頁面完全載入
         WebDriverWait(driver, 30).until(
             lambda d: d.execute_script("return document.readyState") == "complete"
         )
-        driver.save_screenshot('/app/before_wait.png')
-        elements = driver.find_elements(By.XPATH, "//*[contains(text(), '我知道了')]")
-        print("找到元素數量：", len(elements))
-        for element in elements:
-            print(f"元素類型: {element.tag_name}, 文字: {element.text}")
-        iframes = driver.find_elements(By.TAG_NAME, "iframe")
-        for iframe in iframes:
-            driver.switch_to.frame(iframe)
+        print("頁面已完全載入")
+        driver.save_screenshot('/app/page_loaded.png')
+        
+        # 等待浮動視窗出現
+        print("等待浮動視窗出現...")
+        try:
+            # 先等待浮動視窗出現
+            WebDriverWait(driver, 10).until(
+                lambda d: len(d.find_elements(By.XPATH, "//*[contains(text(), '我知道了')]")) > 0
+            )
+            print("浮動視窗已出現")
+            
+            # 尋找「我知道了」按鈕
             elements = driver.find_elements(By.XPATH, "//*[contains(text(), '我知道了')]")
-            if elements:
-                print("在 iframe 中找到「我知道了」")
-                break
-            driver.switch_to.default_content()
-        button = WebDriverWait(driver, 30).until(
-            EC.element_to_be_clickable((By.XPATH, "//*[contains(text(), '我知道了')]"))
-        )
-        print("找到「我知道了」按鈕，準備點擊...")
-        driver.save_screenshot('/app/before_click.png')
-        driver.execute_script("arguments[0].click();", button)
-        print("已點擊「我知道了」按鈕...")
-        driver.save_screenshot('/app/after_click.png')
+            print(f"找到元素數量：{len(elements)}")
+            
+            # 找到第一個可見的按鈕
+            i_know_button = None
+            for element in elements:
+                if element.is_displayed():
+                    i_know_button = element
+                    print(f"找到可見的「我知道了」按鈕：{element.tag_name}")
+                    break
+            
+            if i_know_button:
+                print("準備點擊「我知道了」按鈕...")
+                driver.save_screenshot('/app/before_click.png')
+                # 使用 JavaScript 點擊，避免被其他元素遮擋
+                driver.execute_script("arguments[0].click();", i_know_button)
+                print("已點擊「我知道了」按鈕...")
+                driver.save_screenshot('/app/after_click.png')
+                
+                # 等待浮動視窗消失
+                try:
+                    WebDriverWait(driver, 5).until_not(
+                        lambda d: any(e.is_displayed() for e in d.find_elements(By.XPATH, "//*[contains(text(), '我知道了')]"))
+                    )
+                    print("浮動視窗已消失")
+                except TimeoutException:
+                    print("浮動視窗可能未完全消失")
+            else:
+                print("找不到可見的「我知道了」按鈕")
+        except TimeoutException:
+            print("等待浮動視窗超時，繼續執行...")
         
         # 檢查頁面狀態
         print(f"當前頁面標題: {driver.title}")
         print(f"當前頁面URL: {driver.current_url}")
         
-        iframes = driver.find_elements(By.TAG_NAME, "iframe")
-        for iframe in iframes:
-            driver.switch_to.frame(iframe)
-            try:
-                id_input = WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.ID, "id"))
-                )
-                break
-            except:
-                driver.switch_to.default_content()
-        id_input = WebDriverWait(driver, 30).until(
-            EC.presence_of_element_located((By.ID, "id"))
-        )
+        # 等待登入表單出現
+        print("等待登入表單出現...")
+        
+        # 尋找登入表單的文字輸入框
+        print("尋找身分證字號輸入框...")
+        id_input = None
+        try:
+            # 先嘗試在主頁面尋找
+            id_input = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='text'][placeholder*='身分證']"))
+            )
+            print("在主頁面找到身分證字號輸入框")
+        except TimeoutException:
+            print("主頁面找不到身分證字號輸入框，嘗試切換 iframe...")
+            # 如果主頁面找不到，嘗試在 iframe 中尋找
+            iframes = driver.find_elements(By.TAG_NAME, "iframe")
+            for iframe in iframes:
+                try:
+                    driver.switch_to.frame(iframe)
+                    id_input = WebDriverWait(driver, 5).until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='text'][placeholder*='身分證']"))
+                    )
+                    print("在 iframe 中找到身分證字號輸入框")
+                    break
+                except:
+                    driver.switch_to.default_content()
+        
+        if not id_input:
+            print("無法找到身分證字號輸入框")
+            driver.save_screenshot('/app/login_form_not_found.png')
+            return False
+        
+        # 尋找密碼輸入框
+        print("尋找密碼輸入框...")
+        try:
+            password_input = driver.find_element(By.CSS_SELECTOR, "input[type='password']")
+            print("找到密碼輸入框")
+        except NoSuchElementException:
+            print("找不到密碼輸入框")
+            driver.save_screenshot('/app/password_input_not_found.png')
+            return False
+        
+        # 輸入登入資訊
+        print("準備輸入登入資訊...")
+        id_input.clear()
         id_input.send_keys("A102574899")
-        password_input = driver.find_element(By.ID, "password")
+        print("已輸入身分證字號")
+        
+        password_input.clear()
         password_input.send_keys("visi319VISI")
-        login_button = driver.find_element(By.XPATH, "//button[contains(text(), '民眾登入')]")
-        login_button.click()
-        print("已點擊「民眾登入」按鈕...")
-        driver.save_screenshot('/app/after_login.png')
+        print("已輸入密碼")
+        
+        # 尋找登入按鈕
+        print("尋找登入按鈕...")
+        try:
+            login_button = driver.find_element(By.XPATH, "//button[contains(text(), '民眾登入')]")
+            print("找到登入按鈕，準備點擊...")
+            driver.save_screenshot('/app/before_login.png')
+            login_button.click()
+            print("已點擊「民眾登入」按鈕...")
+            driver.save_screenshot('/app/after_login.png')
+        except NoSuchElementException:
+            print("找不到登入按鈕")
+            driver.save_screenshot('/app/login_button_not_found.png')
+            return False
 
-        # 4. 看到「登入成功」，點擊「確定」
+        # 等待登入成功
         print("等待「登入成功」確定按鈕...")
-        WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), '確定')]"))
-        ).click()
-        print("已點擊「確定」按鈕...")
-        driver.save_screenshot('/app/after_confirm.png')
+        try:
+            WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), '確定')]"))
+            ).click()
+            print("已點擊「確定」按鈕...")
+            driver.save_screenshot('/app/after_confirm.png')
+        except TimeoutException:
+            print("找不到「登入成功」確定按鈕")
+            driver.save_screenshot('/app/confirm_button_not_found.png')
+            return False
 
-        # 5. 點擊「新增預約」
+        # 點擊「新增預約」
         print("等待「新增預約」按鈕...")
-        WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), '新增預約')]"))
-        ).click()
-        print("已點擊「新增預約」按鈕...")
-        driver.save_screenshot('/app/after_new_reservation.png')
+        try:
+            WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), '新增預約')]"))
+            ).click()
+            print("已點擊「新增預約」按鈕...")
+            driver.save_screenshot('/app/after_new_reservation.png')
+        except TimeoutException:
+            print("找不到「新增預約」按鈕")
+            driver.save_screenshot('/app/new_reservation_button_not_found.png')
+            return False
 
-        # 6. 上車地點請下拉選擇「醫療院所」
+        # 上車地點請下拉選擇「醫療院所」
         print("選擇上車地點「醫療院所」...")
         pickup_type = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.ID, "pickupType"))
@@ -106,7 +199,7 @@ def make_reservation():
         pickup_type.send_keys("醫療院所")
         driver.save_screenshot('/app/after_pickup_type.png')
 
-        # 7. 右邊的文字欄位輸入「亞東紀念醫院」，然後文字欄位下方會有Google搜尋結果，點擊第一個結果
+        # 右邊的文字欄位輸入「亞東紀念醫院」，然後文字欄位下方會有Google搜尋結果，點擊第一個結果
         print("輸入上車地點「亞東紀念醫院」...")
         pickup_location = driver.find_element(By.ID, "pickupLocation")
         pickup_location.send_keys("亞東紀念醫院")
@@ -118,13 +211,13 @@ def make_reservation():
         print("已點擊第一個搜尋結果...")
         driver.save_screenshot('/app/after_pickup_location.png')
 
-        # 8. 下車地點請下拉選擇「住家」
+        # 下車地點請下拉選擇「住家」
         print("選擇下車地點「住家」...")
         dropoff_type = driver.find_element(By.ID, "dropoffType")
         dropoff_type.send_keys("住家")
         driver.save_screenshot('/app/after_dropoff_type.png')
 
-        # 9. 預約日期/時段請下拉選擇最後一個選項，右邊請下拉選擇16，再往右邊請下拉選擇40
+        # 預約日期/時段請下拉選擇最後一個選項，右邊請下拉選擇16，再往右邊請下拉選擇40
         print("選擇預約日期/時段...")
         date_select = driver.find_element(By.ID, "date")
         date_select.send_keys("最後一個選項")
@@ -134,55 +227,55 @@ def make_reservation():
         minute_select.send_keys("40")
         driver.save_screenshot('/app/after_time_selection.png')
 
-        # 10. 於預約時間前後30分鐘到達 選擇「不同意」
+        # 於預約時間前後30分鐘到達 選擇「不同意」
         print("選擇「不同意」於預約時間前後30分鐘到達...")
         WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.XPATH, "//input[@value='不同意']"))
         ).click()
         driver.save_screenshot('/app/after_flexible_time.png')
 
-        # 11. 陪同人數 下拉選擇「1人(免費)」
+        # 陪同人數 下拉選擇「1人(免費)」
         print("選擇陪同人數「1人(免費)」...")
         companion_select = driver.find_element(By.ID, "companion")
         companion_select.send_keys("1人(免費)")
         driver.save_screenshot('/app/after_companion.png')
 
-        # 12. 同意共乘 選擇「否」
+        # 同意共乘 選擇「否」
         print("選擇「否」同意共乘...")
         WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.XPATH, "//input[@value='否']"))
         ).click()
         driver.save_screenshot('/app/after_share_ride.png')
 
-        # 13. 搭乘輪椅上車 選擇「是」
+        # 搭乘輪椅上車 選擇「是」
         print("選擇「是」搭乘輪椅上車...")
         WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.XPATH, "//input[@value='是']"))
         ).click()
         driver.save_screenshot('/app/after_wheelchair.png')
 
-        # 14. 大型輪椅 選擇「否」
+        # 大型輪椅 選擇「否」
         print("選擇「否」大型輪椅...")
         WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.XPATH, "//input[@value='否']"))
         ).click()
         driver.save_screenshot('/app/after_large_wheelchair.png')
 
-        # 15. 點擊「下一步，確認預約資訊」按鈕
+        # 點擊「下一步，確認預約資訊」按鈕
         print("點擊「下一步，確認預約資訊」按鈕...")
         WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), '下一步，確認預約資訊')]"))
         ).click()
         driver.save_screenshot('/app/after_next_step.png')
 
-        # 16. 新的頁面點擊「送出預約」
+        # 新的頁面點擊「送出預約」
         print("點擊「送出預約」按鈕...")
         WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), '送出預約')]"))
         ).click()
         driver.save_screenshot('/app/after_submit.png')
 
-        # 17. 跳出「已完成預約」畫面，表示完成
+        # 跳出「已完成預約」畫面，表示完成
         print("等待「已完成預約」畫面...")
         WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.XPATH, "//*[contains(text(), '已完成預約')]"))
@@ -194,7 +287,6 @@ def make_reservation():
         import traceback
         print(traceback.format_exc())
         driver.save_screenshot('/app/error.png')
-        import os
         print("error.png exists:", os.path.exists('/app/error.png'))
         return False
     finally:
@@ -209,6 +301,11 @@ def reservation():
     result = make_reservation()
     return jsonify({"success": result})
 
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory(os.path.join(app.root_path, 'static'),
+                             'favicon.ico', mimetype='image/vnd.microsoft.icon')
+
 @app.route('/before-click')
 def before_click():
     try:
@@ -222,11 +319,6 @@ def after_click():
         return send_file('/app/after_click.png', mimetype='image/png')
     except Exception as e:
         return jsonify({"error": "找不到截圖檔案"}), 404
-
-@app.route('/favicon.ico')
-def favicon():
-    return send_from_directory(os.path.join(app.root_path, 'static'),
-                             'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080))) 
