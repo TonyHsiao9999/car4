@@ -7,6 +7,13 @@ from selenium.common.exceptions import TimeoutException
 from .config import USER_AGENT, WAIT_TIMES
 import os
 import time
+import logging
+import sys
+from io import StringIO
+
+# 設置 Selenium 的日誌級別
+logging.getLogger('selenium').setLevel(logging.ERROR)
+logging.getLogger('urllib3').setLevel(logging.ERROR)
 
 def setup_driver(test_mode=False):
     """設置並返回 Chrome WebDriver"""
@@ -19,6 +26,8 @@ def setup_driver(test_mode=False):
     
     chrome_options.add_argument('--no-sandbox')
     chrome_options.add_argument('--disable-dev-shm-usage')
+    chrome_options.add_argument('--log-level=3')  # 只顯示致命錯誤
+    chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])
     
     service = Service()
     driver = webdriver.Chrome(service=service, options=chrome_options)
@@ -91,18 +100,16 @@ def print_debug_info(driver, locator, error=None):
 def wait_for_element(driver, locator, timeout=WAIT_TIMES["element"]):
     """等待元素出現並返回"""
     try:
-        # 使用 try-except 來捕獲可能的頁面原始碼輸出
-        try:
-            element = WebDriverWait(driver, timeout).until(
-                EC.presence_of_element_located(locator)
-            )
-            return element
-        except Exception as e:
-            # 如果發生錯誤，只輸出我們自己的除錯資訊
-            print_debug_info(driver, locator, f"等待元素超時: {str(e)}")
-            return None
+        element = WebDriverWait(driver, timeout).until(
+            EC.presence_of_element_located(locator)
+        )
+        return element
     except Exception as e:
-        print_debug_info(driver, locator, f"等待元素時發生錯誤: {str(e)}")
+        # 只輸出錯誤訊息，不輸出頁面原始碼
+        error_msg = str(e)
+        if "Message: " in error_msg:
+            error_msg = error_msg.split("Message: ")[1]
+        print_debug_info(driver, locator, f"等待元素超時: {error_msg}")
         return None
 
 def safe_click(driver, locator, timeout=WAIT_TIMES["element"]):
@@ -110,11 +117,12 @@ def safe_click(driver, locator, timeout=WAIT_TIMES["element"]):
     element = wait_for_element(driver, locator, timeout)
     if element:
         try:
-            print(f"找到元素: {locator}")
-            print(f"元素可見性: {element.is_displayed()}")
-            print(f"元素可點擊性: {element.is_enabled()}")
+            print_debug_info(driver, locator, "找到元素")
             element.click()
             return True
         except Exception as e:
-            print_debug_info(driver, locator, f"點擊元素時發生錯誤: {e}")
+            error_msg = str(e)
+            if "Message: " in error_msg:
+                error_msg = error_msg.split("Message: ")[1]
+            print_debug_info(driver, locator, f"點擊元素時發生錯誤: {error_msg}")
     return False 
