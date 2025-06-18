@@ -25,6 +25,25 @@ def setup_driver():
             chromedriver_path = ChromeDriverManager().install()
             print(f"ChromeDriver 路徑: {chromedriver_path}")
             
+            # 修正路徑：確保指向正確的 chromedriver 執行檔
+            if chromedriver_path.endswith('THIRD_PARTY_NOTICES.chromedriver'):
+                # 修正路徑，移除錯誤的檔案名
+                chromedriver_path = chromedriver_path.replace('THIRD_PARTY_NOTICES.chromedriver', 'chromedriver')
+                print(f"修正後的 ChromeDriver 路徑: {chromedriver_path}")
+            
+            # 檢查檔案是否存在且可執行
+            if not os.path.exists(chromedriver_path):
+                print(f"ChromeDriver 檔案不存在: {chromedriver_path}")
+                # 嘗試在目錄中尋找正確的 chromedriver 檔案
+                import glob
+                chromedriver_dir = os.path.dirname(chromedriver_path)
+                chromedriver_files = glob.glob(os.path.join(chromedriver_dir, 'chromedriver*'))
+                for file_path in chromedriver_files:
+                    if os.path.isfile(file_path) and os.access(file_path, os.X_OK):
+                        chromedriver_path = file_path
+                        print(f"找到正確的 ChromeDriver: {chromedriver_path}")
+                        break
+            
             chrome_options = Options()
             chrome_options.add_argument('--headless')
             chrome_options.add_argument('--no-sandbox')
