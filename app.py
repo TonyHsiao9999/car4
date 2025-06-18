@@ -14,89 +14,34 @@ from selenium.webdriver.common.action_chains import ActionChains
 app = Flask(__name__, static_folder='static')
 
 def setup_driver():
-    """設置 WebDriver"""
-    try:
-        print("開始初始化 WebDriver...")
-        
-        # 設置 Chrome 選項
-        chrome_options = Options()
-        chrome_options.add_argument('--headless')
-        chrome_options.add_argument('--no-sandbox')
-        chrome_options.add_argument('--disable-dev-shm-usage')
-        chrome_options.add_argument('--disable-gpu')
-        chrome_options.add_argument('--disable-extensions')
-        chrome_options.add_argument('--disable-plugins')
-        chrome_options.add_argument('--disable-images')
-        chrome_options.add_argument('--disable-javascript')
-        chrome_options.add_argument('--disable-web-security')
-        chrome_options.add_argument('--allow-running-insecure-content')
-        chrome_options.add_argument('--disable-features=VizDisplayCompositor')
-        chrome_options.add_argument('--ignore-certificate-errors')
-        chrome_options.add_argument('--ignore-ssl-errors')
-        chrome_options.add_argument('--ignore-certificate-errors-spki-list')
-        chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-        # 增加高解析度設定
-        chrome_options.add_argument('--window-size=1920,1080')
-        chrome_options.add_argument('--start-maximized')
-        chrome_options.add_argument('--force-device-scale-factor=1')
-        # 減少記憶體使用的選項
-        chrome_options.add_argument('--single-process')
-        chrome_options.add_argument('--disable-background-timer-throttling')
-        chrome_options.add_argument('--disable-backgrounding-occluded-windows')
-        chrome_options.add_argument('--disable-renderer-backgrounding')
-        chrome_options.add_argument('--disable-features=TranslateUI')
-        chrome_options.add_argument('--disable-ipc-flooding-protection')
-        # 修正 user-data-dir 衝突問題
-        import tempfile
-        user_data_dir = tempfile.mkdtemp(prefix='chrome_user_data_')
-        chrome_options.add_argument(f'--user-data-dir={user_data_dir}')
-        # 強制忽略版本檢查的選項
-        chrome_options.add_argument('--remote-debugging-port=9222')
-        chrome_options.add_argument('--disable-blink-features')
-        chrome_options.add_argument('--disable-web-security')
-        chrome_options.add_argument('--allow-running-insecure-content')
-        chrome_options.add_argument('--disable-features=VizDisplayCompositor')
-        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        chrome_options.add_experimental_option("useAutomationExtension", False)
-        
-        # 嘗試使用系統安裝的 Chromium 和 chromedriver
-        try:
-            print("嘗試使用系統安裝的 Chromium...")
-            service = Service('/usr/bin/chromedriver')
-            driver = webdriver.Chrome(service=service, options=chrome_options)
-            print("使用系統 Chromium 初始化成功")
-            return driver
-        except Exception as e:
-            print(f"系統 Chromium 失敗: {e}")
-        
-        # 如果系統 Chromium 失敗，嘗試使用 webdriver-manager
-        try:
-            from webdriver_manager.chrome import ChromeDriverManager
-            print("使用 webdriver-manager 獲取 ChromeDriver...")
-            chromedriver_path = ChromeDriverManager().install()
-            print(f"ChromeDriver 路徑: {chromedriver_path}")
-            
-            service = Service(chromedriver_path)
-            driver = webdriver.Chrome(service=service, options=chrome_options)
-            print("使用 webdriver-manager 初始化 WebDriver 成功")
-            return driver
-            
-        except Exception as e:
-            print(f"webdriver-manager 失敗: {e}")
-        
-        # 最後嘗試：不指定 service，讓 Selenium 自動尋找
-        try:
-            print("嘗試自動尋找 ChromeDriver...")
-            driver = webdriver.Chrome(options=chrome_options)
-            print("自動尋找 ChromeDriver 成功")
-            return driver
-        except Exception as e:
-            print(f"自動尋找 ChromeDriver 失敗: {e}")
-            raise Exception("無法初始化 WebDriver")
-            
-    except Exception as e:
-        print(f"WebDriver 初始化失敗: {e}")
-        raise
+    from selenium.webdriver.chrome.service import Service
+    from selenium.webdriver.chrome.options import Options
+
+    chrome_options = Options()
+    chrome_options.binary_location = "/usr/bin/chromium-browser"
+    chrome_options.add_argument('--headless')
+    chrome_options.add_argument('--no-sandbox')
+    chrome_options.add_argument('--disable-dev-shm-usage')
+    chrome_options.add_argument('--disable-gpu')
+    chrome_options.add_argument('--window-size=1920,1080')
+    chrome_options.add_argument('--disable-extensions')
+    chrome_options.add_argument('--disable-blink-features=AutomationControlled')
+    chrome_options.add_argument('--disable-background-timer-throttling')
+    chrome_options.add_argument('--disable-backgrounding-occluded-windows')
+    chrome_options.add_argument('--disable-renderer-backgrounding')
+    chrome_options.add_argument('--disable-features=TranslateUI')
+    chrome_options.add_argument('--disable-ipc-flooding-protection')
+    chrome_options.add_argument('--disable-features=VizDisplayCompositor')
+    chrome_options.add_argument('--ignore-certificate-errors')
+    chrome_options.add_argument('--ignore-ssl-errors')
+    chrome_options.add_argument('--disable-web-security')
+    chrome_options.add_argument('--allow-running-insecure-content')
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_experimental_option("useAutomationExtension", False)
+
+    service = Service('/usr/bin/chromedriver')
+    driver = webdriver.Chrome(service=service, options=chrome_options)
+    return driver
 
 def wait_for_element(driver, by, value, timeout=30):
     """等待元素出現並返回"""
