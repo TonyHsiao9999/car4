@@ -444,10 +444,144 @@ def make_reservation():
             take_screenshot("pickup_location")
             
             # 7. 輸入「亞東紀念醫院」並選擇第一個搜尋結果
+            print("尋找上車地點輸入框...")
+            
+            # 嘗試多種搜尋框選擇器
+            input_selectors = [
+                # 通用地點輸入框
+                'input[placeholder*="地點"]',
+                'input[placeholder*="起點"]',
+                'input[placeholder*="上車"]',
+                'input[placeholder*="出發"]',
+                'input[placeholder*="from"]',
+                'input[placeholder*="起始"]',
+                
+                # 根據 name 屬性
+                'input[name*="pickup"]',
+                'input[name*="origin"]',
+                'input[name*="from"]',
+                'input[name*="start"]',
+                'input[name*="departure"]',
+                
+                # 根據 ID
+                '#pickup-location',
+                '#origin',
+                '#from-location',
+                '#start-location',
+                '#departure',
+                
+                # 根據 class
+                '.pickup-input',
+                '.origin-input',
+                '.location-input',
+                '.address-input',
+                
+                # 通用輸入框（按順序）
+                'form input[type="text"]:nth-of-type(1)',
+                'form input[type="text"]:first-of-type',
+                'input[type="text"]:nth-of-type(1)',
+                'input[type="text"]:first-of-type',
+                
+                # 更廣泛的搜尋
+                'input[type="text"]'
+            ]
+            
+            pickup_input = None
+            input_found = False
+            
+            for selector in input_selectors:
+                try:
+                    print(f"嘗試搜尋框選擇器: {selector}")
+                    elements = driver['page'].locator(selector).all()
+                    
+                    for i, element in enumerate(elements):
+                        try:
+                            if element.is_visible() and element.is_enabled():
+                                # 檢查是否為上車地點相關的輸入框
+                                placeholder = element.get_attribute('placeholder') or ''
+                                name = element.get_attribute('name') or ''
+                                id_attr = element.get_attribute('id') or ''
+                                class_attr = element.get_attribute('class') or ''
+                                
+                                print(f"找到輸入框 {i}: placeholder='{placeholder}', name='{name}', id='{id_attr}', class='{class_attr}'")
+                                
+                                # 如果是明確的上車地點輸入框，優先使用
+                                if any(keyword in (placeholder + name + id_attr + class_attr).lower() 
+                                      for keyword in ['地點', '起點', '上車', '出發', 'pickup', 'origin', 'from', 'start']):
+                                    pickup_input = element
+                                    input_found = True
+                                    print(f"找到上車地點輸入框: {selector} (索引 {i})")
+                                    break
+                                elif not pickup_input:  # 如果還沒找到明確的，先暫存這個
+                                    pickup_input = element
+                        except Exception as e:
+                            print(f"檢查輸入框 {i} 失敗: {e}")
+                            continue
+                    
+                    if input_found:
+                        break
+                        
+                except Exception as e:
+                    print(f"搜尋框選擇器 {selector} 失敗: {e}")
+                    continue
+            
+            if not pickup_input:
+                print("警告：無法找到上車地點輸入框")
+                take_screenshot("no_input_found")
+                return False
+            
             print("輸入上車地點：亞東紀念醫院")
-            pickup_input = driver['page'].locator('input[placeholder*="地點"]').first
-            pickup_input.fill('亞東紀念醫院')
-            take_screenshot("hospital_input_filled")
+            try:
+                # 確保輸入框有焦點
+                pickup_input.click()
+                driver['page'].wait_for_timeout(500)
+                
+                # 清空輸入框
+                pickup_input.clear()
+                driver['page'].wait_for_timeout(500)
+                
+                # 使用多種方式輸入
+                try:
+                    # 方法1: 使用 fill
+                    pickup_input.fill('亞東紀念醫院')
+                    driver['page'].wait_for_timeout(1000)
+                    
+                    # 檢查是否成功輸入
+                    current_value = pickup_input.input_value()
+                    print(f"輸入後的值: '{current_value}'")
+                    
+                    if '亞東' not in current_value:
+                        print("fill 方法可能失敗，嘗試 type 方法...")
+                        pickup_input.clear()
+                        pickup_input.type('亞東紀念醫院')
+                        driver['page'].wait_for_timeout(1000)
+                        current_value = pickup_input.input_value()
+                        print(f"type 後的值: '{current_value}'")
+                        
+                        if '亞東' not in current_value:
+                            print("type 方法也失敗，嘗試 JavaScript...")
+                            # 使用 JavaScript 直接設置值
+                            script = """
+                            (element) => {
+                                element.value = '亞東紀念醫院';
+                                element.dispatchEvent(new Event('input', { bubbles: true }));
+                                element.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
+                            """
+                            pickup_input.evaluate(script)
+                            driver['page'].wait_for_timeout(1000)
+                            current_value = pickup_input.input_value()
+                            print(f"JavaScript 後的值: '{current_value}'")
+                    
+                except Exception as e:
+                    print(f"輸入過程發生錯誤: {e}")
+                
+                take_screenshot("hospital_input_filled")
+                
+            except Exception as e:
+                print(f"輸入亞東紀念醫院失敗: {e}")
+                take_screenshot("hospital_input_failed")
+                return False
             
             # 等待 Google 搜尋結果出現
             print("等待搜尋結果出現...")
