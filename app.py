@@ -29,12 +29,14 @@ def make_reservation():
     driver = setup_driver()
     try:
         driver.get("https://www.ntpc.ltc-car.org/")
-        # 等待並用 JS 點擊「我知道了」
+        print("已載入網頁，等待「我知道了」按鈕...")
         button = WebDriverWait(driver, 30).until(
             EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), '我知道了')]"))
         )
+        print("找到「我知道了」按鈕，準備點擊...")
         driver.save_screenshot('/app/before_click.png')
         driver.execute_script("arguments[0].click();", button)
+        print("已點擊「我知道了」按鈕...")
         driver.save_screenshot('/app/after_click.png')
         
         # 3. 輸入登入資訊
