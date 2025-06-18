@@ -137,6 +137,40 @@ def make_reservation():
             print(f"沒有找到浮動視窗或點擊失敗: {e}")
             take_screenshot("no_popup_found")
         
+        # 登入步驟
+        print("開始登入流程...")
+        try:
+            # 等待登入表單載入
+            driver['page'].wait_for_selector('input[type="text"]', timeout=10000)
+            print("登入表單已載入")
+            take_screenshot("login_form")
+            
+            # 輸入身分證字號
+            print("輸入身分證字號: A102574899")
+            driver['page'].fill('input[type="text"]', 'A102574899')
+            
+            # 輸入密碼
+            print("輸入密碼: visi319VISI")
+            driver['page'].fill('input[type="password"]', 'visi319VISI')
+            
+            # 點擊民眾登入按鈕
+            print("點擊民眾登入按鈕")
+            driver['page'].click('text=民眾登入')
+            
+            print("登入按鈕點擊完成")
+            take_screenshot("login_clicked")
+            
+            # 等待登入完成
+            print("等待登入完成...")
+            driver['page'].wait_for_load_state('networkidle')
+            print("登入流程完成")
+            take_screenshot("login_complete")
+            
+        except Exception as e:
+            print(f"登入過程發生錯誤: {e}")
+            take_screenshot("login_error")
+            return False
+        
         # 檢查頁面狀態
         print(f"當前頁面標題: {driver['title']()}")
         print(f"當前頁面URL: {driver['current_url']()}")
