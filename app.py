@@ -14,13 +14,45 @@ from selenium.webdriver.common.action_chains import ActionChains
 app = Flask(__name__, static_folder='static')
 
 def setup_driver():
+    """設置 WebDriver"""
     try:
+        print("開始初始化 WebDriver...")
+        
+        # 首先嘗試使用 webdriver-manager 獲取正確版本的 ChromeDriver
+        try:
+            from webdriver_manager.chrome import ChromeDriverManager
+            print("使用 webdriver-manager 獲取 ChromeDriver...")
+            chromedriver_path = ChromeDriverManager().install()
+            print(f"ChromeDriver 路徑: {chromedriver_path}")
+            
+            chrome_options = Options()
+            chrome_options.add_argument('--headless')
+            chrome_options.add_argument('--no-sandbox')
+            chrome_options.add_argument('--disable-dev-shm-usage')
+            chrome_options.add_argument('--disable-gpu')
+            chrome_options.add_argument('--disable-extensions')
+            chrome_options.add_argument('--disable-plugins')
+            chrome_options.add_argument('--disable-images')
+            chrome_options.add_argument('--disable-javascript')
+            chrome_options.add_argument('--disable-web-security')
+            chrome_options.add_argument('--allow-running-insecure-content')
+            chrome_options.add_argument('--disable-features=VizDisplayCompositor')
+            
+            service = Service(chromedriver_path)
+            driver = webdriver.Chrome(service=service, options=chrome_options)
+            print("使用 webdriver-manager 初始化 WebDriver 成功")
+            return driver
+            
+        except Exception as e:
+            print(f"webdriver-manager 失敗: {e}")
+        
+        # 如果 webdriver-manager 失敗，嘗試使用系統安裝的 ChromeDriver
+        print("嘗試使用系統安裝的 ChromeDriver...")
         chrome_options = Options()
         chrome_options.add_argument('--headless')
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument('--disable-dev-shm-usage')
         chrome_options.add_argument('--disable-gpu')
-        chrome_options.add_argument('--window-size=1920,1080')
         chrome_options.add_argument('--disable-extensions')
         chrome_options.add_argument('--disable-plugins')
         chrome_options.add_argument('--disable-images')
@@ -28,40 +60,16 @@ def setup_driver():
         chrome_options.add_argument('--disable-web-security')
         chrome_options.add_argument('--allow-running-insecure-content')
         chrome_options.add_argument('--disable-features=VizDisplayCompositor')
-        chrome_options.add_argument('--disable-ipc-flooding-protection')
-        chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')
-        chrome_options.add_argument('--log-level=3')
-        chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])
-        chrome_options.add_experimental_option('useAutomationExtension', False)
         
-        # Zeabur 環境設定
-        service = None
-        
-        # 方法1：嘗試使用系統安裝的 Chrome
-        if os.path.exists('/usr/bin/google-chrome'):
-            print("使用系統安裝的 Google Chrome")
-            chrome_options.binary_location = '/usr/bin/google-chrome'
-            if os.path.exists('/usr/local/bin/chromedriver'):
-                service = Service('/usr/local/bin/chromedriver')
-            else:
-                service = Service()
-        elif os.path.exists('/usr/bin/chromium'):
-            print("使用系統安裝的 Chromium")
-            chrome_options.binary_location = '/usr/bin/chromium'
-            if os.path.exists('/usr/bin/chromedriver'):
-                service = Service('/usr/bin/chromedriver')
-            else:
-                service = Service()
+        # 檢查是否有環境變數指定的 ChromeDriver 路徑
+        chromedriver_path = os.environ.get('CHROMEDRIVER_PATH', '/usr/local/bin/chromedriver')
+        if os.path.exists(chromedriver_path):
+            print(f"使用指定的 ChromeDriver: {chromedriver_path}")
+            service = Service(chromedriver_path)
         else:
-            print("使用 webdriver-manager 安裝 ChromeDriver")
-            try:
-                from webdriver_manager.chrome import ChromeDriverManager
-                service = Service(ChromeDriverManager().install())
-            except Exception as e:
-                print(f"webdriver-manager 安裝失敗: {e}")
-                service = Service()
+            print("使用預設 ChromeDriver 路徑")
+            service = Service()
         
-        print("正在初始化 Chrome WebDriver...")
         driver = webdriver.Chrome(service=service, options=chrome_options)
         print("Chrome WebDriver 初始化成功")
         return driver
@@ -69,35 +77,49 @@ def setup_driver():
     except Exception as e:
         print(f"設置 WebDriver 時發生錯誤: {e}")
         
-        # 如果是版本不匹配錯誤，嘗試使用 webdriver-manager
-        if "version" in str(e).lower() or "chrome" in str(e).lower():
-            print("檢測到版本不匹配，嘗試使用 webdriver-manager...")
-            try:
-                from webdriver_manager.chrome import ChromeDriverManager
-                chrome_options = Options()
-                chrome_options.add_argument('--headless')
-                chrome_options.add_argument('--no-sandbox')
-                chrome_options.add_argument('--disable-dev-shm-usage')
-                chrome_options.add_argument('--disable-gpu')
-                service = Service(ChromeDriverManager().install())
-                driver = webdriver.Chrome(service=service, options=chrome_options)
-                print("使用 webdriver-manager 初始化 WebDriver 成功")
-                return driver
-            except Exception as e2:
-                print(f"webdriver-manager 也失敗: {e2}")
-        
-        # 嘗試使用最基本的設定
+        # 最後嘗試：手動下載並設置正確版本的 ChromeDriver
         try:
+            print("嘗試手動下載正確版本的 ChromeDriver...")
+            import subprocess
+            import json
+            
+            # 獲取 Chrome 版本
+            try:
+                chrome_version_output = subprocess.check_output(['google-chrome', '--version'], stderr=subprocess.STDOUT, text=True)
+                chrome_version = chrome_version_output.strip().split()[-1].split('.')[0]
+                print(f"檢測到 Chrome 版本: {chrome_version}")
+            except:
+                chrome_version = "137"  # 預設版本
+            
+            # 下載對應版本的 ChromeDriver
+            chromedriver_url = f"https://chromedriver.storage.googleapis.com/LATEST_RELEASE_{chrome_version}"
+            try:
+                response = subprocess.check_output(['curl', '-s', chromedriver_url], text=True)
+                chromedriver_version = response.strip()
+                print(f"下載 ChromeDriver 版本: {chromedriver_version}")
+            except:
+                chromedriver_version = f"{chrome_version}.0.7151.119"
+                print(f"使用預設 ChromeDriver 版本: {chromedriver_version}")
+            
+            # 下載並設置 ChromeDriver
+            chromedriver_download_url = f"https://chromedriver.storage.googleapis.com/{chromedriver_version}/chromedriver_linux64.zip"
+            subprocess.run(['wget', '-O', '/tmp/chromedriver.zip', chromedriver_download_url], check=True)
+            subprocess.run(['unzip', '-o', '/tmp/chromedriver.zip', '-d', '/tmp/'], check=True)
+            subprocess.run(['chmod', '+x', '/tmp/chromedriver'], check=True)
+            
             chrome_options = Options()
             chrome_options.add_argument('--headless')
             chrome_options.add_argument('--no-sandbox')
             chrome_options.add_argument('--disable-dev-shm-usage')
-            service = Service()
+            chrome_options.add_argument('--disable-gpu')
+            
+            service = Service('/tmp/chromedriver')
             driver = webdriver.Chrome(service=service, options=chrome_options)
-            print("使用基本設定初始化 WebDriver 成功")
+            print("手動下載 ChromeDriver 初始化成功")
             return driver
+            
         except Exception as e2:
-            print(f"基本設定也失敗: {e2}")
+            print(f"手動下載 ChromeDriver 也失敗: {e2}")
             raise Exception(f"無法初始化 WebDriver: {e} -> {e2}")
 
 def wait_for_element(driver, by, value, timeout=30):
