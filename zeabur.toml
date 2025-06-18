@@ -1,6 +1,6 @@
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "Dockerfile.ubuntu"
+dockerfilePath = "Dockerfile"
 
 [deploy]
 startCommand = "python3 app.py"
