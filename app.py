@@ -11,47 +11,67 @@ import os
 from dotenv import load_dotenv
 from selenium.webdriver.common.action_chains import ActionChains
 import tempfile
+from playwright.sync_api import sync_playwright
 
 app = Flask(__name__, static_folder='static')
 
 def setup_driver():
-    from selenium.webdriver.chrome.service import Service
-    from selenium.webdriver.chrome.options import Options
+    """設置 WebDriver - 使用 Playwright 替代 Selenium"""
     import tempfile
-
-    chrome_options = Options()
-    chrome_options.binary_location = "/usr/bin/chromium"
-    chrome_options.add_argument('--headless')
-    chrome_options.add_argument('--no-sandbox')
-    chrome_options.add_argument('--disable-dev-shm-usage')
-    chrome_options.add_argument('--disable-gpu')
-    chrome_options.add_argument('--window-size=1280,720')
-    chrome_options.add_argument('--disable-extensions')
-    chrome_options.add_argument('--disable-plugins')
-    chrome_options.add_argument('--disable-images')
-    chrome_options.add_argument('--disable-javascript')
-    chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-    chrome_options.add_argument('--single-process')
-    chrome_options.add_argument('--disable-background-timer-throttling')
-    chrome_options.add_argument('--disable-backgrounding-occluded-windows')
-    chrome_options.add_argument('--disable-renderer-backgrounding')
-    chrome_options.add_argument('--disable-features=TranslateUI')
-    chrome_options.add_argument('--disable-ipc-flooding-protection')
-    chrome_options.add_argument('--disable-features=VizDisplayCompositor')
-    chrome_options.add_argument('--ignore-certificate-errors')
-    chrome_options.add_argument('--ignore-ssl-errors')
-    chrome_options.add_argument('--disable-web-security')
-    chrome_options.add_argument('--allow-running-insecure-content')
-    chrome_options.add_argument('--disable-blink-features')
-    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    chrome_options.add_experimental_option("useAutomationExtension", False)
+    import os
     
-    # 使用唯一的 user-data-dir
-    user_data_dir = tempfile.mkdtemp(prefix='chrome_user_data_')
-    chrome_options.add_argument(f'--user-data-dir={user_data_dir}')
-
-    service = Service('/usr/bin/chromedriver')
-    driver = webdriver.Chrome(service=service, options=chrome_options)
+    # 創建一個 Playwright 瀏覽器實例
+    playwright = sync_playwright().start()
+    browser = playwright.chromium.launch(
+        headless=True,
+        args=[
+            '--no-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+            '--window-size=1280,720',
+            '--disable-extensions',
+            '--disable-plugins',
+            '--disable-images',
+            '--disable-javascript',
+            '--disable-blink-features=AutomationControlled',
+            '--single-process',
+            '--disable-background-timer-throttling',
+            '--disable-backgrounding-occluded-windows',
+            '--disable-renderer-backgrounding',
+            '--disable-features=TranslateUI',
+            '--disable-ipc-flooding-protection',
+            '--disable-features=VizDisplayCompositor',
+            '--ignore-certificate-errors',
+            '--ignore-ssl-errors',
+            '--disable-web-security',
+            '--allow-running-insecure-content',
+        ]
+    )
+    
+    # 創建一個新的上下文和頁面
+    context = browser.new_context(
+        viewport={'width': 1280, 'height': 720},
+        user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    )
+    page = context.new_page()
+    
+    # 返回一個包含 Playwright 物件的字典，模擬 Selenium WebDriver 介面
+    driver = {
+        'page': page,
+        'context': context,
+        'browser': browser,
+        'playwright': playwright,
+        'get': lambda url: page.goto(url),
+        'title': lambda: page.title(),
+        'current_url': lambda: page.url,
+        'set_window_size': lambda width, height: page.set_viewport_size({'width': width, 'height': height}),
+        'maximize_window': lambda: page.set_viewport_size({'width': 1920, 'height': 1080}),
+        'save_screenshot': lambda filename: page.screenshot(path=filename),
+        'quit': lambda: (page.close(), context.close(), browser.close(), playwright.stop()),
+        'execute_script': lambda script: page.evaluate(script),
+        'get_window_size': lambda: {'width': 1280, 'height': 720}
+    }
+    
     return driver
 
 def wait_for_element(driver, by, value, timeout=30):
@@ -108,8 +128,8 @@ def make_reservation():
         take_screenshot("page_complete")
         
         # 檢查頁面狀態
-        print(f"當前頁面標題: {driver.title}")
-        print(f"當前頁面URL: {driver.current_url}")
+        print(f"當前頁面標題: {driver.title()}")
+        print(f"當前頁面URL: {driver.current_url()}")
         print(f"當前視窗大小: {driver.get_window_size()}")
         take_screenshot("main_page")
         
