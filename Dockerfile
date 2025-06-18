@@ -10,23 +10,21 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# 安裝 Chrome（最小化安裝）
+# 安裝 Chrome 114 版本（與 ChromeDriver 114 相容）
 RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - \
     && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list \
     && apt-get update \
-    && apt-get install -y google-chrome-stable --no-install-recommends \
+    && apt-get install -y google-chrome-stable=114.0.5735.198-1 --no-install-recommends \
+    && apt-mark hold google-chrome-stable \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# 下載 ChromeDriver (使用穩定版本，讓 webdriver-manager 處理版本匹配)
-RUN wget -q "https://chromedriver.storage.googleapis.com/LATEST_RELEASE" -O /tmp/chromedriver_version \
-    && CHROMEDRIVER_VERSION=$(cat /tmp/chromedriver_version) \
-    && echo "ChromeDriver 版本: $CHROMEDRIVER_VERSION" \
-    && wget -q "https://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip" -O /tmp/chromedriver.zip \
+# 下載 ChromeDriver 114 版本
+RUN wget -q "https://chromedriver.storage.googleapis.com/114.0.5735.90/chromedriver_linux64.zip" -O /tmp/chromedriver.zip \
     && unzip /tmp/chromedriver.zip -d /usr/local/bin/ \
-    && rm /tmp/chromedriver.zip /tmp/chromedriver_version \
+    && rm /tmp/chromedriver.zip \
     && chmod +x /usr/local/bin/chromedriver \
-    && echo "ChromeDriver 安裝完成"
+    && echo "ChromeDriver 114.0.5735.90 安裝完成"
 
 # 設置工作目錄
 WORKDIR /app
