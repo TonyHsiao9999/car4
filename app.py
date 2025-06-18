@@ -59,17 +59,17 @@ def setup_driver():
         chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
         chrome_options.add_experimental_option("useAutomationExtension", False)
         
-        # 嘗試使用系統安裝的 ChromeDriver
+        # 嘗試使用系統安裝的 Chromium 和 chromedriver
         try:
-            print("嘗試使用系統安裝的 ChromeDriver...")
-            service = Service('/usr/local/bin/chromedriver')
+            print("嘗試使用系統安裝的 Chromium...")
+            service = Service('/usr/bin/chromedriver')
             driver = webdriver.Chrome(service=service, options=chrome_options)
-            print("使用系統 ChromeDriver 初始化成功")
+            print("使用系統 Chromium 初始化成功")
             return driver
         except Exception as e:
-            print(f"系統 ChromeDriver 失敗: {e}")
+            print(f"系統 Chromium 失敗: {e}")
         
-        # 如果系統 ChromeDriver 失敗，嘗試使用 webdriver-manager
+        # 如果系統 Chromium 失敗，嘗試使用 webdriver-manager
         try:
             from webdriver_manager.chrome import ChromeDriverManager
             print("使用 webdriver-manager 獲取 ChromeDriver...")
