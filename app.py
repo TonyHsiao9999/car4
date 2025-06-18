@@ -588,38 +588,76 @@ def make_reservation():
             driver['page'].wait_for_timeout(3000)  # 等待搜尋結果載入
             take_screenshot("search_results_waiting")
             
+            # 首先檢查是否有任何下拉選項出現
+            print("檢查是否有下拉選項出現...")
+            dropdown_appeared = False
+            
+            # 等待下拉選項出現的通用檢測
+            dropdown_selectors = [
+                '.pac-container',
+                '.autocomplete-dropdown',
+                '.suggestions',
+                '.dropdown-menu',
+                'ul[role="listbox"]',
+                '.search-results',
+                '.autocomplete-results'
+            ]
+            
+            for dropdown_selector in dropdown_selectors:
+                try:
+                    element = driver['page'].wait_for_selector(dropdown_selector, timeout=5000)
+                    if element and element.is_visible():
+                        print(f"發現下拉容器: {dropdown_selector}")
+                        dropdown_appeared = True
+                        take_screenshot("dropdown_appeared")
+                        break
+                except Exception as e:
+                    print(f"下拉容器選擇器 {dropdown_selector} 未找到: {e}")
+                    continue
+            
+            if not dropdown_appeared:
+                print("沒有檢測到下拉選項，可能搜尋結果未出現")
+                take_screenshot("no_dropdown_detected")
+                # 嘗試重新觸發搜尋
+                try:
+                    pickup_input.click()
+                    driver['page'].wait_for_timeout(500)
+                    # 重新輸入觸發搜尋
+                    pickup_input.fill('')
+                    pickup_input.fill('亞東紀念醫院')
+                    driver['page'].wait_for_timeout(2000)
+                    take_screenshot("retrigger_search")
+                except Exception as e:
+                    print(f"重新觸發搜尋失敗: {e}")
+            
             # 嘗試多種搜尋結果選擇器
             search_result_selectors = [
-                # Google Places 自動完成
-                '.pac-item:first-child',
+                # Google Places 自動完成 - 更具體的選擇器
                 '.pac-container .pac-item:first-child',
+                '.pac-item:first-child',
                 '.pac-item:nth-child(1)',
+                '.pac-item:first-of-type',
                 
-                # 一般自動完成下拉選項
-                '.autocomplete-item:first-child',
-                '.autocomplete-suggestion:first-child',
-                '.suggestion:first-child',
-                '.dropdown-item:first-child',
-                
-                # 搜尋結果容器
-                '.search-results .result:first-child',
-                '.results .result:first-child',
-                '.search-result:first-child',
-                
-                # 通用下拉選項
-                '.dropdown li:first-child',
+                # 通用自動完成
+                '.autocomplete-dropdown li:first-child',
+                '.autocomplete-results li:first-child',
+                '.suggestions li:first-child',
                 '.dropdown-menu li:first-child',
-                '.menu-item:first-child',
                 
-                # 更通用的選擇器
-                'ul li:first-child',
-                '.ui-menu-item:first-child',
+                # 角色和屬性選擇器
                 '[role="option"]:first-child',
+                '[role="menuitem"]:first-child',
+                'li[data-index="0"]',
+                'li[data-value]',
                 
-                # 包含醫院文字的選項
-                'li:has-text("亞東")',
-                'div:has-text("亞東紀念醫院")',
-                '*:has-text("亞東紀念醫院")'
+                # 更廣泛的選擇器
+                'ul li:first-child',
+                '.dropdown li:first-child',
+                
+                # 包含醫院文字的選項（更精確）
+                'li:has-text("亞東紀念醫院")',
+                '*:has-text("亞東紀念醫院"):visible',
+                'div:has-text("亞東"):visible'
             ]
             
             search_result_clicked = False
@@ -628,15 +666,27 @@ def make_reservation():
                 try:
                     print(f"嘗試搜尋結果選擇器: {selector}")
                     
-                    # 等待元素出現
-                    element = driver['page'].wait_for_selector(selector, timeout=5000)
-                    if element and element.is_visible():
-                        print(f"找到搜尋結果，點擊: {selector}")
-                        element.click()
-                        search_result_clicked = True
-                        break
-                    else:
-                        print(f"搜尋結果元素不可見: {selector}")
+                    # 等待元素出現，但不要等太久
+                    try:
+                        element = driver['page'].wait_for_selector(selector, timeout=3000)
+                        if element and element.is_visible():
+                            # 檢查元素文字是否相關
+                            element_text = element.text_content() or ''
+                            print(f"找到搜尋結果元素，文字: '{element_text}'")
+                            
+                            # 確保這是相關的結果
+                            if '亞東' in element_text or '醫院' in element_text or not element_text:
+                                print(f"點擊搜尋結果: {selector}")
+                                element.click()
+                                search_result_clicked = True
+                                break
+                            else:
+                                print(f"搜尋結果不相關，跳過: '{element_text}'")
+                        else:
+                            print(f"搜尋結果元素不可見: {selector}")
+                    except Exception as e:
+                        print(f"等待搜尋結果 {selector} 失敗: {e}")
+                        continue
                         
                 except Exception as e:
                     print(f"搜尋結果選擇器 {selector} 失敗: {e}")
@@ -655,8 +705,8 @@ def make_reservation():
                             if li.is_visible():
                                 li_text = li.text_content() or ''
                                 print(f"列表項目 {i}: '{li_text}'")
-                                if '亞東' in li_text or '醫院' in li_text:
-                                    print(f"找到疑似醫院選項，點擊: {li_text}")
+                                if '亞東' in li_text and len(li_text.strip()) > 0:
+                                    print(f"找到相關醫院選項，點擊: {li_text}")
                                     li.click()
                                     search_result_clicked = True
                                     break
@@ -670,47 +720,19 @@ def make_reservation():
                 if not search_result_clicked:
                     try:
                         print("嘗試使用鍵盤選擇第一個結果...")
+                        # 確保輸入框有焦點
+                        pickup_input.click()
+                        driver['page'].wait_for_timeout(500)
                         # 按向下箭頭選擇第一個結果
                         driver['page'].keyboard.press('ArrowDown')
-                        driver['page'].wait_for_timeout(500)
+                        driver['page'].wait_for_timeout(1000)
+                        take_screenshot("keyboard_selection")
                         # 按 Enter 確認選擇
                         driver['page'].keyboard.press('Enter')
                         search_result_clicked = True
                         print("鍵盤選擇成功")
                     except Exception as e:
                         print(f"鍵盤選擇失敗: {e}")
-                
-                # 方法3: JavaScript 搜尋和點擊
-                if not search_result_clicked:
-                    try:
-                        print("使用 JavaScript 尋找搜尋結果...")
-                        js_script = """
-                        // 尋找包含"亞東"的可見元素
-                        const elements = Array.from(document.querySelectorAll('*'));
-                        for (let elem of elements) {
-                            if (elem.offsetParent !== null) { // 檢查是否可見
-                                const text = elem.textContent || '';
-                                if (text.includes('亞東') && (
-                                    elem.tagName === 'LI' || 
-                                    elem.tagName === 'DIV' || 
-                                    elem.classList.contains('pac-item') ||
-                                    elem.classList.contains('autocomplete-item') ||
-                                    elem.classList.contains('result')
-                                )) {
-                                    console.log('找到搜尋結果:', elem);
-                                    elem.click();
-                                    return true;
-                                }
-                            }
-                        }
-                        return false;
-                        """
-                        result = driver['page'].evaluate(js_script)
-                        if result:
-                            print("JavaScript 搜尋結果點擊成功")
-                            search_result_clicked = True
-                    except Exception as e:
-                        print(f"JavaScript 搜尋結果點擊失敗: {e}")
             
             if search_result_clicked:
                 print("搜尋結果選擇成功")
@@ -723,7 +745,51 @@ def make_reservation():
             
             # 8. 下車地點選擇「住家」
             print("選擇下車地點：住家")
-            driver['page'].select_option('select', '住家')
+            # 尋找下車地點的下拉選單
+            dropoff_selectors = [
+                'select[name*="dropoff"]',
+                'select[name*="destination"]', 
+                'select[name*="to"]',
+                'select[name*="end"]',
+                'select[name*="下車"]',
+                'select:nth-of-type(2)',  # 第二個下拉選單通常是下車地點
+                'form select:nth-child(n+2)'  # 表單中第二個或之後的選單
+            ]
+            
+            dropoff_selected = False
+            for selector in dropoff_selectors:
+                try:
+                    print(f"嘗試下車地點選擇器: {selector}")
+                    select_element = driver['page'].locator(selector).first
+                    if select_element.count() > 0 and select_element.is_visible():
+                        print(f"找到下車地點選單: {selector}")
+                        select_element.select_option('住家')
+                        dropoff_selected = True
+                        print("下車地點選擇成功：住家")
+                        break
+                except Exception as e:
+                    print(f"下車地點選擇器 {selector} 失敗: {e}")
+                    continue
+            
+            if not dropoff_selected:
+                # 嘗試通用的 select 元素
+                try:
+                    print("嘗試通用的 select 元素...")
+                    all_selects = driver['page'].locator('select').all()
+                    for i, select_elem in enumerate(all_selects):
+                        if select_elem.is_visible():
+                            print(f"檢查選單 {i}")
+                            try:
+                                select_elem.select_option('住家')
+                                dropoff_selected = True
+                                print(f"在選單 {i} 成功選擇住家")
+                                break
+                            except Exception as e:
+                                print(f"選單 {i} 選擇住家失敗: {e}")
+                                continue
+                except Exception as e:
+                    print(f"檢查通用選單失敗: {e}")
+            
             take_screenshot("dropoff_location")
             
             # 9. 預約日期/時段選擇
