@@ -55,10 +55,18 @@ def make_reservation():
         driver.execute_script("arguments[0].click();", button)
         print("已點擊「我知道了」按鈕...")
         driver.save_screenshot('/app/after_click.png')
-
-        # 3. 輸入身分證字號A102574899，密碼visi319VISI，然後點擊「民眾登入」
-        print("開始輸入登入資訊...")
-        id_input = WebDriverWait(driver, 10).until(
+        print("頁面原始碼：", driver.page_source)
+        iframes = driver.find_elements(By.TAG_NAME, "iframe")
+        for iframe in iframes:
+            driver.switch_to.frame(iframe)
+            try:
+                id_input = WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.ID, "id"))
+                )
+                break
+            except:
+                driver.switch_to.default_content()
+        id_input = WebDriverWait(driver, 30).until(
             EC.presence_of_element_located((By.ID, "id"))
         )
         id_input.send_keys("A102574899")
