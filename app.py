@@ -2638,16 +2638,145 @@ def make_reservation():
                 
             take_screenshot("submit_reservation")
             
-            # 17. 檢查「已完成預約」畫面
-            print("檢查預約完成狀態...")
+            # 17. 檢查「已完成預約」浮動視窗
+            print("=== 第17步：檢查預約完成狀態（浮動視窗） ===")
+            
             try:
-                driver['page'].wait_for_selector('text=已完成預約', timeout=10000)
-                print("預約成功完成！")
-                take_screenshot("reservation_success")
-                return True
+                # 等待頁面處理完成
+                print("等待預約處理完成...")
+                driver['page'].wait_for_timeout(3000)
+                
+                # 拍照記錄當前狀態
+                take_screenshot("after_submit_waiting")
+                
+                # 多種方法檢測預約完成的浮動視窗
+                success_detected = False
+                
+                # 方法1: 檢測浮動視窗選擇器
+                modal_selectors = [
+                    '.modal:has-text("已完成預約")',
+                    '.popup:has-text("已完成預約")',
+                    '.dialog:has-text("已完成預約")',
+                    '[role="dialog"]:has-text("已完成預約")',
+                    '.overlay:has-text("已完成預約")',
+                    '.modal-content:has-text("已完成預約")'
+                ]
+                
+                print("檢查浮動視窗...")
+                for selector in modal_selectors:
+                    try:
+                        element = driver['page'].locator(selector).first
+                        if element.count() > 0 and element.is_visible():
+                            print(f"✅ 找到預約完成浮動視窗: {selector}")
+                            success_detected = True
+                            break
+                    except Exception as e:
+                        print(f"浮動視窗選擇器 {selector} 失敗: {e}")
+                        continue
+                
+                # 方法2: 使用 wait_for_selector 等待浮動視窗出現
+                if not success_detected:
+                    print("等待「已完成預約」文字出現...")
+                    try:
+                        driver['page'].wait_for_selector('text=已完成預約', timeout=10000)
+                        print("✅ 找到「已完成預約」文字")
+                        success_detected = True
+                    except Exception as e:
+                        print(f"等待「已完成預約」文字失敗: {e}")
+                
+                # 方法3: 檢查所有可見元素中是否包含成功訊息
+                if not success_detected:
+                    print("檢查所有可見元素...")
+                    
+                    success_keywords = ['已完成預約', '預約成功', '預約完成', '預約已提交', '預約已送出']
+                    
+                    for keyword in success_keywords:
+                        try:
+                            elements = driver['page'].locator(f'*:has-text("{keyword}")').all()
+                            print(f"找到 {len(elements)} 個包含「{keyword}」的元素")
+                            
+                            for i, elem in enumerate(elements):
+                                try:
+                                    if elem.is_visible():
+                                        text = elem.text_content() or ''
+                                        print(f"成功元素 {i}: {text[:100]}")
+                                        success_detected = True
+                                        break
+                                except:
+                                    continue
+                            
+                            if success_detected:
+                                break
+                        except Exception as e:
+                            print(f"檢查關鍵字「{keyword}」失敗: {e}")
+                            continue
+                
+                # 方法4: 檢查浮動視窗的常見類別
+                if not success_detected:
+                    print("檢查常見的浮動視窗類別...")
+                    
+                    common_modal_classes = [
+                        '.modal',
+                        '.popup',
+                        '.dialog',
+                        '.overlay',
+                        '.modal-dialog',
+                        '.alert',
+                        '.notification'
+                    ]
+                    
+                    for class_selector in common_modal_classes:
+                        try:
+                            modals = driver['page'].locator(class_selector).all()
+                            for i, modal in enumerate(modals):
+                                try:
+                                    if modal.is_visible():
+                                        content = modal.text_content() or ''
+                                        print(f"浮動視窗 {class_selector}[{i}]: {content[:100]}")
+                                        
+                                        # 檢查內容是否包含成功訊息
+                                        if any(keyword in content for keyword in success_keywords):
+                                            print(f"✅ 在 {class_selector}[{i}] 中找到預約成功訊息")
+                                            success_detected = True
+                                            break
+                                except:
+                                    continue
+                            
+                            if success_detected:
+                                break
+                        except Exception as e:
+                            print(f"檢查 {class_selector} 失敗: {e}")
+                            continue
+                
+                # 最終拍照記錄
+                if success_detected:
+                    print("🎉 預約成功完成！")
+                    take_screenshot("reservation_success")
+                    return True
+                else:
+                    print("⚠️ 未檢測到明確的預約完成訊息")
+                    take_screenshot("reservation_status_unclear")
+                    
+                    # 額外等待時間，再次檢查
+                    print("額外等待5秒後再次檢查...")
+                    driver['page'].wait_for_timeout(5000)
+                    take_screenshot("reservation_final_check")
+                    
+                    # 最後一次嘗試
+                    try:
+                        final_check = driver['page'].locator('text=已完成預約').first
+                        if final_check.count() > 0:
+                            print("✅ 最終檢查：找到預約完成訊息")
+                            return True
+                    except:
+                        pass
+                    
+                    print("⚠️ 最終未能確認預約狀態")
+                    return False
+                    
             except Exception as e:
-                print(f"沒有找到預約完成訊息: {e}")
-                take_screenshot("reservation_unknown")
+                print(f"檢查預約完成狀態失敗: {e}")
+                take_screenshot("reservation_check_error")
                 return False
                 
         except Exception as e:
