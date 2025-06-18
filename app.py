@@ -176,67 +176,120 @@ def make_reservation():
             # 等待登入成功浮動視窗
             print("等待登入成功訊息...")
             try:
-                # 嘗試多種可能的登入成功訊息選擇器
-                success_selectors = [
-                    'text=登入成功',
-                    'text=登录成功', 
-                    'text=Success',
-                    'text=成功',
-                    '.alert:has-text("登入")',
-                    '.modal:has-text("登入")',
-                    '.dialog:has-text("登入")',
-                    '.message:has-text("登入")'
+                # 專門針對浮動視窗的選擇器
+                modal_selectors = [
+                    '.modal:has-text("登入成功")',
+                    '.dialog:has-text("登入成功")', 
+                    '.popup:has-text("登入成功")',
+                    '.alert:has-text("登入成功")',
+                    '[role="dialog"]:has-text("登入成功")',
+                    '.swal-modal:has-text("登入成功")',
+                    '.modal-content:has-text("登入成功")',
+                    '.ui-dialog:has-text("登入成功")'
                 ]
                 
-                success_found = False
-                for selector in success_selectors:
+                # 先嘗試找到浮動視窗
+                modal_found = False
+                modal_element = None
+                
+                for selector in modal_selectors:
                     try:
-                        print(f"嘗試選擇器: {selector}")
-                        driver['page'].wait_for_selector(selector, timeout=3000)
-                        print(f"找到登入成功訊息: {selector}")
-                        success_found = True
+                        print(f"尋找浮動視窗: {selector}")
+                        modal_element = driver['page'].wait_for_selector(selector, timeout=5000)
+                        print(f"找到登入成功浮動視窗: {selector}")
+                        modal_found = True
                         break
                     except Exception as e:
-                        print(f"選擇器 {selector} 未找到: {e}")
+                        print(f"浮動視窗選擇器 {selector} 未找到: {e}")
                         continue
                 
-                if success_found:
-                    # 尋找確定按鈕
+                # 如果沒找到特定的浮動視窗，嘗試通用的登入成功訊息
+                if not modal_found:
+                    generic_selectors = [
+                        'text=登入成功',
+                        ':text("登入成功")',
+                        '*:has-text("登入成功")'
+                    ]
+                    
+                    for selector in generic_selectors:
+                        try:
+                            print(f"尋找通用登入成功訊息: {selector}")
+                            driver['page'].wait_for_selector(selector, timeout=3000)
+                            print(f"找到登入成功訊息: {selector}")
+                            modal_found = True
+                            break
+                        except Exception as e:
+                            print(f"通用選擇器 {selector} 未找到: {e}")
+                            continue
+                
+                if modal_found:
+                    # 截圖記錄找到登入成功訊息
+                    take_screenshot("login_success_modal_found")
+                    
+                    # 等待一下讓浮動視窗完全顯示
+                    driver['page'].wait_for_timeout(1000)
+                    
+                    # 尋找確定按鈕 - 專門針對浮動視窗內的按鈕
                     confirm_selectors = [
-                        'text=確定',
-                        'text=OK',
-                        'text=好的',
-                        'text=知道了',
+                        '.modal button:has-text("確定")',
+                        '.dialog button:has-text("確定")',
+                        '.popup button:has-text("確定")',
+                        '.alert button:has-text("確定")',
+                        '[role="dialog"] button:has-text("確定")',
+                        '.swal-button:has-text("確定")',
+                        '.modal-footer button:has-text("確定")',
+                        '.ui-dialog-buttonset button:has-text("確定")',
                         'button:has-text("確定")',
-                        'button:has-text("OK")',
-                        '.btn:has-text("確定")'
+                        'text=確定',
+                        '.btn:has-text("確定")',
+                        'input[value="確定"]'
                     ]
                     
                     confirm_clicked = False
                     for confirm_selector in confirm_selectors:
                         try:
                             print(f"嘗試點擊確定按鈕: {confirm_selector}")
-                            driver['page'].click(confirm_selector, timeout=3000)
-                            print(f"確定按鈕點擊成功: {confirm_selector}")
-                            confirm_clicked = True
-                            break
+                            # 等待按鈕可見
+                            button = driver['page'].wait_for_selector(confirm_selector, timeout=3000)
+                            if button.is_visible():
+                                button.click()
+                                print(f"確定按鈕點擊成功: {confirm_selector}")
+                                confirm_clicked = True
+                                break
                         except Exception as e:
                             print(f"確定按鈕 {confirm_selector} 點擊失敗: {e}")
                             continue
                     
                     if not confirm_clicked:
-                        print("未找到確定按鈕，嘗試按 ESC 鍵")
+                        print("未找到確定按鈕，嘗試點擊任何可見的按鈕")
+                        try:
+                            # 嘗試點擊浮動視窗中的任何按鈕
+                            buttons = driver['page'].locator('button').all()
+                            for button in buttons:
+                                if button.is_visible():
+                                    button_text = button.text_content()
+                                    print(f"發現按鈕: {button_text}")
+                                    if any(word in button_text for word in ['確定', 'OK', '好', '關閉']):
+                                        button.click()
+                                        print(f"點擊按鈕: {button_text}")
+                                        confirm_clicked = True
+                                        break
+                        except Exception as e:
+                            print(f"嘗試點擊其他按鈕失敗: {e}")
+                    
+                    if not confirm_clicked:
+                        print("所有按鈕點擊嘗試失敗，嘗試按 ESC 鍵關閉浮動視窗")
                         driver['page'].keyboard.press('Escape')
                     
                     print("登入成功確認完成")
-                    take_screenshot("login_success")
+                    take_screenshot("login_success_confirmed")
                 else:
-                    print("沒有找到登入成功訊息，可能已經登入成功")
-                    take_screenshot("no_login_success_message")
+                    print("沒有找到登入成功浮動視窗，可能已經登入成功或登入失敗")
+                    take_screenshot("no_login_success_modal")
                     
             except Exception as e:
                 print(f"登入成功檢測過程發生錯誤: {e}")
-                take_screenshot("login_success_error")
+                take_screenshot("login_success_detection_error")
             
             # 等待登入完成
             print("等待登入完成...")
