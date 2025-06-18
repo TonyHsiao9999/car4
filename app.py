@@ -649,16 +649,39 @@ def make_reservation():
                         try:
                             # 檢查 URL 是否改變
                             if driver.current_url != current_url:
+                                print(f"URL 已改變：{driver.current_url}")
                                 return True
                             
                             # 檢查頁面標題是否改變
                             if "預約" in driver.title:
+                                print(f"頁面標題包含預約：{driver.title}")
                                 return True
                             
                             # 檢查是否出現預約相關元素
                             elements = driver.find_elements(By.XPATH, "//*[contains(text(), '預約')]")
-                            if any(element.is_displayed() for element in elements):
+                            visible_elements = [e for e in elements if e.is_displayed()]
+                            if visible_elements:
+                                print(f"找到 {len(visible_elements)} 個可見的預約相關元素")
                                 return True
+                            
+                            # 檢查是否出現預約表單
+                            try:
+                                form = driver.find_element(By.TAG_NAME, "form")
+                                if form.is_displayed():
+                                    print("找到可見的預約表單")
+                                    return True
+                            except:
+                                pass
+                            
+                            # 檢查是否出現預約相關輸入欄位
+                            try:
+                                inputs = driver.find_elements(By.TAG_NAME, "input")
+                                for input_field in inputs:
+                                    if input_field.is_displayed() and input_field.get_attribute("type") in ["text", "date", "time"]:
+                                        print("找到預約相關輸入欄位")
+                                        return True
+                            except:
+                                pass
                             
                             return False
                         except:
@@ -672,7 +695,46 @@ def make_reservation():
                     time.sleep(2)
                     
                     # 再次檢查是否在預約頁面
-                    if "預約" in driver.title or "預約" in driver.current_url:
+                    is_reserve_page = False
+                    
+                    # 檢查 URL
+                    if "預約" in driver.current_url:
+                        print(f"URL 包含預約：{driver.current_url}")
+                        is_reserve_page = True
+                    
+                    # 檢查頁面標題
+                    if "預約" in driver.title:
+                        print(f"頁面標題包含預約：{driver.title}")
+                        is_reserve_page = True
+                    
+                    # 檢查預約相關元素
+                    elements = driver.find_elements(By.XPATH, "//*[contains(text(), '預約')]")
+                    visible_elements = [e for e in elements if e.is_displayed()]
+                    if visible_elements:
+                        print(f"找到 {len(visible_elements)} 個可見的預約相關元素")
+                        is_reserve_page = True
+                    
+                    # 檢查預約表單
+                    try:
+                        form = driver.find_element(By.TAG_NAME, "form")
+                        if form.is_displayed():
+                            print("找到可見的預約表單")
+                            is_reserve_page = True
+                    except:
+                        pass
+                    
+                    # 檢查預約相關輸入欄位
+                    try:
+                        inputs = driver.find_elements(By.TAG_NAME, "input")
+                        for input_field in inputs:
+                            if input_field.is_displayed() and input_field.get_attribute("type") in ["text", "date", "time"]:
+                                print("找到預約相關輸入欄位")
+                                is_reserve_page = True
+                                break
+                    except:
+                        pass
+                    
+                    if is_reserve_page:
                         print("確認在預約頁面，繼續執行...")
                     else:
                         print("可能未成功跳轉到預約頁面")
