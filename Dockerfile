@@ -21,6 +21,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # 安裝 Playwright 瀏覽器
 RUN playwright install chromium --with-deps
+RUN playwright install-deps
 
 # 設置環境變數
 ENV DISPLAY=:99
