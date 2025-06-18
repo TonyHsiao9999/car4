@@ -91,12 +91,18 @@ def print_debug_info(driver, locator, error=None):
 def wait_for_element(driver, locator, timeout=WAIT_TIMES["element"]):
     """等待元素出現並返回"""
     try:
-        element = WebDriverWait(driver, timeout).until(
-            EC.presence_of_element_located(locator)
-        )
-        return element
-    except TimeoutException:
-        print_debug_info(driver, locator, "等待元素超時")
+        # 使用 try-except 來捕獲可能的頁面原始碼輸出
+        try:
+            element = WebDriverWait(driver, timeout).until(
+                EC.presence_of_element_located(locator)
+            )
+            return element
+        except Exception as e:
+            # 如果發生錯誤，只輸出我們自己的除錯資訊
+            print_debug_info(driver, locator, f"等待元素超時: {str(e)}")
+            return None
+    except Exception as e:
+        print_debug_info(driver, locator, f"等待元素時發生錯誤: {str(e)}")
         return None
 
 def safe_click(driver, locator, timeout=WAIT_TIMES["element"]):
