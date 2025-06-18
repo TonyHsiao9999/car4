@@ -2406,17 +2406,6 @@ def make_reservation():
                 driver['page'].wait_for_timeout(1000)
                 take_screenshot("before_large_wheelchair_selection")
                 
-                # 先尋找大型輪椅相關的問題文字
-                print("尋找大型輪椅相關問題...")
-                large_wheelchair_questions = driver['page'].locator('*:has-text("大型輪椅")').all()
-                for i, question in enumerate(large_wheelchair_questions):
-                    try:
-                        text = question.text_content() or ''
-                        print(f"大型輪椅問題 {i}: {text}")
-                    except:
-                        continue
-                
-                # 🚀 大幅改進的多層次查找策略
                 clicked = False
                 
                 # 🎯 策略0：使用精確CSS選擇器（基於網頁trace結果）
@@ -2437,10 +2426,10 @@ def make_reservation():
                         print("✅ 策略0成功：精確CSS選擇器")
                         clicked = True
                     else:
-                        print("精確選擇器未找到元素")
+                        print("❌ 精確選擇器未找到元素")
                 
                 except Exception as e:
-                    print(f"策略0執行失敗: {e}")
+                    print(f"❌ 策略0執行失敗: {e}")
                 
                 if clicked:
                     print("✅ 大型輪椅「否」選擇成功")
