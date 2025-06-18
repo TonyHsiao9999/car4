@@ -84,12 +84,18 @@ def make_reservation():
                 
                 # 等待浮動視窗消失
                 try:
-                    WebDriverWait(driver, 5).until_not(
-                        lambda d: any(e.is_displayed() for e in d.find_elements(By.XPATH, "//*[contains(text(), '我知道了')]"))
-                    )
+                    # 使用更穩定的方式等待浮動視窗消失
+                    def is_popup_gone(driver):
+                        try:
+                            elements = driver.find_elements(By.XPATH, "//*[contains(text(), '我知道了')]")
+                            return not any(element.is_displayed() for element in elements)
+                        except:
+                            return True  # 如果發生任何錯誤，假設浮動視窗已經消失
+                    
+                    WebDriverWait(driver, 5).until(is_popup_gone)
                     print("浮動視窗已消失")
                 except TimeoutException:
-                    print("浮動視窗可能未完全消失")
+                    print("浮動視窗可能未完全消失，繼續執行...")
             else:
                 print("找不到可見的「我知道了」按鈕")
         except TimeoutException:
