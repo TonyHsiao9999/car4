@@ -1,6 +1,6 @@
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "Dockerfile.new"
+dockerfilePath = "Dockerfile"
 
 [deploy]
 startCommand = "python app.py"
