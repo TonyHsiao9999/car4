@@ -25,13 +25,20 @@ def setup_driver():
     chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])
     
     # Zeabur 環境設定
-    if os.path.exists('/usr/bin/chromium'):
+    if os.path.exists('/usr/bin/google-chrome'):
+        chrome_options.binary_location = '/usr/bin/google-chrome'
+        service = Service('/usr/local/bin/chromedriver')
+    elif os.path.exists('/usr/bin/chromium'):
         chrome_options.binary_location = '/usr/bin/chromium'
         service = Service('/usr/bin/chromedriver')
     else:
         # 如果沒有安裝 Chrome，使用 webdriver-manager
-        from webdriver_manager.chrome import ChromeDriverManager
-        service = Service(ChromeDriverManager().install())
+        try:
+            from webdriver_manager.chrome import ChromeDriverManager
+            service = Service(ChromeDriverManager().install())
+        except:
+            # 最後備案：使用系統預設
+            service = Service()
     
     driver = webdriver.Chrome(service=service, options=chrome_options)
     return driver
