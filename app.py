@@ -124,6 +124,19 @@ def make_reservation():
         print("頁面已完全載入")
         take_screenshot("page_complete")
         
+        # 處理浮動視窗 - 點擊「我知道了」按鈕
+        print("檢查並處理浮動視窗...")
+        try:
+            # 等待浮動視窗出現
+            driver['page'].wait_for_selector('text=我知道了', timeout=10000)
+            print("找到浮動視窗，點擊「我知道了」按鈕")
+            driver['page'].click('text=我知道了')
+            print("「我知道了」按鈕點擊成功")
+            take_screenshot("popup_closed")
+        except Exception as e:
+            print(f"沒有找到浮動視窗或點擊失敗: {e}")
+            take_screenshot("no_popup_found")
+        
         # 檢查頁面狀態
         print(f"當前頁面標題: {driver['title']()}")
         print(f"當前頁面URL: {driver['current_url']()}")
