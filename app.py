@@ -447,14 +447,145 @@ def make_reservation():
             print("輸入上車地點：亞東紀念醫院")
             pickup_input = driver['page'].locator('input[placeholder*="地點"]').first
             pickup_input.fill('亞東紀念醫院')
-            driver['page'].wait_for_timeout(2000)  # 等待搜尋結果
+            take_screenshot("hospital_input_filled")
             
-            # 點擊第一個搜尋結果
-            print("選擇第一個搜尋結果")
-            search_results = driver['page'].locator('.search-result, .autocomplete-item').first
-            if search_results.is_visible():
-                search_results.click()
-            take_screenshot("pickup_selected")
+            # 等待 Google 搜尋結果出現
+            print("等待搜尋結果出現...")
+            driver['page'].wait_for_timeout(3000)  # 等待搜尋結果載入
+            take_screenshot("search_results_waiting")
+            
+            # 嘗試多種搜尋結果選擇器
+            search_result_selectors = [
+                # Google Places 自動完成
+                '.pac-item:first-child',
+                '.pac-container .pac-item:first-child',
+                '.pac-item:nth-child(1)',
+                
+                # 一般自動完成下拉選項
+                '.autocomplete-item:first-child',
+                '.autocomplete-suggestion:first-child',
+                '.suggestion:first-child',
+                '.dropdown-item:first-child',
+                
+                # 搜尋結果容器
+                '.search-results .result:first-child',
+                '.results .result:first-child',
+                '.search-result:first-child',
+                
+                # 通用下拉選項
+                '.dropdown li:first-child',
+                '.dropdown-menu li:first-child',
+                '.menu-item:first-child',
+                
+                # 更通用的選擇器
+                'ul li:first-child',
+                '.ui-menu-item:first-child',
+                '[role="option"]:first-child',
+                
+                # 包含醫院文字的選項
+                'li:has-text("亞東")',
+                'div:has-text("亞東紀念醫院")',
+                '*:has-text("亞東紀念醫院")'
+            ]
+            
+            search_result_clicked = False
+            
+            for selector in search_result_selectors:
+                try:
+                    print(f"嘗試搜尋結果選擇器: {selector}")
+                    
+                    # 等待元素出現
+                    element = driver['page'].wait_for_selector(selector, timeout=5000)
+                    if element and element.is_visible():
+                        print(f"找到搜尋結果，點擊: {selector}")
+                        element.click()
+                        search_result_clicked = True
+                        break
+                    else:
+                        print(f"搜尋結果元素不可見: {selector}")
+                        
+                except Exception as e:
+                    print(f"搜尋結果選擇器 {selector} 失敗: {e}")
+                    continue
+            
+            # 如果標準方法失敗，嘗試其他方法
+            if not search_result_clicked:
+                print("標準方法失敗，嘗試其他方法...")
+                
+                try:
+                    # 方法1: 檢查所有可見的 li 元素
+                    print("檢查所有可見的列表項目...")
+                    all_lis = driver['page'].locator('li').all()
+                    for i, li in enumerate(all_lis):
+                        try:
+                            if li.is_visible():
+                                li_text = li.text_content() or ''
+                                print(f"列表項目 {i}: '{li_text}'")
+                                if '亞東' in li_text or '醫院' in li_text:
+                                    print(f"找到疑似醫院選項，點擊: {li_text}")
+                                    li.click()
+                                    search_result_clicked = True
+                                    break
+                        except Exception as e:
+                            print(f"檢查列表項目 {i} 失敗: {e}")
+                            continue
+                except Exception as e:
+                    print(f"檢查列表項目失敗: {e}")
+                
+                # 方法2: 使用鍵盤導航
+                if not search_result_clicked:
+                    try:
+                        print("嘗試使用鍵盤選擇第一個結果...")
+                        # 按向下箭頭選擇第一個結果
+                        driver['page'].keyboard.press('ArrowDown')
+                        driver['page'].wait_for_timeout(500)
+                        # 按 Enter 確認選擇
+                        driver['page'].keyboard.press('Enter')
+                        search_result_clicked = True
+                        print("鍵盤選擇成功")
+                    except Exception as e:
+                        print(f"鍵盤選擇失敗: {e}")
+                
+                # 方法3: JavaScript 搜尋和點擊
+                if not search_result_clicked:
+                    try:
+                        print("使用 JavaScript 尋找搜尋結果...")
+                        js_script = """
+                        // 尋找包含"亞東"的可見元素
+                        const elements = Array.from(document.querySelectorAll('*'));
+                        for (let elem of elements) {
+                            if (elem.offsetParent !== null) { // 檢查是否可見
+                                const text = elem.textContent || '';
+                                if (text.includes('亞東') && (
+                                    elem.tagName === 'LI' || 
+                                    elem.tagName === 'DIV' || 
+                                    elem.classList.contains('pac-item') ||
+                                    elem.classList.contains('autocomplete-item') ||
+                                    elem.classList.contains('result')
+                                )) {
+                                    console.log('找到搜尋結果:', elem);
+                                    elem.click();
+                                    return true;
+                                }
+                            }
+                        }
+                        return false;
+                        """
+                        result = driver['page'].evaluate(js_script)
+                        if result:
+                            print("JavaScript 搜尋結果點擊成功")
+                            search_result_clicked = True
+                    except Exception as e:
+                        print(f"JavaScript 搜尋結果點擊失敗: {e}")
+            
+            if search_result_clicked:
+                print("搜尋結果選擇成功")
+                take_screenshot("pickup_selected")
+                # 等待選擇完成
+                driver['page'].wait_for_timeout(2000)
+            else:
+                print("警告：無法選擇搜尋結果，繼續執行...")
+                take_screenshot("pickup_selection_failed")
             
             # 8. 下車地點選擇「住家」
             print("選擇下車地點：住家")
