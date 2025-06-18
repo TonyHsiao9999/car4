@@ -365,9 +365,27 @@ def make_reservation():
                     # 等待一下讓浮動視窗完全顯示
                     driver['page'].wait_for_timeout(1000)
                     
-                    # 🎯 基於成功日誌優化：跳過確定按鈕檢查（因為日誌顯示沒有確定按鈕）
-                    print("根據日誌分析：登入成功後沒有確定按鈕需要點擊，直接繼續")
-                    confirm_clicked = True
+                    # 🎯 基於trace結果：使用精確的確定按鈕選擇器
+                    try:
+                        print("🎯 使用精確的確定按鈕選擇器...")
+                        
+                        # 直接使用trace到的精確選擇器
+                        precise_selector = 'span.dialog-button'
+                        
+                        element = driver['page'].locator(precise_selector).first
+                        if element.count() > 0 and element.is_visible():
+                            print(f"找到精確的確定按鈕: {precise_selector}")
+                            element.click()
+                            driver['page'].wait_for_timeout(1000)
+                            print("✅ 確定按鈕點擊成功")
+                            confirm_clicked = True
+                        else:
+                            print("❌ 精確選擇器未找到確定按鈕")
+                            confirm_clicked = False
+                    
+                    except Exception as e:
+                        print(f"❌ 確定按鈕點擊失敗: {e}")
+                        confirm_clicked = False
                     
                     if not confirm_clicked:
                         print("未找到確定按鈕，嘗試點擊任何可見的按鈕")
