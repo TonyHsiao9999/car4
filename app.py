@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from selenium.webdriver.common.action_chains import ActionChains
 import tempfile
 from playwright.sync_api import sync_playwright
+import subprocess
 
 app = Flask(__name__, static_folder='static')
 
@@ -20,6 +21,16 @@ def setup_driver():
     from playwright.sync_api import sync_playwright
     import tempfile
     import os
+    import subprocess
+    
+    # 動態安裝 Playwright 瀏覽器
+    try:
+        print("正在安裝 Playwright 瀏覽器...")
+        subprocess.run(['playwright', 'install', 'chromium'], check=True)
+        print("Playwright 瀏覽器安裝完成")
+    except Exception as e:
+        print(f"Playwright 瀏覽器安裝失敗: {e}")
+        # 繼續嘗試，可能已經安裝了
     
     # 創建一個 Playwright 瀏覽器實例
     playwright = sync_playwright().start()
