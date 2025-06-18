@@ -305,24 +305,80 @@ def make_reservation():
         # 等待登入成功
         print("等待「登入成功」浮動視窗...")
         try:
-            # 等待浮動視窗出現
-            WebDriverWait(driver, 10).until(
-                lambda d: len(d.find_elements(By.XPATH, "//*[contains(text(), '登入成功')]")) > 0
-            )
+            # 等待浮動視窗出現，增加等待時間並使用更靈活的條件
+            def wait_for_login_success(driver):
+                try:
+                    # 檢查多種可能的文字
+                    success_texts = ["登入成功", "登入完成", "成功登入"]
+                    for text in success_texts:
+                        elements = driver.find_elements(By.XPATH, f"//*[contains(text(), '{text}')]")
+                        if any(element.is_displayed() for element in elements):
+                            return True
+                    return False
+                except:
+                    return False
+            
+            # 增加等待時間到 20 秒
+            WebDriverWait(driver, 20).until(wait_for_login_success)
             print("找到「登入成功」浮動視窗")
             driver.save_screenshot('/app/login_success_popup.png')
             
-            # 尋找確定按鈕
-            confirm_buttons = driver.find_elements(By.XPATH, "//button[contains(text(), '確定')]")
-            print(f"找到 {len(confirm_buttons)} 個確定按鈕")
+            # 等待一下確保浮動視窗完全載入
+            time.sleep(1)
             
-            # 找到第一個可見的確定按鈕
+            # 尋找確定按鈕，使用多種方式
             confirm_button = None
-            for button in confirm_buttons:
-                if button.is_displayed():
-                    confirm_button = button
-                    print("找到可見的確定按鈕")
-                    break
+            
+            # 方法1：直接尋找確定按鈕
+            try:
+                confirm_buttons = driver.find_elements(By.XPATH, "//button[contains(text(), '確定')]")
+                print(f"找到 {len(confirm_buttons)} 個確定按鈕")
+                for button in confirm_buttons:
+                    if button.is_displayed():
+                        confirm_button = button
+                        print("找到可見的確定按鈕")
+                        break
+            except:
+                print("直接尋找確定按鈕失敗")
+            
+            # 方法2：尋找浮動視窗中的按鈕
+            if not confirm_button:
+                try:
+                    # 先找到浮動視窗
+                    popup = None
+                    for text in ["登入成功", "登入完成", "成功登入"]:
+                        elements = driver.find_elements(By.XPATH, f"//*[contains(text(), '{text}')]")
+                        for element in elements:
+                            if element.is_displayed():
+                                # 找到包含這個文字的父元素（可能是浮動視窗）
+                                popup = element.find_element(By.XPATH, "./ancestor::div[contains(@class, 'modal') or contains(@class, 'popup') or contains(@class, 'dialog')]")
+                                if popup:
+                                    break
+                        if popup:
+                            break
+                    
+                    if popup:
+                        print("找到浮動視窗，在其中尋找確定按鈕")
+                        buttons = popup.find_elements(By.TAG_NAME, "button")
+                        for button in buttons:
+                            if button.is_displayed() and ("確定" in button.text or "OK" in button.text):
+                                confirm_button = button
+                                print("在浮動視窗中找到確定按鈕")
+                                break
+                except:
+                    print("在浮動視窗中尋找確定按鈕失敗")
+            
+            # 方法3：尋找任何可點擊的確定按鈕
+            if not confirm_button:
+                try:
+                    elements = driver.find_elements(By.XPATH, "//*[contains(text(), '確定') or contains(text(), 'OK')]")
+                    for element in elements:
+                        if element.is_displayed() and element.is_enabled():
+                            confirm_button = element
+                            print("找到任何可點擊的確定按鈕")
+                            break
+                except:
+                    print("尋找任何可點擊的確定按鈕失敗")
             
             if confirm_button:
                 print("準備點擊確定按鈕...")
@@ -336,8 +392,11 @@ def make_reservation():
                 try:
                     def is_popup_gone(driver):
                         try:
-                            elements = driver.find_elements(By.XPATH, "//*[contains(text(), '登入成功')]")
-                            return not any(element.is_displayed() for element in elements)
+                            for text in ["登入成功", "登入完成", "成功登入"]:
+                                elements = driver.find_elements(By.XPATH, f"//*[contains(text(), '{text}')]")
+                                if any(element.is_displayed() for element in elements):
+                                    return False
+                            return True
                         except:
                             return True
                     
