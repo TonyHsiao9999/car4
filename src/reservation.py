@@ -1,6 +1,6 @@
 from selenium.webdriver.support.ui import Select
 from .config import URL, LOCATORS, WAIT_TIMES
-from .driver import wait_for_element, safe_click
+from .driver import wait_for_element, safe_click, print_debug_info
 
 class ReservationBot:
     def __init__(self, driver):
@@ -32,7 +32,7 @@ class ReservationBot:
 
             return True
         except Exception as e:
-            print(f"登入過程發生錯誤: {e}")
+            print_debug_info(self.driver, "登入流程", f"登入過程發生錯誤: {e}")
             return False
 
     def make_reservation(self, date, time):
@@ -59,5 +59,5 @@ class ReservationBot:
 
             return True
         except Exception as e:
-            print(f"預約過程發生錯誤: {e}")
+            print_debug_info(self.driver, "預約流程", f"預約過程發生錯誤: {e}")
             return False 
