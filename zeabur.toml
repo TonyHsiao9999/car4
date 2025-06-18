@@ -1,3 +1,6 @@
+[project]
+name = "car4-chromium"
+
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
