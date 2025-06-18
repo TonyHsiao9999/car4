@@ -1788,13 +1788,125 @@ def make_reservation():
             take_screenshot("datetime_selected")
             
             # 10. 於預約時間前後30分鐘到達 選擇「不同意」
-            print("選擇不同意前後30分鐘到達")
-            driver['page'].click('text=不同意')
+            print("=== 第10步：選擇不同意前後30分鐘到達 ===")
+            
+            # 等待頁面穩定
+            driver['page'].wait_for_timeout(1500)
+            
+            try:
+                # 尋找不同意按鈕的多種方法
+                disagree_selectors = [
+                    'text=不同意',
+                    'input[value="不同意"]',
+                    'button:has-text("不同意")',
+                    'label:has-text("不同意")',
+                    '[type="radio"][value*="不同意"]'
+                ]
+                
+                clicked = False
+                for selector in disagree_selectors:
+                    try:
+                        element = driver['page'].locator(selector).first
+                        if element.count() > 0 and element.is_visible():
+                            element.click()
+                            print(f"✅ 使用選擇器 {selector} 點擊不同意成功")
+                            clicked = True
+                            break
+                    except Exception as e:
+                        print(f"選擇器 {selector} 失敗: {e}")
+                        continue
+                
+                if not clicked:
+                    print("⚠️ 未找到不同意選項，可能已經是預設值")
+                    
+            except Exception as e:
+                print(f"選擇不同意選項失敗: {e}")
+            
             take_screenshot("time_window")
             
             # 11. 陪同人數 選擇「1人(免費)」
-            print("選擇陪同人數：1人(免費)")
-            driver['page'].select_option('select', '1人(免費)')
+            print("=== 第11步：選擇陪同人數 1人(免費) ===")
+            
+            # 等待頁面響應
+            driver['page'].wait_for_timeout(1000)
+            
+            try:
+                # 智能尋找陪同人數選單
+                companion_selectors = [
+                    'select[name*="companion"]',
+                    'select[name*="陪同"]',
+                    'select[name*="人數"]',
+                    'select[id*="companion"]',
+                    'select[id*="陪同"]',
+                    'select:has(option[text*="1人(免費)"])',
+                    'select:has(option[text*="免費"])',
+                ]
+                
+                companion_selected = False
+                
+                for selector in companion_selectors:
+                    try:
+                        select_elem = driver['page'].locator(selector).first
+                        if select_elem.count() > 0 and select_elem.is_visible():
+                            # 檢查選項
+                            options = select_elem.locator('option').all()
+                            option_texts = [opt.text_content() or '' for opt in options if opt.text_content()]
+                            print(f"找到陪同人數選單，選項: {option_texts}")
+                            
+                            # 嘗試選擇1人(免費)
+                            if '1人(免費)' in option_texts:
+                                select_elem.select_option('1人(免費)')
+                                driver['page'].wait_for_timeout(1000)
+                                
+                                # 驗證選擇
+                                new_value = select_elem.input_value()
+                                print(f"✅ 陪同人數選擇成功，值: '{new_value}'")
+                                companion_selected = True
+                                break
+                            else:
+                                print(f"選單中沒有1人(免費)選項: {option_texts}")
+                    except Exception as e:
+                        print(f"陪同人數選擇器 {selector} 失敗: {e}")
+                        continue
+                
+                # 如果智能方法失敗，謹慎使用備用方法
+                if not companion_selected:
+                    print("智能方法失敗，嘗試備用方法...")
+                    
+                    # 獲取所有選單並謹慎選擇
+                    all_selects = driver['page'].locator('select').all()
+                    print(f"頁面上有 {len(all_selects)} 個選單")
+                    
+                    for i, select_elem in enumerate(all_selects):
+                        try:
+                            if select_elem.is_visible():
+                                options = select_elem.locator('option').all()
+                                option_texts = [opt.text_content() or '' for opt in options if opt.text_content()]
+                                name = select_elem.get_attribute('name') or ''
+                                id_attr = select_elem.get_attribute('id') or ''
+                                
+                                print(f"選單 {i}: name='{name}', id='{id_attr}', 選項={option_texts}")
+                                
+                                # 只處理包含陪同相關選項的選單
+                                if '1人(免費)' in option_texts or any('免費' in opt for opt in option_texts):
+                                    print(f"選單 {i} 看起來是陪同人數選單，嘗試選擇...")
+                                    select_elem.select_option('1人(免費)')
+                                    driver['page'].wait_for_timeout(1000)
+                                    
+                                    new_value = select_elem.input_value()
+                                    print(f"✅ 備用方法成功，選單 {i} 選擇陪同人數: '{new_value}'")
+                                    companion_selected = True
+                                    break
+                        except Exception as e:
+                            print(f"檢查選單 {i} 失敗: {e}")
+                            continue
+                
+                if not companion_selected:
+                    print("⚠️ 陪同人數選擇失敗，繼續執行...")
+                    
+            except Exception as e:
+                print(f"陪同人數選擇過程失敗: {e}")
+            
             take_screenshot("companion")
             
             # 12. 同意共乘 選擇「否」
