@@ -798,7 +798,9 @@ def make_reservation():
                     print(f"找到 {len(elements)} 個包含相關文字的元素")
                     for i, element in enumerate(elements):
                         if element.is_displayed():
-                            print(f"檢查元素 #{i+1}：{element.text}")
+                            element_text = element.text.strip()
+                            element_tag = element.tag_name
+                            print(f"檢查元素 #{i+1}：標籤={element_tag}，文字='{element_text}'")
                             # 嘗試找到相關的下拉選單
                             try:
                                 nearby_select = element.find_element(By.XPATH, "./following-sibling::select")
@@ -895,13 +897,50 @@ def make_reservation():
                 try:
                     buttons = driver.find_elements(By.TAG_NAME, "button")
                     print(f"找到 {len(buttons)} 個按鈕")
-                    for button in buttons:
-                        if button.is_displayed() and "醫療院所" in button.text:
-                            pickup_type = button
-                            print("找到醫療院所按鈕")
-                            break
+                    for i, button in enumerate(buttons):
+                        if button.is_displayed():
+                            button_text = button.text.strip()
+                            print(f"按鈕 #{i+1} 文字：'{button_text}'")
+                            if "醫療院所" in button_text:
+                                pickup_type = button
+                                print("找到醫療院所按鈕")
+                                break
                 except:
                     print("找不到醫療院所按鈕")
+            
+            # 方法9：尋找隱藏的元素
+            if not pickup_type:
+                try:
+                    # 檢查所有隱藏的下拉選單
+                    hidden_selects = driver.find_elements(By.CSS_SELECTOR, "select[style*='display: none'], select[hidden]")
+                    print(f"找到 {len(hidden_selects)} 個隱藏的下拉選單")
+                    for i, select in enumerate(hidden_selects):
+                        select_name = select.get_attribute("name")
+                        select_id = select.get_attribute("id")
+                        print(f"隱藏下拉選單 #{i+1}：name={select_name}, id={select_id}")
+                        if "pickup" in (select_name or "") or "pickup" in (select_id or ""):
+                            pickup_type = select
+                            print("找到隱藏的上車地點下拉選單")
+                            break
+                except:
+                    print("找不到隱藏的下拉選單")
+
+            # 方法10：尋找其他標籤的元素
+            if not pickup_type:
+                try:
+                    # 檢查 div、span 等元素
+                    elements = driver.find_elements(By.CSS_SELECTOR, "div, span, a")
+                    print(f"找到 {len(elements)} 個其他元素")
+                    for i, element in enumerate(elements):
+                        if element.is_displayed():
+                            element_text = element.text.strip()
+                            element_tag = element.tag_name
+                            if "醫療院所" in element_text and element_tag in ["div", "span", "a"]:
+                                pickup_type = element
+                                print(f"找到醫療院所 {element_tag} 元素")
+                                break
+                except:
+                    print("找不到其他標籤的醫療院所元素")
             
             # 如果還是找不到，檢查頁面結構
             if not pickup_type:
@@ -914,6 +953,13 @@ def make_reservation():
                     # 檢查所有輸入元素
                     inputs = driver.find_elements(By.TAG_NAME, "input")
                     print(f"找到 {len(inputs)} 個輸入元素")
+                    for i, input_field in enumerate(inputs):
+                        if input_field.is_displayed():
+                            input_type = input_field.get_attribute("type")
+                            input_name = input_field.get_attribute("name")
+                            input_id = input_field.get_attribute("id")
+                            input_placeholder = input_field.get_attribute("placeholder")
+                            print(f"輸入元素 #{i+1}：type={input_type}, name={input_name}, id={input_id}, placeholder={input_placeholder}")
                     
                     # 檢查所有選擇元素
                     selects = driver.find_elements(By.TAG_NAME, "select")
@@ -922,6 +968,10 @@ def make_reservation():
                     # 檢查所有標籤元素
                     labels = driver.find_elements(By.TAG_NAME, "label")
                     print(f"找到 {len(labels)} 個標籤元素")
+                    for i, label in enumerate(labels):
+                        if label.is_displayed():
+                            label_text = label.text.strip()
+                            print(f"標籤 #{i+1}：'{label_text}'")
                     
                     # 檢查頁面標題和 URL
                     print(f"當前頁面標題：{driver.title}")
@@ -934,7 +984,7 @@ def make_reservation():
                     
                 except Exception as e:
                     print(f"檢查頁面結構時發生錯誤：{str(e)}")
-            
+
             if pickup_type:
                 print("準備選擇上車地點...")
                 driver.save_screenshot('/app/before_pickup_type_select.png')
