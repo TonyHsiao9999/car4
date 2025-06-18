@@ -18,7 +18,9 @@ COPY app.py .
 COPY static/ ./static/
 
 # 安裝 Python 依賴
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip
+RUN pip install --no-cache-dir flask==3.0.2
+RUN pip install --no-cache-dir playwright==1.41.2
 
 # 安裝 Playwright 瀏覽器（使用系統的 Chromium）
 ENV PLAYWRIGHT_BROWSERS_PATH=/usr/bin
