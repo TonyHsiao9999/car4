@@ -228,19 +228,61 @@ def make_reservation():
                     
                     # 在表單中尋找按鈕
                     try:
+                        # 方法1：使用 XPath 尋找包含文字的按鈕
                         login_button = form.find_element(By.XPATH, ".//button[contains(text(), '民眾登入')]")
                         print("在表單中使用 XPath 找到登入按鈕")
                     except:
                         try:
+                            # 方法2：使用 CSS 選擇器尋找按鈕
                             login_button = form.find_element(By.CSS_SELECTOR, "button.btn-primary")
                             print("在表單中使用 CSS 選擇器找到登入按鈕")
                         except:
-                            buttons = form.find_elements(By.TAG_NAME, "button")
-                            for button in buttons:
-                                if "民眾登入" in button.text:
-                                    login_button = button
-                                    print("在表單中通過按鈕文字找到登入按鈕")
+                            try:
+                                # 方法3：尋找所有按鈕並檢查文字
+                                buttons = form.find_elements(By.TAG_NAME, "button")
+                                for button in buttons:
+                                    if "民眾登入" in button.text:
+                                        login_button = button
+                                        print("在表單中通過按鈕文字找到登入按鈕")
+                                        break
+                            except:
+                                print("在表單中找不到按鈕")
+                    
+                    # 如果還是找不到，嘗試尋找表單中的其他元素
+                    if not login_button:
+                        print("嘗試在表單中尋找其他可能的登入元素...")
+                        try:
+                            # 方法4：尋找包含「登入」文字的任何元素
+                            elements = form.find_elements(By.XPATH, ".//*[contains(text(), '登入')]")
+                            for element in elements:
+                                if element.is_displayed() and element.is_enabled():
+                                    login_button = element
+                                    print("在表單中找到包含「登入」文字的元素")
                                     break
+                        except:
+                            print("在表單中找不到包含「登入」文字的元素")
+                        
+                        # 方法5：尋找表單中的提交按鈕
+                        if not login_button:
+                            try:
+                                submit_button = form.find_element(By.CSS_SELECTOR, "input[type='submit']")
+                                if submit_button.is_displayed() and submit_button.is_enabled():
+                                    login_button = submit_button
+                                    print("在表單中找到提交按鈕")
+                            except:
+                                print("在表單中找不到提交按鈕")
+                        
+                        # 方法6：尋找表單中的任何可點擊元素
+                        if not login_button:
+                            try:
+                                clickable_elements = form.find_elements(By.CSS_SELECTOR, "button, input[type='submit'], input[type='button']")
+                                for element in clickable_elements:
+                                    if element.is_displayed() and element.is_enabled():
+                                        login_button = element
+                                        print("在表單中找到可點擊元素")
+                                        break
+                            except:
+                                print("在表單中找不到可點擊元素")
                 except:
                     print("找不到表單或表單中沒有登入按鈕")
             
