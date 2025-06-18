@@ -10,12 +10,14 @@ import time
 import os
 from dotenv import load_dotenv
 from selenium.webdriver.common.action_chains import ActionChains
+from webdriver_manager.chrome import ChromeDriverManager
 
 app = Flask(__name__, static_folder='static')
 
 def setup_driver():
     from selenium.webdriver.chrome.service import Service
     from selenium.webdriver.chrome.options import Options
+    from webdriver_manager.chrome import ChromeDriverManager
 
     chrome_options = Options()
     chrome_options.binary_location = "/usr/bin/google-chrome"
@@ -44,7 +46,9 @@ def setup_driver():
     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
     chrome_options.add_experimental_option("useAutomationExtension", False)
 
-    service = Service('/usr/local/bin/chromedriver')
+    # 使用 webdriver-manager 自動下載正確版本的 ChromeDriver
+    chromedriver_path = ChromeDriverManager().install()
+    service = Service(chromedriver_path)
     driver = webdriver.Chrome(service=service, options=chrome_options)
     return driver
 

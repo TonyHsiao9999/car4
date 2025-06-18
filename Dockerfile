@@ -21,12 +21,6 @@ RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearm
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# 下載 ChromeDriver 114
-RUN wget -q "https://chromedriver.storage.googleapis.com/114.0.5735.90/chromedriver_linux64.zip" -O /tmp/chromedriver.zip \
-    && unzip /tmp/chromedriver.zip -d /usr/local/bin/ \
-    && rm /tmp/chromedriver.zip \
-    && chmod +x /usr/local/bin/chromedriver
-
 # 設置工作目錄
 WORKDIR /app
 
@@ -42,8 +36,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 ENV DISPLAY=:99
 ENV PYTHONUNBUFFERED=1
 ENV CHROME_BIN=/usr/bin/google-chrome
-ENV CHROMEDRIVER_PATH=/usr/local/bin/chromedriver
-# 減少記憶體使用的環境變數
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONHASHSEED=random
 
