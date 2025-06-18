@@ -759,6 +759,9 @@ def make_reservation():
             # 等待一下確保頁面完全載入
             time.sleep(2)
             
+            # 先截圖記錄當前頁面狀態
+            driver.save_screenshot('/app/before_pickup_type_search.png')
+            
             # 方法1：使用 XPath 尋找下拉選單
             try:
                 pickup_type = driver.find_element(By.XPATH, "//select[contains(@name, 'pickup_type') or contains(@id, 'pickup_type')]")
@@ -779,10 +782,11 @@ def make_reservation():
             if not pickup_type:
                 try:
                     selects = driver.find_elements(By.TAG_NAME, "select")
-                    for select in selects:
+                    print(f"找到 {len(selectes)} 個下拉選單")
+                    for i, select in enumerate(selects):
                         if select.is_displayed():
                             pickup_type = select
-                            print("找到可見的下拉選單")
+                            print(f"找到可見的下拉選單 #{i+1}")
                             break
                 except:
                     print("找不到下拉選單")
@@ -791,6 +795,7 @@ def make_reservation():
             if not pickup_type:
                 try:
                     elements = driver.find_elements(By.XPATH, "//*[contains(text(), '上車地點') or contains(text(), '醫療院所')]")
+                    print(f"找到 {len(elements)} 個包含相關文字的元素")
                     for element in elements:
                         if element.is_displayed():
                             # 嘗試找到相關的下拉選單
@@ -816,6 +821,7 @@ def make_reservation():
             if not pickup_type:
                 try:
                     elements = driver.find_elements(By.CSS_SELECTOR, "select, .select2-container")
+                    print(f"找到 {len(elements)} 個可點擊的下拉選單")
                     for element in elements:
                         if element.is_displayed() and element.is_enabled():
                             pickup_type = element
@@ -848,6 +854,38 @@ def make_reservation():
                             continue
                 except:
                     print("使用所有選擇器都找不到下拉選單")
+            
+            # 如果還是找不到，檢查頁面結構
+            if not pickup_type:
+                print("檢查頁面結構...")
+                try:
+                    # 檢查所有表單元素
+                    forms = driver.find_elements(By.TAG_NAME, "form")
+                    print(f"找到 {len(forms)} 個表單")
+                    
+                    # 檢查所有輸入元素
+                    inputs = driver.find_elements(By.TAG_NAME, "input")
+                    print(f"找到 {len(inputs)} 個輸入元素")
+                    
+                    # 檢查所有選擇元素
+                    selects = driver.find_elements(By.TAG_NAME, "select")
+                    print(f"找到 {len(selects)} 個選擇元素")
+                    
+                    # 檢查所有標籤元素
+                    labels = driver.find_elements(By.TAG_NAME, "label")
+                    print(f"找到 {len(labels)} 個標籤元素")
+                    
+                    # 檢查頁面標題和 URL
+                    print(f"當前頁面標題：{driver.title}")
+                    print(f"當前頁面 URL：{driver.current_url}")
+                    
+                    # 保存頁面原始碼以供檢查
+                    with open('/app/page_source.html', 'w', encoding='utf-8') as f:
+                        f.write(driver.page_source)
+                    print("已保存頁面原始碼到 page_source.html")
+                    
+                except Exception as e:
+                    print(f"檢查頁面結構時發生錯誤：{str(e)}")
             
             if pickup_type:
                 print("準備選擇上車地點...")
