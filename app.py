@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, render_template_string, send_file
 from playwright.sync_api import sync_playwright
 import time
 import os
@@ -2360,233 +2360,6 @@ def make_reservation():
                 
                 clicked = False
                 
-                # 🥇 策略1：深度分析評分系統 (最成功的方法，放在第一位)
-                print("策略1：深度分析評分系統...")
-                
-                try:
-                    all_radios = driver['page'].locator('input[type="radio"]').all()
-                    print(f"找到 {len(all_radios)} 個 radio 按鈕")
-                    
-                    candidates = []
-                    
-                    for i, radio in enumerate(all_radios):
-                        try:
-                            value = radio.get_attribute('value') or ''
-                            name = radio.get_attribute('name') or ''
-                            
-                            # 跳過明確的大型輪椅選項
-                            if '大型' in name or 'large' in name.lower():
-                                continue
-                            
-                            # 分析周圍上下文
-                            context_text = ""
-                            parent = radio
-                            
-                            # 分析6層父元素
-                            for level in range(6):
-                                try:
-                                    parent = parent.locator('xpath=..').first
-                                    parent_text = parent.text_content() or ''
-                                    context_text += parent_text + " "
-                                except:
-                                    break
-                            
-                            # 尋找對應的label
-                            label_text = ""
-                            try:
-                                # 方法1：通過for屬性
-                                radio_id = radio.get_attribute('id')
-                                if radio_id:
-                                    label = driver['page'].locator(f'label[for="{radio_id}"]').first
-                                    label_text = label.text_content() or ''
-                                
-                                # 方法2：查找父級label
-                                if not label_text:
-                                    parent_label = radio.locator('xpath=ancestor::label').first
-                                    label_text = parent_label.text_content() or ''
-                            except:
-                                pass
-                            
-                            full_context = f"{context_text} {label_text}".lower()
-                            
-                            # 智能評分系統
-                            score = 0
-                            
-                            # 輪椅相關評分
-                            if '搭乘輪椅上車' in full_context: score += 10
-                            elif '搭乘輪椅' in full_context: score += 8
-                            elif '輪椅上車' in full_context: score += 6
-                            elif '輪椅' in full_context: score += 4
-                            
-                            # 值為「是」的額外分數
-                            if value == '是' or value == 'yes' or value == '1' or value == 'true': score += 5
-                            
-                            # 排除大型輪椅
-                            if '大型' in full_context:
-                                score = 0
-                            
-                            if score > 0:
-                                candidates.append({
-                                    'radio': radio,
-                                    'score': score,
-                                    'value': value,
-                                    'context': full_context[:100],
-                                    'index': i
-                                })
-                        
-                        except Exception as e:
-                            print(f"分析radio {i} 時發生錯誤: {e}")
-                            continue
-                    
-                    # 按分數排序，選擇最佳候選
-                    candidates.sort(key=lambda x: x['score'], reverse=True)
-                    
-                    print(f"找到 {len(candidates)} 個輪椅相關候選")
-                    for j, candidate in enumerate(candidates[:3]):
-                        print(f"候選 {j+1}: 分數={candidate['score']}, 值={candidate['value']}, 上下文={candidate['context']}")
-                    
-                    # 嘗試點擊最佳候選
-                    for candidate in candidates:
-                        if candidate['score'] >= 8:  # 高分候選
-                            try:
-                                print(f"嘗試點擊高分候選: 分數={candidate['score']}")
-                                candidate['radio'].scroll_into_view_if_needed()
-                                candidate['radio'].click()
-                                driver['page'].wait_for_timeout(1000)
-                                
-                                # 驗證是否成功選中
-                                if candidate['radio'].is_checked():
-                                    print("✅ 策略1成功：深度分析評分系統")
-                                    clicked = True
-                                    break
-                            except Exception as e:
-                                print(f"點擊候選失敗: {e}")
-                                continue
-                    
-                except Exception as e:
-                    print(f"策略1執行失敗: {e}")
-                
-                # 🥈 策略2：精確CSS選擇器 (第二有效的方法)
-                if not clicked:
-                    print("策略2：精確CSS選擇器...")
-                    
-                    selectors = [
-                        'input[type="radio"][value="是"]',
-                        'tr:has-text("搭乘輪椅上車") input[type="radio"][value="是"]',
-                        'tr:has-text("輪椅") input[type="radio"][value="是"]:not([name*="大型"])',
-                        'td:has-text("搭乘輪椅") + td input[type="radio"][value="是"]',
-                        'label:has-text("搭乘輪椅") input[type="radio"][value="是"]',
-                        '*:has-text("搭乘輪椅上車") input[type="radio"]',
-                    ]
-                    
-                    for selector in selectors:
-                        try:
-                            elements = driver['page'].locator(selector).all()
-                            for element in elements:
-                                # 排除大型輪椅
-                                name_attr = element.get_attribute('name') or ''
-                                if '大型' in name_attr:
-                                    continue
-                                
-                                element.scroll_into_view_if_needed()
-                                element.click()
-                                driver['page'].wait_for_timeout(500)
-                                
-                                if element.is_checked():
-                                    print(f"✅ 策略2成功：使用選擇器 {selector}")
-                                    clicked = True
-                                    break
-                        except:
-                            continue
-                        
-                        if clicked:
-                            break
-                
-                # 🥉 策略3：智能遍歷 (第三備案)
-                if not clicked:
-                    print("策略3：智能遍歷...")
-                    
-                    try:
-                        yes_buttons = driver['page'].locator('input[type="radio"][value="是"]').all()
-                        print(f"找到 {len(yes_buttons)} 個「是」按鈕")
-                        
-                        for i, button in enumerate(yes_buttons):
-                            try:
-                                # 檢查3層父元素上下文
-                                context = ""
-                                parent = button
-                                
-                                for level in range(3):
-                                    try:
-                                        parent = parent.locator('xpath=..').first
-                                        parent_text = parent.text_content() or ''
-                                        context += parent_text + " "
-                                    except:
-                                        break
-                                
-                                context_lower = context.lower()
-                                
-                                # 智能判斷是否為輪椅相關
-                                is_wheelchair = any(keyword in context_lower for keyword in [
-                                    '搭乘輪椅上車', '搭乘輪椅', '輪椅上車', '輪椅'
-                                ])
-                                
-                                # 排除大型輪椅
-                                is_large_wheelchair = '大型' in context_lower
-                                
-                                if is_wheelchair and not is_large_wheelchair:
-                                    print(f"嘗試智能遍歷按鈕 {i+1}")
-                                    button.scroll_into_view_if_needed()
-                                    button.click()
-                                    driver['page'].wait_for_timeout(500)
-                                    
-                                    if button.is_checked():
-                                        print("✅ 策略3成功：智能遍歷")
-                                        clicked = True
-                                        break
-                            
-                            except Exception as e:
-                                print(f"智能遍歷按鈕 {i+1} 失敗: {e}")
-                                continue
-                    
-                    except Exception as e:
-                        print(f"策略3執行失敗: {e}")
-                
-                # 🔄 策略4：最後備案 (按順序嘗試所有「是」按鈕)
-                if not clicked:
-                    print("策略4：最後備案 - 按順序嘗試所有「是」按鈕...")
-                    
-                    try:
-                        all_yes_buttons = driver['page'].locator('input[type="radio"][value="是"]').all()
-                        
-                        for i, button in enumerate(all_yes_buttons):
-                            try:
-                                # 跳過已經選中的
-                                if button.is_checked():
-                                    continue
-                                
-                                # 排除明確的大型輪椅
-                                name_attr = button.get_attribute('name') or ''
-                                if '大型' in name_attr:
-                                    continue
-                                
-                                print(f"最後備案：嘗試按鈕 {i+1}")
-                                button.scroll_into_view_if_needed()
-                                button.click()
-                                driver['page'].wait_for_timeout(500)
-                                
-                                if button.is_checked():
-                                    print(f"✅ 策略4成功：按鈕 {i+1}")
-                                    clicked = True
-                                    break
-                            
-                            except Exception as e:
-                                print(f"最後備案按鈕 {i+1} 失敗: {e}")
-                                continue
-                    
-                    except Exception as e:
-                        print(f"策略4執行失敗: {e}")
-                
                 # 🎯 策略0：使用精確CSS選擇器（基於網頁trace結果）
                 try:
                     print("🎯 策略0：使用精確CSS選擇器...")
@@ -2964,6 +2737,7 @@ def index():
             <h1>長照交通接送預約系統</h1>
             <a href="/reserve" class="button">開始預約</a>
             <a href="/test-address" class="button">🏠 測試住家地址填入</a>
+            <a href="/cron-logs" class="button">📊 查看 Cron Job 日誌</a>
             <a href="/screenshots" class="button">查看截圖</a>
             <a href="/page_source" class="button">查看頁面原始碼</a>
         </div>
@@ -3632,6 +3406,234 @@ def test_status():
         }
     except:
         return {'status': '狀態獲取失敗'}
+
+@app.route('/cron-logs')
+def cron_logs():
+    """查看 Cron Job 日誌"""
+    try:
+        logs = []
+        log_file = 'cron_reservation.log'
+        
+        if os.path.exists(log_file):
+            with open(log_file, 'r', encoding='utf-8') as f:
+                logs = f.readlines()
+        
+        # 取得最後 100 行日誌
+        recent_logs = logs[-100:] if len(logs) > 100 else logs
+        
+        return render_template_string('''
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cron Job 日誌查看</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            margin: 20px;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+        }
+        .header {
+            background-color: #2d2d30;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #007acc;
+        }
+        .header h1 {
+            margin: 0;
+            color: #ffffff;
+        }
+        .log-container {
+            background-color: #2d2d30;
+            padding: 20px;
+            border-radius: 8px;
+            max-height: 70vh;
+            overflow-y: auto;
+            border: 1px solid #3e3e42;
+        }
+        .log-line {
+            margin: 2px 0;
+            padding: 4px 8px;
+            border-radius: 3px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .log-info { color: #4ec9b0; }
+        .log-error { color: #f44747; background-color: rgba(244, 71, 71, 0.1); }
+        .log-success { color: #b5cea8; }
+        .log-warning { color: #dcdcaa; }
+        .log-timestamp { color: #9cdcfe; }
+        .controls {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .btn {
+            background-color: #007acc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 0 5px;
+            font-size: 14px;
+        }
+        .btn:hover {
+            background-color: #005a9e;
+        }
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            background-color: #252526;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .stat-item {
+            text-align: center;
+        }
+        .stat-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007acc;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #cccccc;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚗 新北市長照交通預約系統 - Cron Job 日誌</h1>
+        <p>日誌檔案: cron_reservation.log | 顯示最新 100 行</p>
+    </div>
+    
+    <div class="stats">
+        <div class="stat-item">
+            <div class="stat-number">{{ total_lines }}</div>
+            <div class="stat-label">總日誌行數</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-number">{{ success_count }}</div>
+            <div class="stat-label">成功執行次數</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-number">{{ error_count }}</div>
+            <div class="stat-label">錯誤次數</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-number">{{ last_execution }}</div>
+            <div class="stat-label">最後執行</div>
+        </div>
+    </div>
+    
+    <div class="controls">
+        <button class="btn" onclick="window.location.reload()">🔄 重新整理</button>
+        <button class="btn" onclick="downloadLogs()">📥 下載完整日誌</button>
+        <button class="btn" onclick="clearLogs()">🗑️ 清空日誌</button>
+        <button class="btn" onclick="window.location.href='/'">🏠 返回首頁</button>
+    </div>
+    
+    <div class="log-container">
+        {% if logs %}
+            {% for log in logs %}
+                <div class="log-line {{ get_log_class(log) }}">{{ log.strip() }}</div>
+            {% endfor %}
+        {% else %}
+            <div class="log-line">暫無日誌記錄</div>
+        {% endif %}
+    </div>
+    
+    <script>
+        function downloadLogs() {
+            window.open('/cron-logs/download', '_blank');
+        }
+        
+        function clearLogs() {
+            if (confirm('確定要清空所有日誌嗎？此操作無法復原。')) {
+                fetch('/cron-logs/clear', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('日誌已清空');
+                        window.location.reload();
+                    } else {
+                        alert('清空失敗: ' + data.error);
+                    }
+                });
+            }
+        }
+        
+        // 自動滾動到底部
+        document.addEventListener('DOMContentLoaded', function() {
+            const container = document.querySelector('.log-container');
+            container.scrollTop = container.scrollHeight;
+        });
+        
+        // 每30秒自動重新整理
+        setInterval(function() {
+            window.location.reload();
+        }, 30000);
+    </script>
+</body>
+</html>
+        ''', 
+        logs=recent_logs,
+        total_lines=len(logs),
+        success_count=sum(1 for log in logs if '成功' in log or 'SUCCESS' in log),
+        error_count=sum(1 for log in logs if '失敗' in log or 'ERROR' in log or '錯誤' in log),
+        last_execution='剛才' if logs else '從未執行',
+        get_log_class=get_log_class
+        )
+        
+    except Exception as e:
+        return f"讀取日誌失敗: {e}"
+
+def get_log_class(log_line):
+    """根據日誌內容返回對應的 CSS 類別"""
+    log_lower = log_line.lower()
+    if 'error' in log_lower or '錯誤' in log_lower or '失敗' in log_lower:
+        return 'log-error'
+    elif 'success' in log_lower or '成功' in log_lower or '✅' in log_line:
+        return 'log-success'
+    elif 'warning' in log_lower or '警告' in log_lower or '⚠️' in log_line:
+        return 'log-warning'
+    elif any(char.isdigit() for char in log_line[:20]):  # 包含時間戳
+        return 'log-timestamp'
+    else:
+        return 'log-info'
+
+@app.route('/cron-logs/download')
+def download_cron_logs():
+    """下載完整日誌檔案"""
+    try:
+        log_file = 'cron_reservation.log'
+        if os.path.exists(log_file):
+            return send_file(
+                log_file,
+                as_attachment=True,
+                download_name=f'cron_reservation_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log',
+                mimetype='text/plain'
+            )
+        else:
+            return "日誌檔案不存在", 404
+    except Exception as e:
+        return f"下載失敗: {e}", 500
+
+@app.route('/cron-logs/clear', methods=['POST'])
+def clear_cron_logs():
+    """清空日誌檔案"""
+    try:
+        log_file = 'cron_reservation.log'
+        if os.path.exists(log_file):
+            with open(log_file, 'w', encoding='utf-8') as f:
+                f.write(f"{datetime.now()} - 日誌已清空\n")
+        return {'success': True}
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
 
 # 全域變數用於儲存測試狀態
 test_logs = []
