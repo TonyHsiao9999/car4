@@ -160,15 +160,50 @@ def make_reservation():
         # 尋找登入按鈕
         print("尋找登入按鈕...")
         try:
-            login_button = driver.find_element(By.XPATH, "//button[contains(text(), '民眾登入')]")
-            print("找到登入按鈕，準備點擊...")
-            driver.save_screenshot('/app/before_login.png')
-            login_button.click()
-            print("已點擊「民眾登入」按鈕...")
-            driver.save_screenshot('/app/after_login.png')
-        except NoSuchElementException:
-            print("找不到登入按鈕")
-            driver.save_screenshot('/app/login_button_not_found.png')
+            # 嘗試多種方式尋找登入按鈕
+            login_button = None
+            
+            # 方法1：使用 XPath 尋找包含文字的按鈕
+            try:
+                login_button = driver.find_element(By.XPATH, "//button[contains(text(), '民眾登入')]")
+                print("使用 XPath 找到登入按鈕")
+            except NoSuchElementException:
+                print("XPath 方式找不到登入按鈕")
+            
+            # 方法2：使用 CSS 選擇器尋找按鈕
+            if not login_button:
+                try:
+                    login_button = driver.find_element(By.CSS_SELECTOR, "button.btn-primary")
+                    print("使用 CSS 選擇器找到登入按鈕")
+                except NoSuchElementException:
+                    print("CSS 選擇器方式找不到登入按鈕")
+            
+            # 方法3：尋找所有按鈕並檢查文字
+            if not login_button:
+                try:
+                    buttons = driver.find_elements(By.TAG_NAME, "button")
+                    for button in buttons:
+                        if "民眾登入" in button.text:
+                            login_button = button
+                            print("通過按鈕文字找到登入按鈕")
+                            break
+                except:
+                    print("按鈕文字搜尋失敗")
+            
+            if login_button:
+                print("找到登入按鈕，準備點擊...")
+                driver.save_screenshot('/app/before_login.png')
+                # 使用 JavaScript 點擊，避免被其他元素遮擋
+                driver.execute_script("arguments[0].click();", login_button)
+                print("已點擊「民眾登入」按鈕...")
+                driver.save_screenshot('/app/after_login.png')
+            else:
+                print("所有方法都找不到登入按鈕")
+                driver.save_screenshot('/app/login_button_not_found.png')
+                return False
+        except Exception as e:
+            print(f"點擊登入按鈕時發生錯誤：{str(e)}")
+            driver.save_screenshot('/app/login_button_error.png')
             return False
 
         # 等待登入成功
