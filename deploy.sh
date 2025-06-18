@@ -9,9 +9,13 @@ if [ -n "$(git status --porcelain)" ]; then
     git commit -m "Update for Zeabur deployment"
 fi
 
+# 確保使用正確的分支名稱
+CURRENT_BRANCH=$(git branch --show-current)
+echo "📋 當前分支: $CURRENT_BRANCH"
+
 # 推送到 GitHub
 echo "📤 推送到 GitHub..."
-git push origin main
+git push origin $CURRENT_BRANCH
 
 echo "✅ 部署準備完成！"
 echo ""
