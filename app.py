@@ -83,7 +83,14 @@ def setup_driver():
             import tempfile
             user_data_dir = tempfile.mkdtemp(prefix='chrome_user_data_')
             chrome_options.add_argument(f'--user-data-dir={user_data_dir}')
+            # 強制忽略版本檢查的選項
+            chrome_options.add_argument('--remote-debugging-port=9222')
+            chrome_options.add_argument('--disable-blink-features')
+            chrome_options.add_argument('--disable-web-security')
+            chrome_options.add_argument('--allow-running-insecure-content')
+            chrome_options.add_argument('--disable-features=VizDisplayCompositor')
             chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+            chrome_options.add_experimental_option("useAutomationExtension", False)
             
             service = Service(chromedriver_path)
             driver = webdriver.Chrome(service=service, options=chrome_options)
@@ -142,7 +149,14 @@ def setup_driver():
             # 修正 user-data-dir 衝突問題
             user_data_dir = tempfile.mkdtemp(prefix='chrome_user_data_')
             chrome_options.add_argument(f'--user-data-dir={user_data_dir}')
+            # 強制忽略版本檢查的選項
+            chrome_options.add_argument('--remote-debugging-port=9223')
+            chrome_options.add_argument('--disable-blink-features')
+            chrome_options.add_argument('--disable-web-security')
+            chrome_options.add_argument('--allow-running-insecure-content')
+            chrome_options.add_argument('--disable-features=VizDisplayCompositor')
             chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+            chrome_options.add_experimental_option("useAutomationExtension", False)
             
             service = Service(chromedriver_path)
             driver = webdriver.Chrome(service=service, options=chrome_options)
@@ -184,7 +198,14 @@ def setup_driver():
         # 修正 user-data-dir 衝突問題
         user_data_dir = tempfile.mkdtemp(prefix='chrome_user_data_')
         chrome_options.add_argument(f'--user-data-dir={user_data_dir}')
+        # 強制忽略版本檢查的選項
+        chrome_options.add_argument('--remote-debugging-port=9224')
+        chrome_options.add_argument('--disable-blink-features')
+        chrome_options.add_argument('--disable-web-security')
+        chrome_options.add_argument('--allow-running-insecure-content')
+        chrome_options.add_argument('--disable-features=VizDisplayCompositor')
         chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        chrome_options.add_experimental_option("useAutomationExtension", False)
         
         # 檢查是否有環境變數指定的 ChromeDriver 路徑
         chromedriver_path = os.environ.get('CHROMEDRIVER_PATH', '/usr/local/bin/chromedriver')
@@ -221,6 +242,9 @@ def setup_driver():
             # 修正 user-data-dir 衝突問題
             user_data_dir = tempfile.mkdtemp(prefix='chrome_user_data_')
             chrome_options.add_argument(f'--user-data-dir={user_data_dir}')
+            # 強制忽略版本檢查的選項
+            chrome_options.add_argument('--remote-debugging-port=9225')
+            chrome_options.add_argument('--disable-blink-features')
             
             service = Service()
             driver = webdriver.Chrome(service=service, options=chrome_options)
