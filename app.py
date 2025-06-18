@@ -68,6 +68,10 @@ def setup_driver():
             chrome_options.add_argument('--ignore-ssl-errors')
             chrome_options.add_argument('--ignore-certificate-errors-spki-list')
             chrome_options.add_argument('--disable-blink-features=AutomationControlled')
+            # 增加高解析度設定
+            chrome_options.add_argument('--window-size=1920,1080')
+            chrome_options.add_argument('--start-maximized')
+            chrome_options.add_argument('--force-device-scale-factor=1')
             chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
             chrome_options.add_experimental_option('useAutomationExtension', False)
             
@@ -114,6 +118,10 @@ def setup_driver():
             chrome_options.add_argument('--ignore-ssl-errors')
             chrome_options.add_argument('--ignore-certificate-errors-spki-list')
             chrome_options.add_argument('--disable-blink-features=AutomationControlled')
+            # 增加高解析度設定
+            chrome_options.add_argument('--window-size=1920,1080')
+            chrome_options.add_argument('--start-maximized')
+            chrome_options.add_argument('--force-device-scale-factor=1')
             chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
             chrome_options.add_experimental_option('useAutomationExtension', False)
             
@@ -143,6 +151,10 @@ def setup_driver():
         chrome_options.add_argument('--ignore-ssl-errors')
         chrome_options.add_argument('--ignore-certificate-errors-spki-list')
         chrome_options.add_argument('--disable-blink-features=AutomationControlled')
+        # 增加高解析度設定
+        chrome_options.add_argument('--window-size=1920,1080')
+        chrome_options.add_argument('--start-maximized')
+        chrome_options.add_argument('--force-device-scale-factor=1')
         chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
         chrome_options.add_experimental_option('useAutomationExtension', False)
         
@@ -172,6 +184,9 @@ def setup_driver():
             chrome_options.add_argument('--disable-gpu')
             chrome_options.add_argument('--ignore-certificate-errors')
             chrome_options.add_argument('--ignore-ssl-errors')
+            # 增加高解析度設定
+            chrome_options.add_argument('--window-size=1920,1080')
+            chrome_options.add_argument('--start-maximized')
             
             service = Service()
             driver = webdriver.Chrome(service=service, options=chrome_options)
@@ -216,6 +231,12 @@ def make_reservation():
         driver = setup_driver()
         print("WebDriver 初始化完成")
         
+        # 設置視窗大小為高解析度
+        print("設置視窗大小為 1920x1080...")
+        driver.set_window_size(1920, 1080)
+        driver.maximize_window()
+        print("視窗大小設置完成")
+        
         print("正在載入網頁...")
         driver.get("https://www.ntpc.ltc-car.org/")
         print("網頁載入完成")
@@ -232,6 +253,7 @@ def make_reservation():
         # 檢查頁面狀態
         print(f"當前頁面標題: {driver.title}")
         print(f"當前頁面URL: {driver.current_url}")
+        print(f"當前視窗大小: {driver.get_window_size()}")
         take_screenshot("main_page")
         
         # 簡化流程，直接返回成功
