@@ -20,7 +20,8 @@ def setup_driver():
     chrome_options.add_argument('--window-size=1920,1080')
     chrome_options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')
     chrome_options.binary_location = '/usr/bin/chromium'  # 指定 chromium 路徑
-    # chrome_options.add_argument('user-agent=Mozilla/5.0 ...') # 如需偽裝user-agent可取消註解
+    chrome_options.add_argument('--log-level=3')  # 只顯示致命錯誤
+    chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])
 
     service = Service('/usr/bin/chromedriver')
     driver = webdriver.Chrome(service=service, options=chrome_options)
@@ -38,7 +39,7 @@ def make_reservation():
         elements = driver.find_elements(By.XPATH, "//*[contains(text(), '我知道了')]")
         print("找到元素數量：", len(elements))
         for element in elements:
-            print(element.tag_name, element.text)
+            print(f"元素類型: {element.tag_name}, 文字: {element.text}")
         iframes = driver.find_elements(By.TAG_NAME, "iframe")
         for iframe in iframes:
             driver.switch_to.frame(iframe)
@@ -55,7 +56,11 @@ def make_reservation():
         driver.execute_script("arguments[0].click();", button)
         print("已點擊「我知道了」按鈕...")
         driver.save_screenshot('/app/after_click.png')
-        print("頁面原始碼：", driver.page_source)
+        
+        # 檢查頁面狀態
+        print(f"當前頁面標題: {driver.title}")
+        print(f"當前頁面URL: {driver.current_url}")
+        
         iframes = driver.find_elements(By.TAG_NAME, "iframe")
         for iframe in iframes:
             driver.switch_to.frame(iframe)
@@ -197,19 +202,12 @@ def make_reservation():
 
 @app.route('/')
 def index():
-    return jsonify({"status": "服務正在運行"})
+    return jsonify({"status": "running"})
 
-@app.route('/reserve')
-def reserve():
-    success = make_reservation()
-    return jsonify({"success": success})
-
-@app.route('/error-screenshot')
-def error_screenshot():
-    try:
-        return send_file('/app/error.png', mimetype='image/png')
-    except Exception as e:
-        return jsonify({"error": "找不到截圖檔案"}), 404
+@app.route('/make-reservation')
+def reservation():
+    result = make_reservation()
+    return jsonify({"success": result})
 
 @app.route('/before-click')
 def before_click():
