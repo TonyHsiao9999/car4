@@ -2113,66 +2113,46 @@ def make_reservation():
                 driver['page'].wait_for_timeout(1000)
                 take_screenshot("after_scroll_disagree")
                 
-                # 尋找不同意按鈕的多種方法
+                # 🥇 基於成功日誌優化的不同意選擇器順序
                 disagree_selectors = [
-                    'text=不同意',
+                    # 🥇 最有效的方法 - 快速識別不浪費時間
                     'input[value="不同意"]',
                     'button:has-text("不同意")',
+                    '[type="radio"][value="不同意"]',
+                    
+                    # 🥈 備用方法
                     'label:has-text("不同意")',
                     '[type="radio"][value*="不同意"]',
-                    '[name*="agree"]:not([value*="同意"])',  # 不包含「同意」的選項
-                    'input[type="radio"]:has-text("不同意")'
+                    '[name*="agree"]:not([value*="同意"])',
+                    'input[type="radio"]:has-text("不同意")',
+                    
+                    # 🔄 最後備案 - 容易timeout的放最後
+                    'text=不同意',
                 ]
                 
                 clicked = False
                 for selector in disagree_selectors:
                     try:
-                        element = driver['page'].locator(selector).first
-                        if element.count() > 0 and element.is_visible():
-                            print(f"找到不同意按鈕，選擇器: {selector}")
-                            # 確保按鈕在視窗內
-                            element.scroll_into_view_if_needed()
-                            driver['page'].wait_for_timeout(500)
-                            element.click()
-                            print(f"✅ 使用選擇器 {selector} 點擊不同意成功")
-                            clicked = True
-                            break
+                        # 🥇 快速檢查元素是否存在，避免長時間等待
+                        elements = driver['page'].locator(selector).all()
+                        if len(elements) > 0:
+                            element = elements[0]
+                            if element.is_visible():
+                                print(f"找到不同意按鈕，選擇器: {selector}")
+                                # 確保按鈕在視窗內
+                                element.scroll_into_view_if_needed()
+                                driver['page'].wait_for_timeout(500)
+                                element.click()
+                                print(f"✅ 使用選擇器 {selector} 點擊不同意成功")
+                                clicked = True
+                                break
                     except Exception as e:
                         print(f"選擇器 {selector} 失敗: {e}")
                         continue
                 
                 # 如果還是找不到，嘗試更廣泛的搜尋
                 if not clicked:
-                    print("嘗試更廣泛的搜尋不同意選項...")
-                    
-                    # 繼續向下捲動
-                    driver['page'].evaluate("window.scrollBy(0, 200)")
-                    driver['page'].wait_for_timeout(1000)
-                    
-                    # 尋找所有包含「不同意」文字的元素
-                    all_elements = driver['page'].locator('*:has-text("不同意")').all()
-                    print(f"找到 {len(all_elements)} 個包含「不同意」的元素")
-                    
-                    for i, elem in enumerate(all_elements):
-                        try:
-                            if elem.is_visible():
-                                text = elem.text_content() or ''
-                                tag = elem.evaluate('el => el.tagName')
-                                print(f"元素 {i}: {tag}, 文字: '{text}'")
-                                
-                                # 嘗試點擊該元素
-                                elem.scroll_into_view_if_needed()
-                                driver['page'].wait_for_timeout(300)
-                                elem.click()
-                                print(f"✅ 點擊「不同意」元素 {i} 成功")
-                                clicked = True
-                                break
-                        except Exception as e:
-                            print(f"點擊元素 {i} 失敗: {e}")
-                            continue
-                
-                if not clicked:
-                    print("⚠️ 未找到不同意選項，嘗試所有radio按鈕...")
+                    print("⚠️ 直接方法失敗，嘗試智能遍歷所有radio按鈕...")
                     
                     # 最後手段：檢查所有radio按鈕
                     radio_buttons = driver['page'].locator('input[type="radio"]').all()
@@ -2297,28 +2277,36 @@ def make_reservation():
                 driver['page'].evaluate("window.scrollBy(0, 300)")
                 driver['page'].wait_for_timeout(1000)
                 
-                # 嘗試多種方法找到「否」按鈕
+                # 🥇 基於成功日誌優化的共乘選擇器順序
                 carpool_selectors = [
-                    'text=否',
+                    # 🥇 最有效的方法 - 快速識別不浪費時間
                     'input[value="否"]',
                     'button:has-text("否")',
-                    'label:has-text("否")',
                     '[type="radio"][value="否"]',
-                    '[type="radio"][value="no"]'
+                    '[type="radio"][value="no"]',
+                    
+                    # 🥈 備用方法
+                    'label:has-text("否")',
+                    
+                    # 🔄 最後備案 - 容易timeout的放最後
+                    'text=否',
                 ]
                 
                 clicked = False
                 for selector in carpool_selectors:
                     try:
-                        element = driver['page'].locator(selector).first
-                        if element.count() > 0 and element.is_visible():
-                            print(f"找到共乘「否」按鈕，選擇器: {selector}")
-                            element.scroll_into_view_if_needed()
-                            driver['page'].wait_for_timeout(500)
-                            element.click()
-                            print(f"✅ 點擊共乘「否」成功")
-                            clicked = True
-                            break
+                        # 🥇 快速檢查元素是否存在，避免長時間等待
+                        elements = driver['page'].locator(selector).all()
+                        if len(elements) > 0:
+                            element = elements[0]
+                            if element.is_visible():
+                                print(f"找到共乘「否」按鈕，選擇器: {selector}")
+                                element.scroll_into_view_if_needed()
+                                driver['page'].wait_for_timeout(500)
+                                element.click()
+                                print(f"✅ 點擊共乘「否」成功")
+                                clicked = True
+                                break
                     except Exception as e:
                         print(f"共乘選擇器 {selector} 失敗: {e}")
                         continue
@@ -2602,96 +2590,250 @@ def make_reservation():
                     except:
                         continue
                 
-                # 多層次查找策略
+                # 🚀 大幅改進的多層次查找策略
                 clicked = False
                 
-                # 策略1: 尋找大型輪椅相關區域的「否」按鈕
-                large_wheelchair_area_selectors = [
-                    '*:has-text("大型輪椅") + * input[type="radio"][value="否"]',
-                    '*:has-text("大型輪椅") input[type="radio"][value="否"]',
-                    '*:has-text("大型") input[type="radio"][value="否"]'
-                ]
+                # 🥇 策略1：智能深度分析所有「否」按鈕
+                print("🥇 策略1：智能深度分析所有「否」按鈕...")
                 
-                for selector in large_wheelchair_area_selectors:
-                    try:
-                        element = driver['page'].locator(selector).first
-                        if element.count() > 0 and element.is_visible():
-                            print(f"找到大型輪椅區域的「否」按鈕，選擇器: {selector}")
-                            element.scroll_into_view_if_needed()
-                            driver['page'].wait_for_timeout(500)
-                            element.click()
-                            print(f"✅ 點擊大型輪椅「否」成功 (策略1)")
-                            clicked = True
-                            break
-                    except Exception as e:
-                        print(f"大型輪椅區域選擇器 {selector} 失敗: {e}")
-                        continue
-                
-                # 策略2: 如果策略1失敗，檢查所有「否」按鈕
-                if not clicked:
-                    print("策略1失敗，檢查所有「否」按鈕...")
+                try:
+                    all_no_buttons = driver['page'].locator('input[type="radio"][value="否"]').all()
+                    print(f"找到 {len(all_no_buttons)} 個「否」按鈕")
                     
-                    no_buttons = driver['page'].locator('input[type="radio"][value="否"]').all()
-                    print(f"找到 {len(no_buttons)} 個「否」按鈕")
+                    # 評分系統，智能識別大型輪椅相關按鈕
+                    candidates = []
                     
-                    for i, button in enumerate(no_buttons):
+                    for i, button in enumerate(all_no_buttons):
                         try:
                             if button.is_visible():
-                                # 檢查按鈕的上下文
-                                parent = button.locator('..').first
-                                context = parent.text_content() or ''
                                 name = button.get_attribute('name') or ''
-                                print(f"「否」按鈕 {i}: name='{name}', 上下文='{context[:50]}'")
+                                id_attr = button.get_attribute('id') or ''
                                 
-                                # 如果上下文包含大型輪椅相關詞彙
-                                if any(keyword in context for keyword in ['大型輪椅', '大型', 'large']):
-                                    print(f"按鈕 {i} 看起來是大型輪椅相關，嘗試點擊...")
-                                    button.scroll_into_view_if_needed()
-                                    driver['page'].wait_for_timeout(500)
-                                    button.click()
-                                    print(f"✅ 點擊大型輪椅「否」成功 (策略2)")
+                                # 分析周圍6層父元素的上下文
+                                context_text = ""
+                                parent = button
+                                
+                                for level in range(6):
+                                    try:
+                                        parent = parent.locator('xpath=..').first
+                                        parent_text = parent.text_content() or ''
+                                        context_text += parent_text + " "
+                                    except:
+                                        break
+                                
+                                # 評分系統
+                                score = 0
+                                context_lower = context_text.lower()
+                                
+                                # 大型輪椅相關評分
+                                if '大型輪椅' in context_lower: score += 10
+                                elif '大型' in context_lower: score += 8
+                                elif '輪椅' in context_lower: score += 6
+                                elif 'large' in context_lower: score += 5
+                                elif 'wheelchair' in context_lower: score += 4
+                                
+                                # 屬性評分
+                                if '大型' in name or '大型' in id_attr: score += 8
+                                if 'large' in name.lower() or 'large' in id_attr.lower(): score += 6
+                                
+                                # 排除普通輪椅（避免誤點）
+                                if '搭乘輪椅上車' in context_lower and '大型' not in context_lower:
+                                    score = 0  # 這是普通輪椅，排除
+                                
+                                if score > 0:
+                                    candidates.append({
+                                        'button': button,
+                                        'score': score,
+                                        'index': i,
+                                        'context': context_lower[:100],
+                                        'name': name,
+                                        'id': id_attr
+                                    })
+                                    
+                                print(f"「否」按鈕 {i}: 分數={score}, name='{name}', 上下文='{context_lower[:50]}'")
+                        
+                        except Exception as e:
+                            print(f"分析按鈕 {i} 失敗: {e}")
+                            continue
+                    
+                    # 按分數排序，選擇最佳候選
+                    candidates.sort(key=lambda x: x['score'], reverse=True)
+                    
+                    print(f"找到 {len(candidates)} 個大型輪椅相關候選")
+                    for j, candidate in enumerate(candidates[:3]):
+                        print(f"候選 {j+1}: 分數={candidate['score']}, 索引={candidate['index']}, 上下文={candidate['context']}")
+                    
+                    # 嘗試點擊最佳候選
+                    for candidate in candidates:
+                        if candidate['score'] >= 6:  # 高分候選
+                            try:
+                                print(f"嘗試點擊高分候選: 分數={candidate['score']}, 索引={candidate['index']}")
+                                candidate['button'].scroll_into_view_if_needed()
+                                candidate['button'].click()
+                                driver['page'].wait_for_timeout(1000)
+                                
+                                # 驗證是否成功選中
+                                if candidate['button'].is_checked():
+                                    print("✅ 策略1成功：智能深度分析")
                                     clicked = True
                                     break
-                        except Exception as e:
-                            print(f"檢查按鈕 {i} 失敗: {e}")
-                            continue
+                            except Exception as e:
+                                print(f"點擊候選失敗: {e}")
+                                continue
+                    
+                except Exception as e:
+                    print(f"策略1執行失敗: {e}")
                 
-                # 策略3: 如果還是失敗，按照順序嘗試點擊「否」按鈕
+                # 🥈 策略2：精確選擇器匹配
                 if not clicked:
-                    print("策略2失敗，按順序嘗試所有「否」按鈕...")
+                    print("🥈 策略2：精確選擇器匹配...")
                     
-                    # 繼續捲動查看更多內容
-                    driver['page'].evaluate("window.scrollBy(0, 200)")
-                    driver['page'].wait_for_timeout(1000)
+                    large_wheelchair_selectors = [
+                        '*:has-text("大型輪椅") input[type="radio"][value="否"]',
+                        'tr:has-text("大型輪椅") input[type="radio"][value="否"]',
+                        'td:has-text("大型輪椅") + td input[type="radio"][value="否"]',
+                        'label:has-text("大型輪椅") input[type="radio"][value="否"]',
+                        '*:has-text("大型") input[type="radio"][value="否"]',
+                        '[name*="large"] input[type="radio"][value="否"]',
+                        '[id*="large"] input[type="radio"][value="否"]',
+                    ]
                     
-                    no_buttons = driver['page'].locator('input[type="radio"][value="否"]').all()
-                    for i, button in enumerate(no_buttons):
+                    for selector in large_wheelchair_selectors:
                         try:
-                            if button.is_visible():
-                                print(f"嘗試點擊「否」按鈕 {i}...")
-                                button.scroll_into_view_if_needed()
-                                driver['page'].wait_for_timeout(300)
-                                button.click()
-                                driver['page'].wait_for_timeout(500)
-                                
-                                # 檢查點擊後的狀態
-                                checked = button.is_checked()
-                                print(f"按鈕 {i} 點擊後狀態: {checked}")
-                                
-                                if checked:
-                                    print(f"✅ 點擊大型輪椅「否」成功 (策略3, 按鈕{i})")
-                                    clicked = True
-                                    break
+                            elements = driver['page'].locator(selector).all()
+                            if len(elements) > 0:
+                                element = elements[0]
+                                if element.is_visible():
+                                    print(f"找到大型輪椅「否」按鈕，選擇器: {selector}")
+                                    element.scroll_into_view_if_needed()
+                                    driver['page'].wait_for_timeout(500)
+                                    element.click()
+                                    
+                                    if element.is_checked():
+                                        print(f"✅ 策略2成功：選擇器 {selector}")
+                                        clicked = True
+                                        break
                         except Exception as e:
-                            print(f"點擊按鈕 {i} 失敗: {e}")
+                            print(f"選擇器 {selector} 失敗: {e}")
                             continue
                 
+                # 🥉 策略3：屬性名稱匹配
                 if not clicked:
-                    print("⚠️ 所有策略都失敗，未能點擊大型輪椅「否」選項")
-                
-                # 拍照記錄最終狀態
-                take_screenshot("after_large_wheelchair_selection")
+                    print("🥉 策略3：屬性名稱匹配...")
                     
+                    try:
+                        all_radios = driver['page'].locator('input[type="radio"]').all()
+                        
+                        for i, radio in enumerate(all_radios):
+                            try:
+                                if radio.is_visible():
+                                    name = radio.get_attribute('name') or ''
+                                    id_attr = radio.get_attribute('id') or ''
+                                    value = radio.get_attribute('value') or ''
+                                    
+                                    # 檢查是否為大型輪椅相關且值為「否」
+                                    is_large_wheelchair = any(keyword in (name + id_attr).lower() 
+                                                            for keyword in ['large', '大型'])
+                                    is_no_value = value in ['否', 'no', '0', 'false']
+                                    
+                                    if is_large_wheelchair and is_no_value:
+                                        print(f"找到大型輪椅「否」按鈕 {i}: name='{name}', id='{id_attr}', value='{value}'")
+                                        radio.scroll_into_view_if_needed()
+                                        radio.click()
+                                        driver['page'].wait_for_timeout(500)
+                                        
+                                        if radio.is_checked():
+                                            print(f"✅ 策略3成功：屬性匹配 (按鈕{i})")
+                                            clicked = True
+                                            break
+                            except Exception as e:
+                                print(f"檢查radio {i} 失敗: {e}")
+                                continue
+                    except Exception as e:
+                        print(f"策略3執行失敗: {e}")
+                
+                # 🔄 策略4：順序遍歷所有「否」按鈕（保守方法）
+                if not clicked:
+                    print("🔄 策略4：順序遍歷所有「否」按鈕...")
+                    
+                    try:
+                        # 繼續捲動查看更多內容
+                        driver['page'].evaluate("window.scrollBy(0, 200)")
+                        driver['page'].wait_for_timeout(1000)
+                        
+                        no_buttons = driver['page'].locator('input[type="radio"][value="否"]').all()
+                        print(f"策略4找到 {len(no_buttons)} 個「否」按鈕")
+                        
+                        for i, button in enumerate(no_buttons):
+                            try:
+                                if button.is_visible():
+                                    # 跳過已檢查過的按鈕或明確不是大型輪椅的
+                                    name = button.get_attribute('name') or ''
+                                    
+                                    # 避免誤點普通輪椅
+                                    if '搭乘輪椅' in name and '大型' not in name:
+                                        print(f"跳過普通輪椅按鈕 {i}: name='{name}'")
+                                        continue
+                                    
+                                    print(f"策略4：嘗試點擊「否」按鈕 {i}...")
+                                    button.scroll_into_view_if_needed()
+                                    driver['page'].wait_for_timeout(300)
+                                    button.click()
+                                    driver['page'].wait_for_timeout(500)
+                                    
+                                    # 檢查點擊後的狀態
+                                    checked = button.is_checked()
+                                    print(f"按鈕 {i} 點擊後狀態: {checked}")
+                                    
+                                    if checked:
+                                        print(f"✅ 策略4成功：按鈕 {i}")
+                                        clicked = True
+                                        break
+                            except Exception as e:
+                                print(f"點擊按鈕 {i} 失敗: {e}")
+                                continue
+                    
+                    except Exception as e:
+                        print(f"策略4執行失敗: {e}")
+                
+                # 🆘 策略5：最後備案 - JavaScript執行
+                if not clicked:
+                    print("🆘 策略5：JavaScript最後備案...")
+                    
+                    try:
+                        js_script = """
+                        // 尋找所有包含"大型輪椅"文字的元素
+                        const elements = Array.from(document.querySelectorAll('*'));
+                        for (let elem of elements) {
+                            const text = elem.textContent || '';
+                            if (text.includes('大型輪椅') || text.includes('大型')) {
+                                // 在這個元素範圍內尋找「否」按鈕
+                                const noButtons = elem.querySelectorAll('input[type="radio"][value="否"]');
+                                for (let btn of noButtons) {
+                                    if (btn.offsetParent !== null) { // 可見
+                                        console.log('找到大型輪椅「否」按鈕，點擊:', btn);
+                                        btn.click();
+                                        return true;
+                                    }
+                                }
+                            }
+                        }
+                        return false;
+                        """
+                        result = driver['page'].evaluate(js_script)
+                        if result:
+                            print("✅ 策略5成功：JavaScript執行")
+                            clicked = True
+                    except Exception as e:
+                        print(f"策略5執行失敗: {e}")
+                
+                if clicked:
+                    print("✅ 大型輪椅「否」選擇成功")
+                    take_screenshot("after_large_wheelchair_selection_success")
+                else:
+                    print("⚠️ 所有策略都失敗，但繼續執行（可能大型輪椅已是預設值）")
+                    take_screenshot("large_wheelchair_selection_failed")
+                
             except Exception as e:
                 print(f"選擇大型輪椅「否」失敗: {e}")
                 
