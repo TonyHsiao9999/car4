@@ -1,0 +1,11 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "python app.py"
+healthCheckPath = "/"
+healthCheckTimeout = 300
+
+[env]
+PORT = "8080" 

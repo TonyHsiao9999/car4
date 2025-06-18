@@ -1,12 +1,28 @@
 FROM python:3.9-slim
 
-# 安裝 Chrome、chromedriver 和必要的依賴
+# 安裝系統依賴
 RUN apt-get update && apt-get install -y \
-    chromium \
-    chromium-driver \
-    python3-pip \
-    fonts-liberation libasound2 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdbus-1-3 libgtk-3-0 libnspr4 libnss3 libxcomposite1 libxdamage1 libxrandr2 xdg-utils \
+    wget \
+    gnupg \
+    unzip \
+    curl \
     && rm -rf /var/lib/apt/lists/*
+
+# 安裝 Chrome
+RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - \
+    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list \
+    && apt-get update \
+    && apt-get install -y google-chrome-stable \
+    && rm -rf /var/lib/apt/lists/*
+
+# 安裝 ChromeDriver
+RUN CHROME_VERSION=$(google-chrome --version | awk '{print $3}' | awk -F'.' '{print $1}') \
+    && wget -q "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_VERSION" -O /tmp/chromedriver_version \
+    && CHROMEDRIVER_VERSION=$(cat /tmp/chromedriver_version) \
+    && wget -q "https://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip" -O /tmp/chromedriver.zip \
+    && unzip /tmp/chromedriver.zip -d /usr/local/bin/ \
+    && rm /tmp/chromedriver.zip /tmp/chromedriver_version \
+    && chmod +x /usr/local/bin/chromedriver
 
 # 設置工作目錄
 WORKDIR /app
@@ -14,6 +30,7 @@ WORKDIR /app
 # 複製專案文件
 COPY requirements.txt .
 COPY app.py .
+COPY static/ ./static/
 
 # 安裝 Python 依賴
 RUN pip install --no-cache-dir -r requirements.txt
@@ -21,6 +38,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 設置環境變數
 ENV DISPLAY=:99
 ENV PYTHONUNBUFFERED=1
+ENV CHROME_BIN=/usr/bin/google-chrome
+ENV CHROMEDRIVER_PATH=/usr/local/bin/chromedriver
+
+# 創建截圖目錄
+RUN mkdir -p /app/screenshots
 
 # 啟動應用
 CMD ["python", "app.py"] 
