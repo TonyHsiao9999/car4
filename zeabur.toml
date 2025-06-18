@@ -1,9 +1,9 @@
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "Dockerfile.chromium"
+dockerfilePath = "Dockerfile.ubuntu"
 
 [deploy]
-startCommand = "python app.py"
+startCommand = "python3 app.py"
 healthCheckPath = "/"
 healthCheckTimeout = 300
 
