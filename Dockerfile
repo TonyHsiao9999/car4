@@ -21,16 +21,18 @@ RUN pip install --upgrade pip
 RUN pip install --no-cache-dir flask==3.0.2
 RUN pip install --no-cache-dir playwright==1.41.2
 
-# 安裝 Playwright 瀏覽器
-RUN playwright install chromium --with-deps
+# 安裝 Playwright 瀏覽器和依賴
 RUN playwright install-deps
+RUN playwright install chromium
 
 # 設置環境變數
 ENV DISPLAY=:99
 ENV PYTHONUNBUFFERED=1
-ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 # 創建截圖目錄
 RUN mkdir -p /app/screenshots
+
+# 測試 Playwright 安裝
+RUN python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); browser = p.chromium.launch(); browser.close(); p.stop(); print('Playwright 測試成功')"
 
 CMD ["python", "app.py"] 

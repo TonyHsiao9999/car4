@@ -99,6 +99,11 @@ def make_reservation():
         print("=== 開始執行預約流程 ===")
         print("開始初始化 WebDriver...")
         driver = setup_driver()
+        
+        if driver is None:
+            print("WebDriver 初始化失敗，無法繼續")
+            return False
+            
         print("WebDriver 初始化完成")
         
         # 設置視窗大小為高解析度
