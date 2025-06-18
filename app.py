@@ -17,60 +17,59 @@ import subprocess
 app = Flask(__name__, static_folder='static')
 
 def setup_driver():
-    """設置 WebDriver - 使用 Playwright 替代 Selenium"""
-    from playwright.sync_api import sync_playwright
-    import tempfile
-    import os
-    import subprocess
-    
-    # 動態安裝 Playwright 瀏覽器
+    """設置 Playwright WebDriver"""
     try:
-        print("正在安裝 Playwright 瀏覽器...")
-        subprocess.run(['playwright', 'install', 'chromium'], check=True)
-        print("Playwright 瀏覽器安裝完成")
+        print("正在初始化 Playwright...")
+        playwright = sync_playwright().start()
+        
+        # 使用系統的 Chromium
+        browser = playwright.chromium.launch(
+            headless=True,
+            args=[
+                '--no-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-gpu',
+                '--disable-web-security',
+                '--disable-features=VizDisplayCompositor',
+                '--disable-extensions',
+                '--disable-plugins',
+                '--disable-images',
+                '--disable-javascript',
+                '--disable-background-timer-throttling',
+                '--disable-backgrounding-occluded-windows',
+                '--disable-renderer-backgrounding',
+                '--disable-features=TranslateUI',
+                '--disable-ipc-flooding-protection',
+                '--memory-pressure-off',
+                '--max_old_space_size=4096'
+            ]
+        )
+        
+        context = browser.new_context(
+            viewport={'width': 1920, 'height': 1080},
+            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        )
+        
+        page = context.new_page()
+        
+        # 創建 driver 字典
+        driver = {
+            'page': page,
+            'context': context,
+            'browser': browser,
+            'playwright': playwright,
+            'get': lambda url: page.goto(url),
+            'title': lambda: page.title(),
+            'current_url': lambda: page.url,
+            'get_window_size': lambda: {'width': 1920, 'height': 1080}
+        }
+        
+        print("Playwright 初始化成功")
+        return driver
+        
     except Exception as e:
-        print(f"Playwright 瀏覽器安裝失敗: {e}")
-        # 繼續嘗試，可能已經安裝了
-    
-    # 創建一個 Playwright 瀏覽器實例
-    playwright = sync_playwright().start()
-    browser = playwright.chromium.launch(
-        headless=True,
-        args=[
-            '--no-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-gpu',
-            '--disable-extensions',
-            '--disable-plugins',
-            '--disable-blink-features=AutomationControlled',
-        ]
-    )
-    
-    # 創建一個新的上下文和頁面
-    context = browser.new_context(
-        viewport={'width': 1280, 'height': 720},
-        user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-    )
-    page = context.new_page()
-    
-    # 返回一個包含 Playwright 物件的字典，模擬 Selenium WebDriver 介面
-    driver = {
-        'page': page,
-        'context': context,
-        'browser': browser,
-        'playwright': playwright,
-        'get': lambda url: page.goto(url),
-        'title': lambda: page.title(),
-        'current_url': lambda: page.url,
-        'set_window_size': lambda width, height: page.set_viewport_size({'width': width, 'height': height}),
-        'maximize_window': lambda: page.set_viewport_size({'width': 1920, 'height': 1080}),
-        'save_screenshot': lambda filename: page.screenshot(path=filename),
-        'quit': lambda: (page.close(), context.close(), browser.close(), playwright.stop()),
-        'execute_script': lambda script: page.evaluate(script),
-        'get_window_size': lambda: {'width': 1280, 'height': 720}
-    }
-    
-    return driver
+        print(f"Playwright 初始化失敗: {e}")
+        return None
 
 def wait_for_element(driver, by, value, timeout=30):
     """等待元素出現並返回"""
