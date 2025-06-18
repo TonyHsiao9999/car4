@@ -766,20 +766,83 @@ def make_reservation():
                             current_value = select_elem.input_value()
                             print(f"選單 {i} 當前值: '{current_value}'")
                             
-                            # 選擇住家
-                            select_elem.select_option('住家')
-                            driver['page'].wait_for_timeout(500)
+                            # 找到住家選項的索引
+                            home_index = None
+                            for j, option_text in enumerate(option_texts):
+                                if option_text == '住家':
+                                    home_index = j
+                                    break
                             
-                            # 驗證是否成功選擇
-                            new_value = select_elem.input_value()
-                            print(f"選單 {i} 選擇後的值: '{new_value}'")
-                            
-                            if new_value == '住家':
-                                print(f"✅ 選單 {i} 成功選擇住家作為下車地點")
-                                dropoff_success = True
-                                break
+                            if home_index is not None:
+                                print(f"住家選項在索引 {home_index}")
+                                
+                                # 嘗試多種選擇方法
+                                success = False
+                                
+                                # 方法1: 使用文字值選擇
+                                try:
+                                    select_elem.select_option('住家')
+                                    driver['page'].wait_for_timeout(500)
+                                    new_value = select_elem.input_value()
+                                    print(f"方法1 (文字值) 選擇後的值: '{new_value}'")
+                                    if new_value == '住家' or (new_value and new_value != current_value):
+                                        success = True
+                                except Exception as e:
+                                    print(f"方法1 (文字值) 失敗: {e}")
+                                
+                                # 方法2: 使用索引值選擇
+                                if not success:
+                                    try:
+                                        select_elem.select_option(index=home_index)
+                                        driver['page'].wait_for_timeout(500)
+                                        new_value = select_elem.input_value()
+                                        print(f"方法2 (索引值) 選擇後的值: '{new_value}'")
+                                        if new_value and new_value != current_value:
+                                            success = True
+                                    except Exception as e:
+                                        print(f"方法2 (索引值) 失敗: {e}")
+                                
+                                # 方法3: 使用數字值選擇（通常住家是索引1）
+                                if not success:
+                                    try:
+                                        # 嘗試用數字值
+                                        select_elem.select_option(str(home_index))
+                                        driver['page'].wait_for_timeout(500)
+                                        new_value = select_elem.input_value()
+                                        print(f"方法3 (數字值) 選擇後的值: '{new_value}'")
+                                        if new_value and new_value != current_value:
+                                            success = True
+                                    except Exception as e:
+                                        print(f"方法3 (數字值) 失敗: {e}")
+                                
+                                # 方法4: 使用 value 屬性選擇
+                                if not success:
+                                    try:
+                                        # 獲取住家選項的 value 屬性
+                                        home_option = select_elem.locator('option').nth(home_index)
+                                        option_value = home_option.get_attribute('value')
+                                        print(f"住家選項的 value 屬性: '{option_value}'")
+                                        
+                                        if option_value:
+                                            select_elem.select_option(value=option_value)
+                                            driver['page'].wait_for_timeout(500)
+                                            new_value = select_elem.input_value()
+                                            print(f"方法4 (value屬性) 選擇後的值: '{new_value}'")
+                                            if new_value and new_value != current_value:
+                                                success = True
+                                    except Exception as e:
+                                        print(f"方法4 (value屬性) 失敗: {e}")
+                                
+                                # 驗證最終結果
+                                if success:
+                                    final_value = select_elem.input_value()
+                                    print(f"✅ 選單 {i} 成功選擇住家作為下車地點，最終值: '{final_value}'")
+                                    dropoff_success = True
+                                    break
+                                else:
+                                    print(f"❌ 選單 {i} 所有方法都失敗，無法選擇住家")
                             else:
-                                print(f"❌ 選單 {i} 選擇住家失敗，值未變更")
+                                print(f"❌ 在選單 {i} 中找不到住家選項的索引")
                                 
                         except Exception as e:
                             print(f"❌ 選單 {i} 選擇住家時發生錯誤: {e}")
