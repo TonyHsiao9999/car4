@@ -550,6 +550,9 @@ def make_reservation():
             # 等待一下確保頁面完全載入
             time.sleep(2)
             
+            # 初始化按鈕變數
+            reserve_button = None
+            
             # 方法1：使用 XPath 尋找按鈕
             try:
                 reserve_buttons = driver.find_elements(By.XPATH, "//button[contains(text(), '新增預約')]")
