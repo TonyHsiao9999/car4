@@ -44,6 +44,14 @@ def setup_driver():
                         print(f"找到正確的 ChromeDriver: {chromedriver_path}")
                         break
             
+            # 設置執行權限
+            try:
+                import stat
+                os.chmod(chromedriver_path, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH)
+                print(f"已設置 ChromeDriver 執行權限: {chromedriver_path}")
+            except Exception as e:
+                print(f"設置權限失敗: {e}")
+            
             chrome_options = Options()
             chrome_options.add_argument('--headless')
             chrome_options.add_argument('--no-sandbox')
@@ -71,7 +79,53 @@ def setup_driver():
         except Exception as e:
             print(f"webdriver-manager 失敗: {e}")
         
-        # 如果 webdriver-manager 失敗，嘗試使用系統安裝的 ChromeDriver
+        # 如果 webdriver-manager 失敗，嘗試手動下載正確版本的 ChromeDriver
+        try:
+            print("嘗試手動下載正確版本的 ChromeDriver...")
+            import subprocess
+            import tempfile
+            
+            # 下載 ChromeDriver 137 版本到臨時目錄
+            chromedriver_url = "https://chromedriver.storage.googleapis.com/137.0.7151.119/chromedriver_linux64.zip"
+            temp_dir = tempfile.mkdtemp()
+            chromedriver_zip = os.path.join(temp_dir, "chromedriver.zip")
+            chromedriver_path = os.path.join(temp_dir, "chromedriver")
+            
+            # 下載並解壓
+            subprocess.run(['wget', '-O', chromedriver_zip, chromedriver_url], check=True)
+            subprocess.run(['unzip', '-o', chromedriver_zip, '-d', temp_dir], check=True)
+            subprocess.run(['chmod', '+x', chromedriver_path], check=True)
+            
+            print(f"手動下載的 ChromeDriver 路徑: {chromedriver_path}")
+            
+            chrome_options = Options()
+            chrome_options.add_argument('--headless')
+            chrome_options.add_argument('--no-sandbox')
+            chrome_options.add_argument('--disable-dev-shm-usage')
+            chrome_options.add_argument('--disable-gpu')
+            chrome_options.add_argument('--disable-extensions')
+            chrome_options.add_argument('--disable-plugins')
+            chrome_options.add_argument('--disable-images')
+            chrome_options.add_argument('--disable-javascript')
+            chrome_options.add_argument('--disable-web-security')
+            chrome_options.add_argument('--allow-running-insecure-content')
+            chrome_options.add_argument('--disable-features=VizDisplayCompositor')
+            chrome_options.add_argument('--ignore-certificate-errors')
+            chrome_options.add_argument('--ignore-ssl-errors')
+            chrome_options.add_argument('--ignore-certificate-errors-spki-list')
+            chrome_options.add_argument('--disable-blink-features=AutomationControlled')
+            chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+            chrome_options.add_experimental_option('useAutomationExtension', False)
+            
+            service = Service(chromedriver_path)
+            driver = webdriver.Chrome(service=service, options=chrome_options)
+            print("手動下載 ChromeDriver 初始化成功")
+            return driver
+            
+        except Exception as e:
+            print(f"手動下載 ChromeDriver 失敗: {e}")
+        
+        # 最後嘗試：使用系統安裝的 ChromeDriver
         print("嘗試使用系統安裝的 ChromeDriver...")
         chrome_options = Options()
         chrome_options.add_argument('--headless')
