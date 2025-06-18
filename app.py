@@ -639,12 +639,20 @@ def make_reservation():
                 final_value = pickup_input.input_value()
                 print(f"鍵盤選擇後輸入框的值: '{final_value}'")
                 
-                if final_value and len(final_value.strip()) > len('亞東紀念醫院') and '亞東' in final_value:
-                    print("鍵盤方法成功！")
-                    success = True
+                # 使用相同的寬鬆判斷條件（中英文關鍵字）
+                keywords = ['亞東', '醫院', '紀念', 'Far Eastern', 'Memorial', 'Hospital', 'FEMH']
+                addr_keywords = ['台北', '新北', '板橋', 'Taipei', 'New Taipei']
+                if final_value and final_value.strip():
+                    if (any(keyword in final_value for keyword in keywords) or
+                        (len(final_value.strip()) >= len('亞東紀念醫院') and final_value.strip() != '亞東紀念醫院') or
+                        any(addr_keyword in final_value for addr_keyword in addr_keywords)):
+                        print("鍵盤方法成功！")
+                        success = True
+                    else:
+                        print("鍵盤方法可能未成功，值未顯著變化")
                 else:
-                    print("鍵盤方法可能未成功，值未顯著變化")
-                    
+                    print("鍵盤方法可能未成功，值為空")
+                
             except Exception as e:
                 print(f"鍵盤方法失敗: {e}")
             
@@ -672,9 +680,15 @@ def make_reservation():
                                 
                                 # 檢查是否成功
                                 final_value = pickup_input.input_value()
-                                if final_value and len(final_value.strip()) > len('亞東紀念醫院'):
-                                    print("點擊方法成功！")
-                                    success = True
+                                # 使用相同的寬鬆判斷條件（中英文關鍵字）
+                                if final_value and final_value.strip():
+                                    keywords = ['亞東', '醫院', '紀念', 'Far Eastern', 'Memorial', 'Hospital', 'FEMH']
+                                    addr_keywords = ['台北', '新北', '板橋', 'Taipei', 'New Taipei']
+                                    if (any(keyword in final_value for keyword in keywords) or
+                                        (len(final_value.strip()) >= len('亞東紀念醫院') and final_value.strip() != '亞東紀念醫院') or
+                                        any(addr_keyword in final_value for addr_keyword in addr_keywords)):
+                                        print("點擊方法成功！")
+                                        success = True
                                     break
                         except Exception as e:
                             print(f"選擇器 {selector} 失敗: {e}")
@@ -698,9 +712,15 @@ def make_reservation():
                                 driver['page'].wait_for_timeout(2000)
                                 
                                 final_value = pickup_input.input_value()
-                                if final_value and len(final_value.strip()) > len('亞東紀念醫院'):
-                                    print("列表點擊成功！")
-                                    success = True
+                                # 使用相同的寬鬆判斷條件（中英文關鍵字）
+                                if final_value and final_value.strip():
+                                    keywords = ['亞東', '醫院', '紀念', 'Far Eastern', 'Memorial', 'Hospital', 'FEMH']
+                                    addr_keywords = ['台北', '新北', '板橋', 'Taipei', 'New Taipei']
+                                    if (any(keyword in final_value for keyword in keywords) or
+                                        (len(final_value.strip()) >= len('亞東紀念醫院') and final_value.strip() != '亞東紀念醫院') or
+                                        any(addr_keyword in final_value for addr_keyword in addr_keywords)):
+                                        print("列表點擊成功！")
+                                        success = True
                                     break
                         except Exception as e:
                             continue
