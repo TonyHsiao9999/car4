@@ -1524,11 +1524,13 @@ def make_reservation():
                             time_texts = [opt.text_content() or '' for opt in time_options if opt.text_content()]
                             print(f"時間選項: {time_texts}")
                             
-                            # 尋找16點或接近的時間
+                            # 精確尋找16點時間
                             target_time = None
                             for time_text in time_texts:
-                                if '16' in time_text or '4' in time_text:
+                                # 精確匹配16，避免選到04、14等
+                                if '16' in time_text:
                                     target_time = time_text
+                                    print(f"找到精確的16點選項: {time_text}")
                                     break
                             
                             # 如果找不到16點，選擇一個可用時間
@@ -1688,11 +1690,13 @@ def make_reservation():
                                 except Exception as e:
                                     print(f"時間方法1失敗: {e}")
                                 
-                                # 方法2: 尋找包含16的選項文字
+                                # 方法2: 精確尋找包含16的選項文字
                                 if not success:
                                     try:
                                         for i, text in enumerate(option_texts):
-                                            if '16' in text:
+                                            # 精確匹配16，確保不會選到04、14等
+                                            if '16' in text and not any(x in text for x in ['04', '14', '24']):
+                                                print(f"找到精確的16點選項: '{text}'")
                                                 time_select.select_option(text)
                                                 driver['page'].wait_for_timeout(1000)
                                                 new_value = time_select.input_value()
@@ -1702,18 +1706,42 @@ def make_reservation():
                                     except Exception as e:
                                         print(f"時間方法2失敗: {e}")
                                 
-                                # 方法3: 使用索引選擇
+                                # 方法3: 使用索引選擇（也要精確匹配16）
                                 if not success:
                                     try:
                                         for i, text in enumerate(option_texts):
-                                            if '16' in text:
+                                            # 精確匹配16，確保不會選到04、14等
+                                            if '16' in text and not any(x in text for x in ['04', '14', '24']):
+                                                print(f"用索引選擇精確的16點選項: '{text}' (索引{i})")
                                                 time_select.select_option(index=i)
                                                 driver['page'].wait_for_timeout(1000)
                                                 new_value = time_select.input_value()
                                                 print(f"✅ 時間方法3成功，索引: {i}, 值: '{new_value}'")
+                                                success = True
                                                 break
                                     except Exception as e:
                                         print(f"時間方法3失敗: {e}")
+                                
+                                # 方法4: 如果還是沒找到16，顯示警告但繼續
+                                if not success:
+                                    print("⚠️ 警告：未能找到16點選項，可能時間格式不同")
+                                    print(f"可用時間選項: {option_texts}")
+                                    print(f"可用時間值: {option_values}")
+                                    
+                                    # 嘗試通過值來匹配16
+                                    for i, value in enumerate(option_values):
+                                        if '16' in str(value):
+                                            try:
+                                                print(f"嘗試通過值選擇16: value='{value}'")
+                                                time_select.select_option(value=value)
+                                                driver['page'].wait_for_timeout(1000)
+                                                new_value = time_select.input_value()
+                                                print(f"✅ 時間方法4成功，通過值選擇: '{new_value}'")
+                                                success = True
+                                                break
+                                            except Exception as e:
+                                                print(f"通過值選擇失敗: {e}")
+                                                continue
                             else:
                                 print("第二個選單不可見")
                         except Exception as e:
