@@ -79,6 +79,10 @@ def setup_driver():
             chrome_options.add_argument('--disable-renderer-backgrounding')
             chrome_options.add_argument('--disable-features=TranslateUI')
             chrome_options.add_argument('--disable-ipc-flooding-protection')
+            # 修正 user-data-dir 衝突問題
+            import tempfile
+            user_data_dir = tempfile.mkdtemp(prefix='chrome_user_data_')
+            chrome_options.add_argument(f'--user-data-dir={user_data_dir}')
             chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
             
             service = Service(chromedriver_path)
@@ -95,8 +99,8 @@ def setup_driver():
             import subprocess
             import tempfile
             
-            # 下載 ChromeDriver 137 版本到臨時目錄
-            chromedriver_url = "https://chromedriver.storage.googleapis.com/137.0.7151.119/chromedriver_linux64.zip"
+            # 使用確實存在的 ChromeDriver 版本
+            chromedriver_url = "https://chromedriver.storage.googleapis.com/114.0.5735.90/chromedriver_linux64.zip"
             temp_dir = tempfile.mkdtemp()
             chromedriver_zip = os.path.join(temp_dir, "chromedriver.zip")
             chromedriver_path = os.path.join(temp_dir, "chromedriver")
@@ -135,6 +139,9 @@ def setup_driver():
             chrome_options.add_argument('--disable-renderer-backgrounding')
             chrome_options.add_argument('--disable-features=TranslateUI')
             chrome_options.add_argument('--disable-ipc-flooding-protection')
+            # 修正 user-data-dir 衝突問題
+            user_data_dir = tempfile.mkdtemp(prefix='chrome_user_data_')
+            chrome_options.add_argument(f'--user-data-dir={user_data_dir}')
             chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
             
             service = Service(chromedriver_path)
@@ -174,6 +181,9 @@ def setup_driver():
         chrome_options.add_argument('--disable-renderer-backgrounding')
         chrome_options.add_argument('--disable-features=TranslateUI')
         chrome_options.add_argument('--disable-ipc-flooding-protection')
+        # 修正 user-data-dir 衝突問題
+        user_data_dir = tempfile.mkdtemp(prefix='chrome_user_data_')
+        chrome_options.add_argument(f'--user-data-dir={user_data_dir}')
         chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
         
         # 檢查是否有環境變數指定的 ChromeDriver 路徑
@@ -205,6 +215,12 @@ def setup_driver():
             # 增加高解析度設定
             chrome_options.add_argument('--window-size=1920,1080')
             chrome_options.add_argument('--start-maximized')
+            # 減少記憶體使用的選項
+            chrome_options.add_argument('--single-process')
+            chrome_options.add_argument('--disable-background-timer-throttling')
+            # 修正 user-data-dir 衝突問題
+            user_data_dir = tempfile.mkdtemp(prefix='chrome_user_data_')
+            chrome_options.add_argument(f'--user-data-dir={user_data_dir}')
             
             service = Service()
             driver = webdriver.Chrome(service=service, options=chrome_options)
