@@ -301,9 +301,9 @@ def fetch_dispatch_results():
             driver['page'].wait_for_timeout(3000)  # 額外等待確保內容載入
             take_screenshot("order_list_loaded")
             
-            # 🎯 使用系統當日日期
+            # 🎯 使用系統當日日期 (修正格式為 2025/06/19)
             today = datetime.now()
-            target_date = today.strftime("%Y/%m/%d")
+            target_date = today.strftime("%Y/%m/%d")  # 格式：2025/06/19
             print(f"尋找預約日期為 {target_date} 的訂單...")
             
             # 分析訂單記錄
@@ -324,12 +324,18 @@ def fetch_dispatch_results():
             # 🔄 開始分頁搜尋迴圈
             while True:
                 print(f"\n=== 搜尋第 {page_count} 頁 ===")
-                take_screenshot(f"page_{page_count}_start")
                 
-                # 🔽 先捲動到頁面頂部
-                print("捲動到頁面頂部...")
+                # 🔝 強制捲動到頁面最頂部
+                print("強制捲動到頁面最頂部...")
                 driver['page'].evaluate("window.scrollTo(0, 0)")
+                driver['page'].wait_for_timeout(2000)  # 增加等待時間確保捲動完成
+                
+                # 再次確保在最頂部
+                driver['page'].evaluate("document.documentElement.scrollTop = 0")
+                driver['page'].evaluate("document.body.scrollTop = 0")
                 driver['page'].wait_for_timeout(1000)
+                
+                take_screenshot(f"page_{page_count}_start_top")
                 
                 # 📋 搜尋當前頁面的所有記錄
                 current_page_results = 0
@@ -358,8 +364,11 @@ def fetch_dispatch_results():
                             total_records_checked += 1
                             print(f"檢查記錄 {total_records_checked}: {date_text}")
                             
-                            # 檢查是否包含目標日期
-                            if target_date in date_text:
+                            # 檢查是否包含目標日期 (確保格式匹配)
+                            date_match = target_date in date_text
+                            print(f"目標日期: {target_date}, 記錄日期: {date_text}, 匹配: {date_match}")
+                            
+                            if date_match:
                                 print(f"✅ 找到匹配日期的記錄: {date_text}")
                                 current_page_results += 1
                                 
@@ -513,6 +522,14 @@ def fetch_dispatch_results():
                             # 等待新頁面載入
                             driver['page'].wait_for_load_state("networkidle")
                             driver['page'].wait_for_timeout(3000)
+                            
+                            # 🔝 切換頁面後立即捲動到最頂部
+                            print("切換頁面後，捲動到最頂部...")
+                            driver['page'].evaluate("window.scrollTo(0, 0)")
+                            driver['page'].wait_for_timeout(1000)
+                            driver['page'].evaluate("document.documentElement.scrollTop = 0")
+                            driver['page'].evaluate("document.body.scrollTop = 0")
+                            driver['page'].wait_for_timeout(1000)
                             
                             page_count += 1
                             next_page_found = True
