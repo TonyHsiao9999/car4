@@ -3,6 +3,7 @@ from playwright.sync_api import sync_playwright
 import time
 import os
 import base64
+import re
 from datetime import datetime
 
 app = Flask(__name__)
@@ -469,9 +470,30 @@ def fetch_dispatch_results():
                         total_records_checked += 1
                         print(f"📅 第 {record_index} 筆記錄日期: {date_text}")
                         
-                        # 檢查是否符合目標日期
-                        date_match = target_date in date_text
-                        print(f"🎯 目標日期: {target_date}, 記錄日期: {date_text}, 匹配: {date_match}")
+                        # 🎯 改進日期比對邏輯：只比對日期部分，忽略時間
+                        # 從日期文字中提取日期部分（YYYY/MM/DD 格式）
+                        date_pattern = r'(\d{4}/\d{1,2}/\d{1,2})'
+                        date_match_result = re.search(date_pattern, date_text)
+                        
+                        if date_match_result:
+                            extracted_date = date_match_result.group(1)
+                            # 標準化日期格式，確保月份和日期是兩位數
+                            date_parts = extracted_date.split('/')
+                            normalized_date = f"{date_parts[0]}/{date_parts[1].zfill(2)}/{date_parts[2].zfill(2)}"
+                            
+                            # 標準化目標日期格式
+                            target_parts = target_date.split('/')
+                            normalized_target = f"{target_parts[0]}/{target_parts[1].zfill(2)}/{target_parts[2].zfill(2)}"
+                            
+                            date_match = normalized_date == normalized_target
+                            print(f"🎯 目標日期: {normalized_target}")
+                            print(f"📅 記錄日期: {normalized_date} (完整文字: {date_text})")
+                            print(f"✅ 日期匹配: {date_match}")
+                        else:
+                            # 如果無法解析日期格式，回到原始比對方式
+                            date_match = target_date in date_text
+                            print(f"⚠️ 無法解析日期格式，使用原始比對")
+                            print(f"🎯 目標日期: {target_date}, 記錄日期: {date_text}, 匹配: {date_match}")
                         
                         if date_match:
                             print(f"✅ 找到匹配的第 {record_index} 筆記錄!")
