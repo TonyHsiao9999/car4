@@ -81,6 +81,393 @@ def setup_driver():
         print(f"Playwright 初始化失敗: {e}")
         return None
 
+def fetch_dispatch_results():
+    """抓取派車結果的函數"""
+    from datetime import datetime, timedelta
+    
+    driver = None
+    screenshot_count = 0
+    
+    def take_screenshot(description):
+        nonlocal screenshot_count
+        try:
+            screenshot_count += 1
+            filename = f'dispatch_{screenshot_count:03d}_{description}.png'
+            if driver:
+                driver['page'].screenshot(path=filename)
+                print(f"派車抓取截圖 {screenshot_count}: {description} - {filename}")
+            return filename
+        except Exception as e:
+            print(f"截圖失敗: {e}")
+            return None
+    
+    try:
+        print("=== 開始執行派車結果抓取流程 ===")
+        print("開始初始化 WebDriver...")
+        driver = setup_driver()
+        
+        if driver is None:
+            print("WebDriver 初始化失敗，無法繼續")
+            return False
+            
+        print("WebDriver 初始化完成")
+        
+        # 設置視窗大小為高解析度
+        print("設置視窗大小為 1920x1080...")
+        driver['page'].set_viewport_size({'width': 1920, 'height': 1080})
+        print("視窗大小設置完成")
+        
+        print("正在載入網頁...")
+        driver['get']("https://www.ntpc.ltc-car.org/")
+        print("網頁載入完成")
+        take_screenshot("page_loaded")
+        
+        # 等待頁面完全載入
+        print("等待頁面完全載入...")
+        driver['page'].wait_for_load_state("networkidle")
+        print("頁面已完全載入")
+        take_screenshot("page_complete")
+        
+        # 處理浮動視窗 - 點擊「我知道了」按鈕
+        print("檢查並處理浮動視窗...")
+        try:
+            # 等待浮動視窗出現
+            driver['page'].wait_for_selector('text=我知道了', timeout=10000)
+            print("找到浮動視窗，點擊「我知道了」按鈕")
+            driver['page'].click('text=我知道了')
+            print("「我知道了」按鈕點擊成功")
+            take_screenshot("popup_closed")
+        except Exception as e:
+            print(f"沒有找到浮動視窗或點擊失敗: {e}")
+            take_screenshot("no_popup_found")
+        
+        # 登入步驟（與預約功能相同的登入邏輯）
+        print("開始登入流程...")
+        try:
+            # 等待登入表單載入
+            driver['page'].wait_for_selector('input[type="text"]', timeout=10000)
+            print("登入表單已載入")
+            take_screenshot("login_form")
+            
+            # 輸入身分證字號
+            print("輸入身分證字號: A102574899")
+            driver['page'].fill('input[type="text"]', 'A102574899')
+            
+            # 輸入密碼
+            print("輸入密碼: visi319VISI")
+            driver['page'].fill('input[type="password"]', 'visi319VISI')
+            
+            # 點擊民眾登入按鈕
+            print("點擊民眾登入按鈕")
+            take_screenshot("before_login_click")
+            
+            login_selectors = [
+                'a:has-text("民眾登入")',
+                'button:has-text("民眾登入")',
+                'text=民眾登入',
+                '*:has-text("民眾登入")',
+            ]
+            
+            login_clicked = False
+            for selector in login_selectors:
+                try:
+                    print(f"嘗試登入按鈕選擇器: {selector}")
+                    element = driver['page'].locator(selector).first
+                    if element.count() > 0 and element.is_visible():
+                        print(f"找到元素: {selector}")
+                        element.click()
+                        print(f"登入按鈕點擊成功: {selector}")
+                        login_clicked = True
+                        break
+                except Exception as e:
+                    print(f"登入按鈕選擇器 {selector} 失敗: {e}")
+                    continue
+            
+            if login_clicked:
+                print("登入按鈕點擊完成")
+                take_screenshot("login_clicked")
+            else:
+                print("警告：無法找到或點擊登入按鈕")
+                take_screenshot("login_click_failed")
+            
+            # 等待登入成功浮動視窗
+            print("等待登入成功訊息...")
+            try:
+                driver['page'].wait_for_selector('text=登入成功', timeout=5000)
+                take_screenshot("login_success_modal_found")
+                
+                # 點擊確定按鈕
+                try:
+                    print("🎯 使用精確的確定按鈕選擇器...")
+                    precise_selector = 'span.dialog-button'
+                    element = driver['page'].locator(precise_selector).first
+                    if element.count() > 0 and element.is_visible():
+                        print(f"找到精確的確定按鈕: {precise_selector}")
+                        element.click()
+                        driver['page'].wait_for_timeout(1000)
+                        print("✅ 確定按鈕點擊成功")
+                except Exception as e:
+                    print(f"❌ 確定按鈕點擊失敗: {e}")
+                
+                take_screenshot("login_success_confirmed")
+            except Exception as e:
+                print(f"沒有找到登入成功浮動視窗: {e}")
+                take_screenshot("no_login_success_modal")
+            
+            # 等待登入完成
+            print("等待登入完成...")
+            driver['page'].wait_for_load_state("networkidle")
+            print("登入流程完成")
+            take_screenshot("login_complete")
+            
+        except Exception as e:
+            print(f"登入過程發生錯誤: {e}")
+            take_screenshot("login_error")
+            return False
+        
+        # 從這裡開始改為點擊「訂單查詢」
+        print("=== 開始訂單查詢流程 ===")
+        try:
+            # 點擊「訂單查詢」
+            print("點擊訂單查詢...")
+            
+            order_query_selectors = [
+                'text=訂單查詢',
+                'a:has-text("訂單查詢")',
+                'button:has-text("訂單查詢")',
+                '*:has-text("訂單查詢")',
+                'a[href*="order"]',
+                'a[href*="query"]',
+                '.menu-item:has-text("訂單查詢")'
+            ]
+            
+            order_clicked = False
+            for selector in order_query_selectors:
+                try:
+                    print(f"嘗試訂單查詢選擇器: {selector}")
+                    element = driver['page'].locator(selector).first
+                    if element.count() > 0 and element.is_visible():
+                        print(f"找到訂單查詢元素: {selector}")
+                        element.click()
+                        print(f"訂單查詢點擊成功: {selector}")
+                        order_clicked = True
+                        break
+                except Exception as e:
+                    print(f"訂單查詢選擇器 {selector} 失敗: {e}")
+                    continue
+            
+            if not order_clicked:
+                print("❌ 無法找到訂單查詢按鈕")
+                take_screenshot("order_query_not_found")
+                return False
+            
+            # 等待訂單列表載入
+            print("等待訂單列表載入...")
+            driver['page'].wait_for_load_state("networkidle")
+            driver['page'].wait_for_timeout(3000)  # 額外等待確保內容載入
+            take_screenshot("order_list_loaded")
+            
+            # 獲取明天的日期
+            tomorrow = datetime.now() + timedelta(days=1)
+            target_date = tomorrow.strftime("%Y-%m-%d")
+            print(f"尋找預約日期為 {target_date} 的訂單...")
+            
+            # 分析訂單記錄
+            print("開始分析訂單記錄...")
+            
+            # 尋找包含預約記錄的方框
+            record_selectors = [
+                '.order-item',
+                '.reservation-item', 
+                '.record-item',
+                '.card',
+                '.box',
+                'div[class*="order"]',
+                'div[class*="reservation"]',
+                'div[class*="record"]'
+            ]
+            
+            found_records = []
+            
+            # 嘗試通用方法找到所有可能的記錄方框
+            for selector in record_selectors:
+                try:
+                    elements = driver['page'].locator(selector).all()
+                    if len(elements) > 0:
+                        print(f"找到 {len(elements)} 個記錄使用選擇器: {selector}")
+                        found_records.extend(elements)
+                except Exception as e:
+                    continue
+            
+            # 如果沒找到特定的記錄元素，嘗試尋找包含文字的 div
+            if not found_records:
+                print("未找到特定記錄元素，嘗試尋找包含預約信息的 div...")
+                try:
+                    # 尋找包含"預約日期"或"日期"文字的元素
+                    date_elements = driver['page'].locator('*:has-text("預約日期"), *:has-text("日期/時段")').all()
+                    print(f"找到 {len(date_elements)} 個包含日期信息的元素")
+                    
+                    # 向上查找這些元素的父容器
+                    for date_elem in date_elements:
+                        try:
+                            # 獲取父元素作為記錄容器
+                            parent = date_elem.locator('xpath=..')
+                            if parent.count() > 0:
+                                found_records.append(parent.first)
+                        except Exception as e:
+                            continue
+                            
+                except Exception as e:
+                    print(f"尋找日期元素失敗: {e}")
+            
+            # 如果還是沒找到，使用更廣泛的搜索
+            if not found_records:
+                print("使用廣泛搜索尋找所有可能的記錄容器...")
+                try:
+                    # 尋找包含關鍵字的所有 div
+                    broad_elements = driver['page'].locator('div').all()
+                    for elem in broad_elements:
+                        try:
+                            text_content = elem.text_content() or ''
+                            if any(keyword in text_content for keyword in ['預約日期', '車號', '司機', '時段']):
+                                found_records.append(elem)
+                        except Exception as e:
+                            continue
+                except Exception as e:
+                    print(f"廣泛搜索失敗: {e}")
+            
+            print(f"總共找到 {len(found_records)} 個可能的記錄")
+            take_screenshot("records_found")
+            
+            # 分析每個記錄
+            matching_record = None
+            
+            for i, record in enumerate(found_records):
+                try:
+                    print(f"\n--- 分析記錄 {i+1} ---")
+                    text_content = record.text_content() or ''
+                    print(f"記錄內容預覽: {text_content[:200]}...")
+                    
+                    # 檢查是否包含目標日期
+                    if target_date in text_content:
+                        print(f"✅ 找到匹配的日期 {target_date}")
+                        matching_record = record
+                        break
+                    else:
+                        print(f"❌ 日期不匹配，繼續搜索...")
+                        
+                except Exception as e:
+                    print(f"分析記錄 {i+1} 失敗: {e}")
+                    continue
+            
+            # 處理找到的匹配記錄
+            if matching_record:
+                print(f"\n🎯 找到匹配的預約記錄！")
+                take_screenshot("matching_record_found")
+                
+                # 提取信息
+                try:
+                    text_content = matching_record.text_content() or ''
+                    print(f"匹配記錄的完整內容:\n{text_content}")
+                    
+                    # 解析預約日期/時段
+                    reservation_date_time = ""
+                    car_number = ""
+                    driver_name = ""
+                    
+                    # 使用正則表達式或字符串處理提取信息
+                    import re
+                    
+                    # 提取預約日期/時段
+                    date_patterns = [
+                        r'預約日期[/:]?\s*([0-9]{4}-[0-9]{1,2}-[0-9]{1,2}[^車司機]*)',
+                        r'日期[/時段]?[：:]\s*([0-9]{4}-[0-9]{1,2}-[0-9]{1,2}[^車司機]*)',
+                        r'([0-9]{4}-[0-9]{1,2}-[0-9]{1,2}\s+[0-9]{1,2}:[0-9]{2})'
+                    ]
+                    
+                    for pattern in date_patterns:
+                        match = re.search(pattern, text_content)
+                        if match:
+                            reservation_date_time = match.group(1).strip()
+                            print(f"提取到預約日期/時段: {reservation_date_time}")
+                            break
+                    
+                    # 提取車號
+                    car_patterns = [
+                        r'車號[：:]\s*([A-Z0-9\-]+)',
+                        r'車號\s+([A-Z0-9\-]+)',
+                        r'車輛[：:]?\s*([A-Z0-9\-]+)'
+                    ]
+                    
+                    for pattern in car_patterns:
+                        match = re.search(pattern, text_content)
+                        if match:
+                            car_number = match.group(1).strip()
+                            print(f"提取到車號: {car_number}")
+                            break
+                    
+                    # 提取指派司機
+                    driver_patterns = [
+                        r'指派司機[：:]\s*([^車號預約\n]+)',
+                        r'司機[：:]\s*([^車號預約\n]+)',
+                        r'駕駛[：:]\s*([^車號預約\n]+)'
+                    ]
+                    
+                    for pattern in driver_patterns:
+                        match = re.search(pattern, text_content)
+                        if match:
+                            driver_name = match.group(1).strip()
+                            print(f"提取到指派司機: {driver_name}")
+                            break
+                    
+                    # 寫入檔案
+                    print("將結果寫入 search_result.txt...")
+                    
+                    result_content = f"""派車結果查詢時間: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+預約日期/時段: {reservation_date_time}
+車號: {car_number}
+指派司機: {driver_name}
+"""
+                    
+                    # 清空檔案並寫入新內容
+                    with open('search_result.txt', 'w', encoding='utf-8') as f:
+                        f.write(result_content)
+                    
+                    print("✅ 派車結果已成功寫入 search_result.txt")
+                    print(f"結果內容:\n{result_content}")
+                    
+                    take_screenshot("result_saved")
+                    return True
+                    
+                except Exception as e:
+                    print(f"提取信息失敗: {e}")
+                    take_screenshot("extraction_failed")
+                    return False
+            else:
+                print(f"❌ 沒有找到日期為 {target_date} 的預約記錄")
+                take_screenshot("no_matching_record")
+                return False
+            
+        except Exception as e:
+            print(f"訂單查詢過程發生錯誤: {e}")
+            take_screenshot("order_query_error")
+            return False
+            
+    except Exception as e:
+        print(f"派車結果抓取過程發生錯誤: {e}")
+        take_screenshot("dispatch_error")
+        return False
+        
+    finally:
+        if driver:
+            try:
+                driver['page'].close()
+                driver['browser'].close()
+                print("瀏覽器已關閉")
+            except Exception as e:
+                print(f"關閉瀏覽器時發生錯誤: {e}")
+
+
 def make_reservation():
     driver = None
     screenshot_count = 0
@@ -2724,11 +3111,13 @@ def index():
     <body>
         <div class="container">
             <h1>長照交通接送預約系統</h1>
-            <a href="/reserve" class="button">開始預約</a>
-            <a href="/test-address" class="button">🏠 測試住家地址填入</a>
+            <a href="/reserve" class="button">🚗 開始預約</a>
+            <a href="/latest-dispatch" class="button">📋 看最新派車結果</a>
+            <a href="/fetch-dispatch" class="button">🔄 抓取派車結果</a>
             <a href="/cron-logs" class="button">📊 查看 Cron Job 日誌</a>
-            <a href="/screenshots" class="button">查看截圖</a>
-            <a href="/page_source" class="button">查看頁面原始碼</a>
+            <a href="/screenshots" class="button">📸 查看預約時截圖</a>
+            <a href="/dispatch-screenshots" class="button">🔍 查看尋找派車結果截圖</a>
+            <a href="/dispatch-result-file" class="button">📄 查看派車結果本地檔案</a>
         </div>
     </body>
     </html>
@@ -2801,65 +3190,271 @@ def get_screenshot(filename):
         print(f"讀取截圖失敗: {e}")
         return f"無法讀取截圖: {filename}", 404
 
-@app.route('/page_source')
-def page_source():
+@app.route('/dispatch-screenshots')
+def dispatch_screenshots():
+    """查看尋找派車結果截圖"""
+    import os
+    import glob
+    
+    # 獲取所有派車截圖檔案（以 dispatch_ 開頭）
+    screenshot_files = glob.glob('dispatch_*.png')
+    screenshot_files.sort()
+    
+    html = '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>尋找派車結果截圖</title>
+        <meta charset="utf-8">
+        <style>
+            body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+            .container { max-width: 1200px; margin: 0 auto; }
+            .header { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+            .screenshot { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+            .screenshot img { max-width: 100%; height: auto; border: 1px solid #eee; border-radius: 4px; }
+            .screenshot h3 { margin: 5px 0 15px 0; color: #333; font-size: 18px; }
+            .back-button { 
+                background-color: #2196F3; 
+                color: white; 
+                padding: 10px 20px; 
+                text-decoration: none; 
+                border-radius: 4px; 
+                display: inline-block; 
+                margin-bottom: 20px; 
+            }
+            .back-button:hover { background-color: #1976D2; }
+            .no-screenshots { text-align: center; color: #666; padding: 40px; background: white; border-radius: 8px; }
+            .stats { background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <a href="/" class="back-button">返回首頁</a>
+                <h1>🔍 尋找派車結果截圖歷程</h1>
+                <p>這裡顯示抓取派車結果過程中的所有截圖，幫助了解執行流程和除錯。</p>
+            </div>
+    '''
+    
+    if screenshot_files:
+        html += f'''
+            <div class="stats">
+                <strong>📊 統計資訊：</strong>共找到 {len(screenshot_files)} 張派車抓取截圖
+            </div>
+        '''
+        
+        for file_path in screenshot_files:
+            filename = os.path.basename(file_path)
+            # 解析檔名，移除 dispatch_ 前綴和 .png 後綴
+            description = filename.replace('.png', '').replace('dispatch_', '').replace('_', ' ')
+            
+            # 美化描述文字
+            description_map = {
+                '001 page loaded': '步驟 1: 頁面載入完成',
+                '002 page complete': '步驟 2: 頁面完全載入',
+                '003 popup closed': '步驟 3: 關閉彈窗',
+                '003 no popup found': '步驟 3: 未找到彈窗',
+                '004 login form': '步驟 4: 登入表單載入',
+                '005 before login click': '步驟 5: 準備點擊登入',
+                '006 login clicked': '步驟 6: 登入按鈕已點擊',
+                '007 login success modal found': '步驟 7: 發現登入成功彈窗',
+                '008 login success confirmed': '步驟 8: 確認登入成功',
+                '009 login complete': '步驟 9: 登入流程完成',
+                'order query not found': '❌ 未找到訂單查詢按鈕',
+                'order list loaded': '✅ 訂單列表載入完成',
+                'records found': '🔍 找到訂單記錄',
+                'matching record found': '🎯 找到匹配的預約記錄',
+                'result saved': '💾 結果已儲存',
+                'no matching record': '❌ 未找到匹配記錄',
+                'extraction failed': '❌ 信息提取失敗',
+                'order query error': '❌ 訂單查詢錯誤',
+                'dispatch error': '❌ 派車抓取錯誤'
+            }
+            
+            display_description = description_map.get(description, description.title())
+            
+            html += f'''
+            <div class="screenshot">
+                <h3>{display_description}</h3>
+                <img src="/screenshot/{filename}" alt="{display_description}" loading="lazy">
+            </div>
+            '''
+    else:
+        html += '''
+        <div class="no-screenshots">
+            <h2>📭 暫無派車抓取截圖</h2>
+            <p>目前沒有派車抓取過程的截圖。</p>
+            <p>請先執行「🔄 抓取派車結果」功能來生成截圖。</p>
+        </div>
+        '''
+    
+    html += '''
+        </div>
+    </body>
+    </html>
+    '''
+    
+    return html
+
+@app.route('/dispatch-result-file')
+def dispatch_result_file():
+    """查看派車結果本地檔案"""
+    import os
+    from datetime import datetime
+    
+    html = '''
+    <!DOCTYPE html>
+    <html lang="zh-TW">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>派車結果本地檔案</title>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+            .container { max-width: 1000px; margin: 0 auto; }
+            .header { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+            .content { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+            .back-button { 
+                background-color: #2196F3; 
+                color: white; 
+                padding: 10px 20px; 
+                text-decoration: none; 
+                border-radius: 4px; 
+                display: inline-block; 
+                margin-bottom: 20px; 
+            }
+            .back-button:hover { background-color: #1976D2; }
+            .file-content { 
+                background: #f8f9fa; 
+                border: 1px solid #e9ecef; 
+                border-radius: 6px; 
+                padding: 20px; 
+                font-family: 'Courier New', monospace; 
+                white-space: pre-wrap; 
+                word-wrap: break-word;
+                line-height: 1.6;
+            }
+            .no-file { 
+                text-align: center; 
+                color: #666; 
+                padding: 40px; 
+                background: #fff3cd; 
+                border: 1px solid #ffeaa7; 
+                border-radius: 8px; 
+            }
+            .file-info {
+                background: #e3f2fd; 
+                padding: 15px; 
+                border-radius: 8px; 
+                margin-bottom: 20px;
+                font-size: 14px;
+            }
+            .controls {
+                text-align: center;
+                margin-bottom: 20px;
+            }
+            .btn {
+                background-color: #28a745;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 4px;
+                cursor: pointer;
+                margin: 0 5px;
+                text-decoration: none;
+                display: inline-block;
+            }
+            .btn:hover { background-color: #218838; }
+            .btn-download { background-color: #17a2b8; }
+            .btn-download:hover { background-color: #138496; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <a href="/" class="back-button">返回首頁</a>
+                <h1>📄 派車結果本地檔案</h1>
+                <p>顯示 search_result.txt 檔案的內容，包含最新的派車查詢結果。</p>
+            </div>
+            
+            <div class="controls">
+                <button class="btn" onclick="window.location.reload()">🔄 重新整理</button>
+                <a href="/download-dispatch-result" class="btn btn-download">📥 下載檔案</a>
+            </div>
+    '''
+    
     try:
-        with open('page_source.html', 'r', encoding='utf-8') as f:
-            content = f.read()
-        return f'''
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>頁面原始碼</title>
-            <meta charset="utf-8">
-            <style>
-                body {{ font-family: monospace; margin: 20px; }}
-                pre {{ background-color: #f5f5f5; padding: 20px; border-radius: 5px; overflow-x: auto; }}
-                .back-button {{ 
-                    background-color: #2196F3; 
-                    color: white; 
-                    padding: 10px 20px; 
-                    text-decoration: none; 
-                    border-radius: 4px; 
-                    display: inline-block; 
-                    margin-bottom: 20px; 
-                }}
-            </style>
-        </head>
-        <body>
-            <a href="/" class="back-button">返回首頁</a>
-            <h1>頁面原始碼</h1>
-            <pre>{content}</pre>
-        </body>
-        </html>
+        file_path = 'search_result.txt'
+        
+        if os.path.exists(file_path):
+            # 獲取檔案資訊
+            file_stat = os.stat(file_path)
+            file_size = file_stat.st_size
+            file_mtime = datetime.fromtimestamp(file_stat.st_mtime)
+            
+            html += f'''
+            <div class="file-info">
+                <strong>📋 檔案資訊：</strong><br>
+                檔案名稱: search_result.txt<br>
+                檔案大小: {file_size} bytes<br>
+                最後修改時間: {file_mtime.strftime('%Y-%m-%d %H:%M:%S')}<br>
+                檔案路徑: {os.path.abspath(file_path)}
+            </div>
+            '''
+            
+            # 讀取檔案內容
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            if content.strip():
+                html += f'''
+                <div class="content">
+                    <h2>📝 檔案內容</h2>
+                    <div class="file-content">{content}</div>
+                </div>
+                '''
+            else:
+                html += '''
+                <div class="no-file">
+                    <h2>📭 檔案內容為空</h2>
+                    <p>search_result.txt 檔案存在但內容為空。</p>
+                    <p>請執行「🔄 抓取派車結果」功能來生成內容。</p>
+                </div>
+                '''
+        else:
+            html += '''
+            <div class="no-file">
+                <h2>📭 檔案不存在</h2>
+                <p>search_result.txt 檔案尚未建立。</p>
+                <p>請先執行「🔄 抓取派車結果」功能來生成檔案。</p>
+            </div>
+            '''
+            
+    except Exception as e:
+        html += f'''
+        <div class="no-file">
+            <h2>❌ 讀取檔案失敗</h2>
+            <p>無法讀取 search_result.txt 檔案。</p>
+            <p>錯誤訊息: {str(e)}</p>
+        </div>
         '''
-    except FileNotFoundError:
-        return '''
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>頁面原始碼</title>
-            <meta charset="utf-8">
-            <style>
-                body { font-family: Arial, sans-serif; margin: 20px; }
-                .back-button { 
-                    background-color: #2196F3; 
-                    color: white; 
-                    padding: 10px 20px; 
-                    text-decoration: none; 
-                    border-radius: 4px; 
-                    display: inline-block; 
-                    margin-bottom: 20px; 
-                }
-            </style>
-        </head>
-        <body>
-            <a href="/" class="back-button">返回首頁</a>
-            <h1>頁面原始碼</h1>
-            <p>頁面原始碼檔案不存在</p>
-        </body>
-        </html>
-        '''
+    
+    html += '''
+        </div>
+        
+        <script>
+            // 每30秒自動重新整理
+            setInterval(function() {
+                window.location.reload();
+            }, 30000);
+        </script>
+    </body>
+    </html>
+    '''
+    
+    return html
+
+
 
 @app.route('/test')
 def test():
@@ -2885,516 +3480,60 @@ def favicon():
     return send_from_directory(os.path.join(app.root_path, 'static'),
                              'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
-@app.route('/test-address')
-def test_address():
-    """測試住家地址填入方法的 Web 介面"""
+@app.route('/latest-dispatch')
+def latest_dispatch():
+    """查看最新派車結果"""
     return '''
     <!DOCTYPE html>
     <html lang="zh-TW">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>住家地址填入測試</title>
+        <title>最新派車結果</title>
         <style>
             body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
-            .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-            .button { background: #007bff; color: white; padding: 12px 24px; border: none; border-radius: 4px; cursor: pointer; margin: 5px; text-decoration: none; display: inline-block; }
-            .button:hover { background: #0056b3; }
-            .button:disabled { background: #6c757d; cursor: not-allowed; }
-            .danger { background: #dc3545; }
-            .danger:hover { background: #c82333; }
-            .success { background: #28a745; }
-            .warning { background: #ffc107; color: #000; }
-            .log { background: #f8f9fa; border: 1px solid #dee2e6; padding: 15px; margin: 10px 0; border-radius: 4px; font-family: monospace; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
-            .status { padding: 10px; margin: 10px 0; border-radius: 4px; }
-            .status.success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
-            .status.error { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
-            .status.warning { background: #fff3cd; border: 1px solid #ffeaa7; color: #856404; }
-            .method-card { border: 1px solid #dee2e6; border-radius: 8px; padding: 15px; margin: 10px 0; background: #fff; }
-            .method-title { font-weight: bold; color: #495057; margin-bottom: 10px; }
-            .method-description { color: #6c757d; margin-bottom: 15px; }
-            h1 { color: #343a40; text-align: center; }
-            h2 { color: #495057; border-bottom: 2px solid #007bff; padding-bottom: 5px; }
+            .container { max-width: 1000px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+            .back-button { 
+                background-color: #2196F3; 
+                color: white; 
+                padding: 10px 20px; 
+                text-decoration: none; 
+                border-radius: 4px; 
+                display: inline-block; 
+                margin-bottom: 20px; 
+            }
+            h1 { color: #333; text-align: center; }
+            .placeholder { text-align: center; color: #666; padding: 40px; }
         </style>
     </head>
     <body>
         <div class="container">
-            <h1>🏠 住家地址填入方法測試</h1>
-            
-            <div class="status warning">
-                <strong>⚠️ 注意：</strong>這個測試會實際執行預約流程到住家地址填入步驟，但不會完成最終預約。
+            <a href="/" class="back-button">返回首頁</a>
+            <h1>📋 最新派車結果</h1>
+            <div class="placeholder">
+                <p>此功能尚未實作，請稍後...</p>
+                <p>這裡將顯示最新的派車結果資訊</p>
             </div>
-            
-            <h2>🧪 測試選項</h2>
-            
-            <div class="method-card">
-                <div class="method-title">📍 完整地址填入測試</div>
-                <div class="method-description">執行完整的預約流程直到住家地址填入步驟，測試所有7種替代方案</div>
-                <button class="button" onclick="startAddressTest('full')">開始完整測試</button>
-            </div>
-            
-            <div class="method-card">
-                <div class="method-title">🔍 快速地址檢測</div>
-                <div class="method-description">只執行到選擇住家步驟，快速檢測地址填入狀況</div>
-                <button class="button warning" onclick="startAddressTest('quick')">快速檢測</button>
-            </div>
-            
-            <div class="method-card">
-                <div class="method-title">⚙️ 單一方法測試</div>
-                <div class="method-description">測試特定的地址填入方法</div>
-                <select id="methodSelect" style="padding: 8px; margin: 5px;">
-                    <option value="1">方法1: 等待自動填入</option>
-                    <option value="2">方法2: 重新選擇住家</option>
-                    <option value="3">方法3: 點擊觸發</option>
-                    <option value="4">方法4: 手動填入</option>
-                    <option value="5">方法5: 地址選單</option>
-                    <option value="6">方法6: JavaScript觸發</option>
-                    <option value="7">方法7: 表單驗證檢查</option>
-                </select>
-                <button class="button" onclick="startSingleMethodTest()">測試選定方法</button>
-            </div>
-            
-            <h2>📊 測試狀態</h2>
-            <div id="status" class="status">準備進行測試...</div>
-            
-            <h2>📝 測試日誌</h2>
-            <div id="logs" class="log">等待測試開始...</div>
-            
-            <h2>🖼️ 截圖</h2>
-            <div id="screenshots"></div>
-            
-            <h2>🔗 其他工具</h2>
-            <a href="/screenshots" class="button">查看所有截圖</a>
-            <a href="/page_source" class="button">查看頁面原始碼</a>
-            <a href="/" class="button success">返回主頁</a>
         </div>
-        
-        <script>
-            let testRunning = false;
-            
-            function updateStatus(message, type = 'warning') {
-                const statusEl = document.getElementById('status');
-                statusEl.textContent = message;
-                statusEl.className = 'status ' + type;
-            }
-            
-            function appendLog(message) {
-                const logsEl = document.getElementById('logs');
-                const timestamp = new Date().toLocaleTimeString();
-                logsEl.textContent += '[' + timestamp + '] ' + message + '\\n';
-                logsEl.scrollTop = logsEl.scrollHeight;
-            }
-            
-            function startAddressTest(type) {
-                if (testRunning) {
-                    alert('測試已在進行中，請等待完成');
-                    return;
-                }
-                
-                testRunning = true;
-                updateStatus('測試進行中...', 'warning');
-                appendLog('開始 ' + (type === 'full' ? '完整' : '快速') + ' 地址填入測試');
-                
-                // 禁用所有按鈕
-                const buttons = document.querySelectorAll('button');
-                buttons.forEach(btn => btn.disabled = true);
-                
-                fetch('/run-address-test', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({type: type})
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        updateStatus('測試完成', 'success');
-                        appendLog('✅ 測試成功完成');
-                        if (data.logs) {
-                            data.logs.forEach(log => appendLog(log));
-                        }
-                        if (data.screenshots) {
-                            showScreenshots(data.screenshots);
-                        }
-                    } else {
-                        updateStatus('測試失敗: ' + data.error, 'error');
-                        appendLog('❌ 測試失敗: ' + data.error);
-                    }
-                })
-                .catch(error => {
-                    updateStatus('測試錯誤: ' + error.message, 'error');
-                    appendLog('💥 測試錯誤: ' + error.message);
-                })
-                .finally(() => {
-                    testRunning = false;
-                    // 重新啟用按鈕
-                    buttons.forEach(btn => btn.disabled = false);
-                });
-            }
-            
-            function startSingleMethodTest() {
-                const methodSelect = document.getElementById('methodSelect');
-                const method = methodSelect.value;
-                
-                if (testRunning) {
-                    alert('測試已在進行中，請等待完成');
-                    return;
-                }
-                
-                testRunning = true;
-                updateStatus('測試方法 ' + method + ' 進行中...', 'warning');
-                appendLog('開始測試方法 ' + method + ': ' + methodSelect.options[methodSelect.selectedIndex].text);
-                
-                fetch('/run-single-method-test', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({method: method})
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        updateStatus('方法 ' + method + ' 測試完成', 'success');
-                        appendLog('✅ 方法 ' + method + ' 測試完成');
-                        if (data.result) {
-                            appendLog('結果: ' + data.result);
-                        }
-                    } else {
-                        updateStatus('方法 ' + method + ' 測試失敗: ' + data.error, 'error');
-                        appendLog('❌ 方法 ' + method + ' 失敗: ' + data.error);
-                    }
-                })
-                .catch(error => {
-                    updateStatus('測試錯誤: ' + error.message, 'error');
-                    appendLog('💥 測試錯誤: ' + error.message);
-                })
-                .finally(() => {
-                    testRunning = false;
-                });
-            }
-            
-            function showScreenshots(screenshots) {
-                const screenshotsEl = document.getElementById('screenshots');
-                screenshotsEl.innerHTML = '';
-                
-                screenshots.forEach(screenshot => {
-                    const div = document.createElement('div');
-                    div.style.margin = '10px 0';
-                    div.innerHTML = '<h4>' + screenshot.name + '</h4><img src="/screenshot/' + screenshot.filename + '" style="max-width: 100%; border: 1px solid #ddd; border-radius: 4px;">';
-                    screenshotsEl.appendChild(div);
-                });
-            }
-            
-            // 每5秒自動刷新狀態（如果有測試在進行）
-            setInterval(() => {
-                if (testRunning) {
-                    fetch('/test-status')
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.status) {
-                            updateStatus(data.status, data.type || 'warning');
-                        }
-                        if (data.new_logs) {
-                            data.new_logs.forEach(log => appendLog(log));
-                        }
-                    })
-                    .catch(() => {}); // 忽略錯誤
-                }
-            }, 5000);
-        </script>
     </body>
     </html>
     '''
 
-@app.route('/run-address-test', methods=['POST'])
-def run_address_test():
-    """執行住家地址填入測試"""
+@app.route('/fetch-dispatch')
+def fetch_dispatch():
+    """抓取派車結果"""
     try:
-        data = request.get_json()
-        test_type = data.get('type', 'full')
-        
-        # 執行地址測試的邏輯
-        global test_logs, test_status
-        test_logs = []
-        test_status = "測試進行中..."
-        
-        def test_log(message):
-            test_logs.append(message)
-            print(f"[ADDRESS_TEST] {message}")
-        
-        # 設置瀏覽器
-        driver = setup_driver()
-        test_log("瀏覽器已啟動")
-        
-        try:
-            # 基本導航和登入流程
-            test_log("導航到預約系統...")
-            driver['page'].goto("https://www.ntpc.ltc-car.org/")
-            driver['page'].wait_for_load_state("networkidle")
-            
-            # 處理初始彈窗
-            try:
-                driver['page'].click('text=我知道了', timeout=3000)
-                test_log("✅ 已處理初始彈窗")
-            except:
-                test_log("⚠️ 沒有初始彈窗")
-            
-            # 登入
-            test_log("開始登入...")
-            driver['page'].fill('#username', 'A102574899')
-            driver['page'].fill('#password', 'visi319VISI')
-            driver['page'].click('button:has-text("民眾登入")')
-            
-            # 處理登入成功彈窗
-            try:
-                driver['page'].wait_for_selector('text=登入成功', timeout=5000)
-                driver['page'].click('button:has-text("確定")')
-                test_log("✅ 登入成功")
-            except:
-                test_log("⚠️ 沒有登入成功彈窗")
-            
-            # 導航到新增預約
-            test_log("導航到新增預約...")
-            driver['page'].click('text=新增預約')
-            driver['page'].wait_for_load_state("networkidle")
-            
-            # 設置上車地點
-            test_log("設置上車地點為醫療院所...")
-            driver['page'].select_option('select', '醫療院所')
-            
-            # 搜尋醫院
-            test_log("搜尋亞東紀念醫院...")
-            search_input = driver['page'].locator('input[placeholder*="搜尋"]').first
-            search_input.fill('亞東紀念醫院')
-            driver['page'].wait_for_timeout(2000)
-            
-            try:
-                driver['page'].keyboard.press('ArrowDown')
-                driver['page'].keyboard.press('Enter')
-                test_log("✅ 已選擇亞東紀念醫院")
-            except:
-                test_log("⚠️ 選擇醫院可能失敗")
-            
-            # 選擇住家作為下車地點
-            test_log("選擇住家作為下車地點...")
-            home_selects = driver['page'].locator('select').all()
-            home_selected = False
-            
-            for i, select_elem in enumerate(home_selects):
-                try:
-                    if select_elem.is_visible():
-                        options = select_elem.locator('option').all()
-                        option_texts = [opt.inner_text() for opt in options if opt.is_visible()]
-                        
-                        if '住家' in option_texts and i > 0:  # 不是第一個選單
-                            test_log(f"在選單 {i} 中找到住家，選擇...")
-                            select_elem.select_option('住家')
-                            driver['page'].wait_for_timeout(2000)
-                            home_selected = True
-                            test_log("✅ 住家選擇成功")
-                            break
-                except Exception as e:
-                    test_log(f"選單 {i} 檢查失敗: {e}")
-                    continue
-            
-            if not home_selected:
-                test_log("❌ 未能選擇住家")
-                return {'success': False, 'error': '無法選擇住家選項'}
-            
-            # 現在開始測試地址填入
-            test_log("=== 開始測試住家地址填入方法 ===")
-            
-            # 找到地址輸入框
-            address_inputs = driver['page'].locator('input[type="text"]').all()
-            target_address_input = None
-            
-            for i, input_elem in enumerate(address_inputs):
-                try:
-                    if input_elem.is_visible() and input_elem.is_enabled():
-                        placeholder = input_elem.get_attribute('placeholder') or ''
-                        name = input_elem.get_attribute('name') or ''
-                        id_attr = input_elem.get_attribute('id') or ''
-                        
-                        is_address = any(keyword in (placeholder + name + id_attr).lower() 
-                                       for keyword in ['地址', '住址', 'address'])
-                        is_pickup = any(keyword in (name + id_attr).lower() 
-                                      for keyword in ['pickup', 'pickUp', 'origin', 'from', 'start'])
-                        
-                        if is_address and not is_pickup and i > 0:
-                            target_address_input = input_elem
-                            test_log(f"✅ 找到地址輸入框 {i}: {placeholder}")
-                            break
-                except:
-                    continue
-            
-            if not target_address_input:
-                test_log("❌ 未找到地址輸入框")
-                return {'success': False, 'error': '無法找到地址輸入框'}
-            
-            # 執行測試
-            test_results = {}
-            screenshots = []
-            
-            if test_type == 'quick':
-                # 快速測試：只檢查自動填入
-                test_log("--- 執行快速檢測 ---")
-                for attempt in range(3):
-                    current_value = target_address_input.input_value() or ''
-                    test_log(f"檢查自動填入 {attempt+1}/3: '{current_value}'")
-                    
-                    if current_value.strip():
-                        test_log(f"✅ 快速檢測成功 - 地址已自動填入: '{current_value}'")
-                        test_results['quick'] = True
-                        break
-                    
-                    driver['page'].wait_for_timeout(1000)
-                else:
-                    test_log("❌ 快速檢測 - 沒有自動填入")
-                    test_results['quick'] = False
-                
-                take_screenshot("quick_test_result")
-                screenshots.append({'name': '快速測試結果', 'filename': f'quick_test_result_{int(time.time())}.png'})
-            
-            else:
-                # 完整測試：測試所有方法
-                test_log("--- 執行完整測試 ---")
-                
-                # 方法1: 等待自動填入
-                test_log("測試方法1: 等待自動填入")
-                method1_success = False
-                for attempt in range(5):
-                    current_value = target_address_input.input_value() or ''
-                    if current_value.strip():
-                        test_log(f"✅ 方法1成功: '{current_value}'")
-                        method1_success = True
-                        break
-                    driver['page'].wait_for_timeout(1000)
-                
-                test_results['method1'] = method1_success
-                if not method1_success:
-                    test_log("❌ 方法1失敗")
-                
-                # 方法2: 重新選擇住家
-                if not method1_success:
-                    test_log("測試方法2: 重新選擇住家")
-                    try:
-                        home_select = driver['page'].locator('select').filter(has_text='住家').first
-                        home_select.select_option('住家')
-                        driver['page'].wait_for_timeout(2000)
-                        
-                        new_value = target_address_input.input_value() or ''
-                        if new_value.strip():
-                            test_log(f"✅ 方法2成功: '{new_value}'")
-                            test_results['method2'] = True
-                        else:
-                            test_log("❌ 方法2失敗")
-                            test_results['method2'] = False
-                    except Exception as e:
-                        test_log(f"❌ 方法2失敗: {e}")
-                        test_results['method2'] = False
-                
-                # 方法3: 點擊觸發
-                if not any(test_results.values()):
-                    test_log("測試方法3: 點擊觸發")
-                    try:
-                        target_address_input.click()
-                        driver['page'].wait_for_timeout(1000)
-                        target_address_input.focus()
-                        driver['page'].wait_for_timeout(2000)
-                        
-                        new_value = target_address_input.input_value() or ''
-                        if new_value.strip():
-                            test_log(f"✅ 方法3成功: '{new_value}'")
-                            test_results['method3'] = True
-                        else:
-                            test_log("❌ 方法3失敗")
-                            test_results['method3'] = False
-                    except Exception as e:
-                        test_log(f"❌ 方法3失敗: {e}")
-                        test_results['method3'] = False
-                
-                # 方法4: 手動填入
-                if not any(test_results.values()):
-                    test_log("測試方法4: 手動填入")
-                    try:
-                        test_address = "新北市板橋區文化路一段188巷44號"
-                        target_address_input.fill(test_address)
-                        driver['page'].wait_for_timeout(1000)
-                        
-                        new_value = target_address_input.input_value() or ''
-                        if new_value.strip():
-                            test_log(f"✅ 方法4成功: '{new_value}'")
-                            test_results['method4'] = True
-                        else:
-                            test_log("❌ 方法4失敗")
-                            test_results['method4'] = False
-                    except Exception as e:
-                        test_log(f"❌ 方法4失敗: {e}")
-                        test_results['method4'] = False
-                
-                take_screenshot("full_test_result")
-                screenshots.append({'name': '完整測試結果', 'filename': f'full_test_result_{int(time.time())}.png'})
-            
-            test_status = "測試完成"
-            
-            return {
-                'success': True, 
-                'logs': test_logs,
-                'results': test_results,
-                'screenshots': screenshots
-            }
-            
-        finally:
-            driver['page'].close()
-            driver['browser'].close()
-            
+        print("=== 開始執行派車結果抓取流程 ===")
+        result = fetch_dispatch_results()
+        print(f"=== 派車結果抓取流程執行結果: {result} ===")
+        return jsonify({"success": result, "message": "派車結果抓取流程執行完成"})
     except Exception as e:
-        test_status = f"測試失敗: {e}"
-        return {'success': False, 'error': str(e)}
-
-@app.route('/run-single-method-test', methods=['POST'])
-def run_single_method_test():
-    """執行單一方法測試"""
-    try:
-        data = request.get_json()
-        method = data.get('method', '1')
-        
-        # 這裡可以實現單一方法的測試邏輯
-        # 為了簡化，先返回模擬結果
-        
-        method_descriptions = {
-            '1': '等待自動填入',
-            '2': '重新選擇住家',
-            '3': '點擊觸發',
-            '4': '手動填入',
-            '5': '地址選單',
-            '6': 'JavaScript觸發',
-            '7': '表單驗證檢查'
-        }
-        
-        # 模擬測試結果
-        import random
-        success = random.choice([True, False])
-        result = f"方法 {method} ({method_descriptions.get(method, '未知')}) "
-        result += "測試成功" if success else "測試失敗"
-        
-        return {
-            'success': success,
-            'result': result
-        }
-        
-    except Exception as e:
-        return {'success': False, 'error': str(e)}
-
-@app.route('/test-status')
-def test_status():
-    """獲取測試狀態"""
-    try:
-        global test_status, test_logs
-        return {
-            'status': test_status if 'test_status' in globals() else '無進行中的測試',
-            'new_logs': test_logs[-5:] if 'test_logs' in globals() else []
-        }
-    except:
-        return {'status': '狀態獲取失敗'}
+        import traceback
+        error_msg = f"派車結果抓取流程執行失敗: {str(e)}"
+        print(error_msg)
+        print("詳細錯誤資訊:")
+        print(traceback.format_exc())
+        return jsonify({"success": False, "error": error_msg}), 500
 
 @app.route('/cron-logs')
 def cron_logs():
@@ -3624,9 +3763,25 @@ def clear_cron_logs():
     except Exception as e:
         return {'success': False, 'error': str(e)}
 
-# 全域變數用於儲存測試狀態
-test_logs = []
-test_status = "待機中"
+@app.route('/download-dispatch-result')
+def download_dispatch_result():
+    """下載派車結果檔案"""
+    try:
+        file_path = 'search_result.txt'
+        if os.path.exists(file_path):
+            from datetime import datetime
+            return send_file(
+                file_path,
+                as_attachment=True,
+                download_name=f'search_result_{datetime.now().strftime("%Y%m%d_%H%M%S")}.txt',
+                mimetype='text/plain'
+            )
+        else:
+            return "派車結果檔案不存在", 404
+    except Exception as e:
+        return f"下載失敗: {e}", 500
+
+
 
 if __name__ == '__main__':
     # Zeabur 環境變數
