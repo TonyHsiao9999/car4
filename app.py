@@ -5,13 +5,15 @@ import os
 import base64
 import re
 from datetime import datetime
+import pytz
 
 app = Flask(__name__)
 
 def take_screenshot(driver, name):
     """截圖功能"""
     try:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        taipei_tz = pytz.timezone('Asia/Taipei')
+        timestamp = datetime.now(taipei_tz).strftime("%Y%m%d_%H%M%S")
         filename = f"step_{name}_{timestamp}.png"
         driver['page'].screenshot(path=filename)
         print(f"截圖已保存: {filename}")
@@ -394,10 +396,14 @@ def fetch_dispatch_results():
             driver['page'].wait_for_timeout(5000)  # 增加等待時間確保SPA內容載入
             take_screenshot("order_list_loaded")
             
-            # 🎯 使用系統當日日期 (修正格式為 2025/06/19)
-            today = datetime.now()
+            # 🎯 使用台北時區的當日日期 (修正格式為 2025/06/19)
+            taipei_tz = pytz.timezone('Asia/Taipei')
+            today = datetime.now(taipei_tz)
             target_date = today.strftime("%Y/%m/%d")  # 格式：2025/06/19
-            print(f"尋找預約日期為 {target_date} 的訂單...")
+            utc_time = datetime.utcnow()
+            print(f"🌏 UTC時間: {utc_time.strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"🇹🇼 台北時間: {today.strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"🔍 尋找預約日期為 {target_date} 的訂單 (台北時區)...")
             
             # 分析訂單記錄
             print("開始分析訂單記錄...")
@@ -900,7 +906,9 @@ def fetch_dispatch_results():
             # 🎯 寫入結果檔案
             print("將搜尋結果寫入 search_result.txt...")
             
-            result_content = f"派車結果查詢時間: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+            taipei_tz = pytz.timezone('Asia/Taipei')
+            query_time = datetime.now(taipei_tz)
+            result_content = f"派車結果查詢時間: {query_time.strftime('%Y-%m-%d %H:%M:%S')} (台北時區)\n"
             result_content += f"搜尋目標日期: {target_date}\n"
             result_content += f"🎯 搜尋範圍: 只查詢「已派車」狀態的記錄\n"
             result_content += f"總共嘗試次數: {current_attempt}\n"
@@ -4227,10 +4235,12 @@ def download_cron_logs():
     try:
         log_file = 'cron_reservation.log'
         if os.path.exists(log_file):
+            taipei_tz = pytz.timezone('Asia/Taipei')
+            timestamp = datetime.now(taipei_tz).strftime("%Y%m%d_%H%M%S")
             return send_file(
                 log_file,
                 as_attachment=True,
-                download_name=f'cron_reservation_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log',
+                download_name=f'cron_reservation_{timestamp}.log',
                 mimetype='text/plain'
             )
         else:
@@ -4244,8 +4254,10 @@ def clear_cron_logs():
     try:
         log_file = 'cron_reservation.log'
         if os.path.exists(log_file):
+            taipei_tz = pytz.timezone('Asia/Taipei')
+            current_time = datetime.now(taipei_tz)
             with open(log_file, 'w', encoding='utf-8') as f:
-                f.write(f"{datetime.now()} - 日誌已清空\n")
+                f.write(f"{current_time} - 日誌已清空\n")
         return {'success': True}
     except Exception as e:
         return {'success': False, 'error': str(e)}
@@ -4257,10 +4269,12 @@ def download_dispatch_result():
         file_path = 'search_result.txt'
         if os.path.exists(file_path):
             from datetime import datetime
+            taipei_tz = pytz.timezone('Asia/Taipei')
+            timestamp = datetime.now(taipei_tz).strftime("%Y%m%d_%H%M%S")
             return send_file(
                 file_path,
                 as_attachment=True,
-                download_name=f'search_result_{datetime.now().strftime("%Y%m%d_%H%M%S")}.txt',
+                download_name=f'search_result_{timestamp}.txt',
                 mimetype='text/plain'
             )
         else:
