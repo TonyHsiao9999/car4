@@ -3610,6 +3610,7 @@ def index():
             <a href="/latest-dispatch" class="button">📋 看最新派車結果</a>
             <a href="/fetch-dispatch" class="button">🔄 抓取派車結果</a>
             <a href="/cron-logs" class="button">📊 查看 Cron Job 日誌</a>
+            <a href="/dispatch-cron-logs" class="button">📊 查看派車查詢日誌</a>
             <a href="/screenshots" class="button">📸 查看預約時截圖</a>
             <a href="/dispatch-screenshots" class="button">🔍 查看尋找派車結果截圖</a>
             <a href="/dispatch-result-file" class="button">📄 查看派車結果本地檔案</a>
@@ -4228,6 +4229,236 @@ def get_log_class(log_line):
         return 'log-timestamp'
     else:
         return 'log-info'
+
+@app.route('/dispatch-cron-logs')
+def dispatch_cron_logs():
+    """顯示派車查詢的 cron job 日誌"""
+    try:
+        log_file = 'cron_dispatch.log'
+        
+        if not os.path.exists(log_file):
+            # 如果日誌檔案不存在，創建一個空的
+            with open(log_file, 'w', encoding='utf-8') as f:
+                f.write("派車查詢日誌檔案 - 等待首次執行\n")
+        
+        # 讀取日誌檔案
+        with open(log_file, 'r', encoding='utf-8') as f:
+            logs = f.readlines()
+        
+        # 只顯示最新的100行
+        recent_logs = logs[-100:]
+        
+        return render_template_string('''
+<!DOCTYPE html>
+<html>
+<head>
+    <title>派車查詢 Cron Job 日誌</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: 'Segoe UI', Consolas, monospace;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            margin: 0;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .header {
+            background-color: #2d2d30;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .header h1 {
+            color: #00d7ff;
+            margin: 0 0 10px 0;
+        }
+        .header p {
+            color: #cccccc;
+            margin: 0;
+        }
+        .log-container {
+            background-color: #252526;
+            border: 1px solid #3c3c3c;
+            border-radius: 8px;
+            padding: 20px;
+            font-family: 'Courier New', Consolas, monospace;
+            font-size: 14px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .log-line {
+            margin: 5px 0;
+            padding: 5px;
+            border-radius: 3px;
+            word-wrap: break-word;
+        }
+        .log-info { color: #d4d4d4; }
+        .log-success { color: #4ec9b0; background-color: rgba(78, 201, 176, 0.1); }
+        .log-error { color: #f44747; background-color: rgba(244, 71, 71, 0.1); }
+        .log-warning { color: #dcdcaa; }
+        .log-timestamp { color: #9cdcfe; }
+        .controls {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .btn {
+            background-color: #007acc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 0 5px;
+            font-size: 14px;
+        }
+        .btn:hover {
+            background-color: #005a9e;
+        }
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            background-color: #252526;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .stat-item {
+            text-align: center;
+        }
+        .stat-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #00d7ff;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #cccccc;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔍 派車查詢 Cron Job 日誌</h1>
+        <p>日誌檔案: cron_dispatch.log | 顯示最新 100 行</p>
+        <p>排程時間: 每週一和週四 00:10 (台北時區)</p>
+    </div>
+    
+    <div class="stats">
+        <div class="stat-item">
+            <div class="stat-number">{{ total_lines }}</div>
+            <div class="stat-label">總日誌行數</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-number">{{ success_count }}</div>
+            <div class="stat-label">成功執行次數</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-number">{{ error_count }}</div>
+            <div class="stat-label">錯誤次數</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-number">{{ last_execution }}</div>
+            <div class="stat-label">最後執行</div>
+        </div>
+    </div>
+    
+    <div class="controls">
+        <button class="btn" onclick="window.location.reload()">🔄 重新整理</button>
+        <button class="btn" onclick="downloadLogs()">📥 下載完整日誌</button>
+        <button class="btn" onclick="clearLogs()">🗑️ 清空日誌</button>
+        <button class="btn" onclick="window.location.href='/'">🏠 返回首頁</button>
+    </div>
+    
+    <div class="log-container">
+        {% if logs %}
+            {% for log in logs %}
+                <div class="log-line {{ get_log_class(log) }}">{{ log.strip() }}</div>
+            {% endfor %}
+        {% else %}
+            <div class="log-line">暫無日誌記錄</div>
+        {% endif %}
+    </div>
+    
+    <script>
+        function downloadLogs() {
+            window.open('/dispatch-cron-logs/download', '_blank');
+        }
+        
+        function clearLogs() {
+            if (confirm('確定要清空所有派車查詢日誌嗎？此操作無法復原。')) {
+                fetch('/dispatch-cron-logs/clear', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('日誌已清空');
+                        window.location.reload();
+                    } else {
+                        alert('清空失敗: ' + data.error);
+                    }
+                });
+            }
+        }
+        
+        // 自動滾動到底部
+        document.addEventListener('DOMContentLoaded', function() {
+            const container = document.querySelector('.log-container');
+            container.scrollTop = container.scrollHeight;
+        });
+        
+        // 每30秒自動重新整理
+        setInterval(function() {
+            window.location.reload();
+        }, 30000);
+    </script>
+</body>
+</html>
+        ''', 
+        logs=recent_logs,
+        total_lines=len(logs),
+        success_count=sum(1 for log in logs if '成功' in log or 'SUCCESS' in log),
+        error_count=sum(1 for log in logs if '失敗' in log or 'ERROR' in log or '錯誤' in log),
+        last_execution='剛才' if logs else '從未執行',
+        get_log_class=get_log_class
+        )
+        
+    except Exception as e:
+        return f"讀取派車查詢日誌失敗: {e}"
+
+@app.route('/dispatch-cron-logs/download')
+def download_dispatch_cron_logs():
+    """下載完整派車查詢日誌檔案"""
+    try:
+        log_file = 'cron_dispatch.log'
+        if os.path.exists(log_file):
+            taipei_tz = pytz.timezone('Asia/Taipei')
+            timestamp = datetime.now(taipei_tz).strftime("%Y%m%d_%H%M%S")
+            return send_file(
+                log_file,
+                as_attachment=True,
+                download_name=f'cron_dispatch_{timestamp}.log',
+                mimetype='text/plain'
+            )
+        else:
+            return "派車查詢日誌檔案不存在", 404
+    except Exception as e:
+        return f"下載失敗: {e}", 500
+
+@app.route('/dispatch-cron-logs/clear', methods=['POST'])
+def clear_dispatch_cron_logs():
+    """清空派車查詢日誌檔案"""
+    try:
+        log_file = 'cron_dispatch.log'
+        if os.path.exists(log_file):
+            taipei_tz = pytz.timezone('Asia/Taipei')
+            current_time = datetime.now(taipei_tz)
+            with open(log_file, 'w', encoding='utf-8') as f:
+                f.write(f"{current_time} - 派車查詢日誌已清空\n")
+        return {'success': True}
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
 
 @app.route('/cron-logs/download')
 def download_cron_logs():
