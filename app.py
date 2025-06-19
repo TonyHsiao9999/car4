@@ -228,38 +228,72 @@ def fetch_dispatch_results():
         # 從這裡開始改為點擊「訂單查詢」
         print("=== 開始訂單查詢流程 ===")
         try:
-            # 點擊「訂單查詢」
+            # 點擊「訂單查詢」- 使用精確的 CSS 選擇器
             print("點擊訂單查詢...")
             
-            order_query_selectors = [
-                'text=訂單查詢',
-                'a:has-text("訂單查詢")',
-                'button:has-text("訂單查詢")',
-                '*:has-text("訂單查詢")',
-                'a[href*="order"]',
-                'a[href*="query"]',
-                '.menu-item:has-text("訂單查詢")'
-            ]
+            # 等待頁面穩定
+            print("等待頁面穩定...")
+            driver['page'].wait_for_load_state("networkidle")
+            driver['page'].wait_for_timeout(2000)
             
-            order_clicked = False
-            for selector in order_query_selectors:
-                try:
-                    print(f"嘗試訂單查詢選擇器: {selector}")
-                    element = driver['page'].locator(selector).first
-                    if element.count() > 0 and element.is_visible():
-                        print(f"找到訂單查詢元素: {selector}")
-                        element.click()
-                        print(f"訂單查詢點擊成功: {selector}")
-                        order_clicked = True
-                        break
-                except Exception as e:
-                    print(f"訂單查詢選擇器 {selector} 失敗: {e}")
-                    continue
+            # 使用用戶提供的精確 CSS 選擇器
+            order_selector = '.page:nth-child(2) li:nth-child(2) h2:nth-child(1)'
+            print(f"使用精確選擇器: {order_selector}")
+            
+            try:
+                # 等待元素出現
+                element = driver['page'].wait_for_selector(order_selector, timeout=10000)
+                if element and element.is_visible():
+                    print(f"✅ 找到訂單查詢元素")
+                    element.click()
+                    print(f"🎯 訂單查詢點擊成功")
+                    order_clicked = True
+                else:
+                    print(f"❌ 元素不可見")
+                    order_clicked = False
+            except Exception as e:
+                print(f"❌ 訂單查詢點擊失敗: {e}")
+                order_clicked = False
             
             if not order_clicked:
                 print("❌ 無法找到訂單查詢按鈕")
                 take_screenshot("order_query_not_found")
                 return False
+            
+            # 驗證點擊是否成功 - 檢查頁面是否有變化
+            print("驗證訂單查詢點擊效果...")
+            try:
+                # 等待頁面變化的指標
+                change_indicators = [
+                    'text=預約記錄',
+                    'text=訂單記錄', 
+                    'text=預約列表',
+                    '.order-list',
+                    '.reservation-list',
+                    '.record-list',
+                    'table',
+                    '.card',
+                    '.order-item'
+                ]
+                
+                page_changed = False
+                for indicator in change_indicators:
+                    try:
+                        driver['page'].wait_for_selector(indicator, timeout=3000)
+                        print(f"✅ 頁面變化確認: 找到 {indicator}")
+                        page_changed = True
+                        break
+                    except:
+                        continue
+                
+                if not page_changed:
+                    print("⚠️ 未檢測到明顯的頁面變化，可能點擊未成功")
+                    take_screenshot("page_change_uncertain")
+                else:
+                    print("✅ 頁面變化確認，訂單查詢頁面已載入")
+                    
+            except Exception as e:
+                print(f"頁面變化檢測失敗: {e}")
             
             # 等待訂單列表載入
             print("等待訂單列表載入...")
@@ -267,185 +301,157 @@ def fetch_dispatch_results():
             driver['page'].wait_for_timeout(3000)  # 額外等待確保內容載入
             take_screenshot("order_list_loaded")
             
-            # 獲取明天的日期
-            tomorrow = datetime.now() + timedelta(days=1)
-            target_date = tomorrow.strftime("%Y-%m-%d")
+            # 🎯 使用系統當日日期
+            today = datetime.now()
+            target_date = today.strftime("%Y/%m/%d")
             print(f"尋找預約日期為 {target_date} 的訂單...")
             
             # 分析訂單記錄
             print("開始分析訂單記錄...")
             
-            # 尋找包含預約記錄的方框
-            record_selectors = [
-                '.order-item',
-                '.reservation-item', 
-                '.record-item',
-                '.card',
-                '.box',
-                'div[class*="order"]',
-                'div[class*="reservation"]',
-                'div[class*="record"]'
-            ]
+            # 🎯 使用新的 CSS 選擇器尋找預約記錄
+            print("使用新的 CSS 選擇器尋找預約記錄...")
             
-            found_records = []
+            # 尋找所有包含日期的元素
+            date_elements = driver['page'].query_selector_all('.accept .date .text')
+            print(f"找到 {len(date_elements)} 個日期元素")
             
-            # 嘗試通用方法找到所有可能的記錄方框
-            for selector in record_selectors:
+            if not date_elements:
+                print("❌ 未找到任何日期元素")
+                take_screenshot("no_date_elements_found")
+                return False
+            
+            # 清空結果檔案
+            result_file = "search_result.txt"
+            with open(result_file, 'w', encoding='utf-8') as f:
+                f.write("")  # 清空檔案
+            
+            results = []
+            matching_found = False
+            
+            for i, date_element in enumerate(date_elements):
                 try:
-                    elements = driver['page'].locator(selector).all()
-                    if len(elements) > 0:
-                        print(f"找到 {len(elements)} 個記錄使用選擇器: {selector}")
-                        found_records.extend(elements)
-                except Exception as e:
-                    continue
-            
-            # 如果沒找到特定的記錄元素，嘗試尋找包含文字的 div
-            if not found_records:
-                print("未找到特定記錄元素，嘗試尋找包含預約信息的 div...")
-                try:
-                    # 尋找包含"預約日期"或"日期"文字的元素
-                    date_elements = driver['page'].locator('*:has-text("預約日期"), *:has-text("日期/時段")').all()
-                    print(f"找到 {len(date_elements)} 個包含日期信息的元素")
+                    date_text = date_element.inner_text().strip()
+                    print(f"檢查日期 {i+1}: {date_text}")
                     
-                    # 向上查找這些元素的父容器
-                    for date_elem in date_elements:
+                    # 檢查是否包含目標日期
+                    if target_date in date_text:
+                        print(f"✅ 找到匹配日期的記錄 {i+1}: {date_text}")
+                        matching_found = True
+                        
+                        # 🎯 找到對應的展開按鈕並點擊
                         try:
-                            # 獲取父元素作為記錄容器
-                            parent = date_elem.locator('xpath=..')
-                            if parent.count() > 0:
-                                found_records.append(parent.first)
-                        except Exception as e:
+                            # 尋找同一個記錄容器中的展開按鈕
+                            # 先找到包含這個日期元素的父容器
+                            parent_record = date_element
+                            attempts = 0
+                            expand_button = None
+                            
+                            # 向上尋找父容器，直到找到展開按鈕
+                            while attempts < 5:
+                                try:
+                                    parent_record = parent_record.locator('xpath=..').first
+                                    expand_button = parent_record.query_selector('.dispatch .icon-slide_down')
+                                    if expand_button:
+                                        break
+                                    attempts += 1
+                                except:
+                                    break
+                            
+                            if expand_button:
+                                print(f"找到展開按鈕，準備點擊...")
+                                expand_button.click()
+                                print(f"✅ 展開按鈕點擊成功")
+                                
+                                # 等待展開內容載入
+                                driver['page'].wait_for_timeout(3000)
+                                take_screenshot(f"record_{i+1}_expanded")
+                                
+                                # 在展開的內容中尋找車號、指派司機和自付金額
+                                expanded_content = parent_record.inner_text()
+                                print(f"展開內容: {expanded_content}")
+                                
+                                # 🎯 提取所需資訊
+                                import re
+                                
+                                # 提取車號
+                                car_number_match = re.search(r'車號[：:\s]*([A-Z0-9\-]+)', expanded_content)
+                                if not car_number_match:
+                                    car_number_match = re.search(r'([A-Z]{2,3}-\d{4})', expanded_content)
+                                
+                                # 提取指派司機
+                                driver_match = re.search(r'指派司機[：:\s]*([^\n\r]+)', expanded_content)
+                                if not driver_match:
+                                    driver_match = re.search(r'司機[：:\s]*([^\n\r]+)', expanded_content)
+                                
+                                # 🆕 提取自付金額
+                                amount_match = re.search(r'自付金額[：:\s]*([0-9,]+)', expanded_content)
+                                if not amount_match:
+                                    amount_match = re.search(r'金額[：:\s]*([0-9,]+)', expanded_content)
+                                    if not amount_match:
+                                        amount_match = re.search(r'(\d+)元', expanded_content)
+                                        if not amount_match:
+                                            amount_match = re.search(r'費用[：:\s]*([0-9,]+)', expanded_content)
+                                
+                                # 整理提取的資訊
+                                reservation_date_time = date_text
+                                car_number = car_number_match.group(1).strip() if car_number_match else "未找到"
+                                driver_name = driver_match.group(1).strip() if driver_match else "未找到"
+                                self_pay_amount = amount_match.group(1).strip() if amount_match else "未找到"
+                                
+                                result_entry = {
+                                    'date_time': reservation_date_time,
+                                    'car_number': car_number,
+                                    'driver': driver_name,
+                                    'self_pay_amount': self_pay_amount
+                                }
+                                
+                                results.append(result_entry)
+                                print(f"✅ 提取結果: {result_entry}")
+                                
+                            else:
+                                print(f"❌ 未找到展開按鈕")
+                                take_screenshot(f"no_expand_button_{i+1}")
+                                
+                        except Exception as expand_error:
+                            print(f"展開記錄時發生錯誤: {expand_error}")
+                            take_screenshot(f"expand_error_{i+1}")
                             continue
                             
                 except Exception as e:
-                    print(f"尋找日期元素失敗: {e}")
-            
-            # 如果還是沒找到，使用更廣泛的搜索
-            if not found_records:
-                print("使用廣泛搜索尋找所有可能的記錄容器...")
-                try:
-                    # 尋找包含關鍵字的所有 div
-                    broad_elements = driver['page'].locator('div').all()
-                    for elem in broad_elements:
-                        try:
-                            text_content = elem.text_content() or ''
-                            if any(keyword in text_content for keyword in ['預約日期', '車號', '司機', '時段']):
-                                found_records.append(elem)
-                        except Exception as e:
-                            continue
-                except Exception as e:
-                    print(f"廣泛搜索失敗: {e}")
-            
-            print(f"總共找到 {len(found_records)} 個可能的記錄")
-            take_screenshot("records_found")
-            
-            # 分析每個記錄
-            matching_record = None
-            
-            for i, record in enumerate(found_records):
-                try:
-                    print(f"\n--- 分析記錄 {i+1} ---")
-                    text_content = record.text_content() or ''
-                    print(f"記錄內容預覽: {text_content[:200]}...")
-                    
-                    # 檢查是否包含目標日期
-                    if target_date in text_content:
-                        print(f"✅ 找到匹配的日期 {target_date}")
-                        matching_record = record
-                        break
-                    else:
-                        print(f"❌ 日期不匹配，繼續搜索...")
-                        
-                except Exception as e:
-                    print(f"分析記錄 {i+1} 失敗: {e}")
+                    print(f"處理日期元素 {i+1} 時發生錯誤: {e}")
                     continue
             
-            # 處理找到的匹配記錄
-            if matching_record:
-                print(f"\n🎯 找到匹配的預約記錄！")
-                take_screenshot("matching_record_found")
+            # 🎯 寫入結果檔案
+            if results:
+                print("將結果寫入 search_result.txt...")
                 
-                # 提取信息
-                try:
-                    text_content = matching_record.text_content() or ''
-                    print(f"匹配記錄的完整內容:\n{text_content}")
-                    
-                    # 解析預約日期/時段
-                    reservation_date_time = ""
-                    car_number = ""
-                    driver_name = ""
-                    
-                    # 使用正則表達式或字符串處理提取信息
-                    import re
-                    
-                    # 提取預約日期/時段
-                    date_patterns = [
-                        r'預約日期[/:]?\s*([0-9]{4}-[0-9]{1,2}-[0-9]{1,2}[^車司機]*)',
-                        r'日期[/時段]?[：:]\s*([0-9]{4}-[0-9]{1,2}-[0-9]{1,2}[^車司機]*)',
-                        r'([0-9]{4}-[0-9]{1,2}-[0-9]{1,2}\s+[0-9]{1,2}:[0-9]{2})'
-                    ]
-                    
-                    for pattern in date_patterns:
-                        match = re.search(pattern, text_content)
-                        if match:
-                            reservation_date_time = match.group(1).strip()
-                            print(f"提取到預約日期/時段: {reservation_date_time}")
-                            break
-                    
-                    # 提取車號
-                    car_patterns = [
-                        r'車號[：:]\s*([A-Z0-9\-]+)',
-                        r'車號\s+([A-Z0-9\-]+)',
-                        r'車輛[：:]?\s*([A-Z0-9\-]+)'
-                    ]
-                    
-                    for pattern in car_patterns:
-                        match = re.search(pattern, text_content)
-                        if match:
-                            car_number = match.group(1).strip()
-                            print(f"提取到車號: {car_number}")
-                            break
-                    
-                    # 提取指派司機
-                    driver_patterns = [
-                        r'指派司機[：:]\s*([^車號預約\n]+)',
-                        r'司機[：:]\s*([^車號預約\n]+)',
-                        r'駕駛[：:]\s*([^車號預約\n]+)'
-                    ]
-                    
-                    for pattern in driver_patterns:
-                        match = re.search(pattern, text_content)
-                        if match:
-                            driver_name = match.group(1).strip()
-                            print(f"提取到指派司機: {driver_name}")
-                            break
-                    
-                    # 寫入檔案
-                    print("將結果寫入 search_result.txt...")
-                    
-                    result_content = f"""派車結果查詢時間: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-預約日期/時段: {reservation_date_time}
-車號: {car_number}
-指派司機: {driver_name}
-"""
-                    
-                    # 清空檔案並寫入新內容
-                    with open('search_result.txt', 'w', encoding='utf-8') as f:
-                        f.write(result_content)
-                    
-                    print("✅ 派車結果已成功寫入 search_result.txt")
-                    print(f"結果內容:\n{result_content}")
-                    
-                    take_screenshot("result_saved")
-                    return True
-                    
-                except Exception as e:
-                    print(f"提取信息失敗: {e}")
-                    take_screenshot("extraction_failed")
-                    return False
+                result_content = f"派車結果查詢時間: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                
+                for i, result in enumerate(results, 1):
+                    result_content += f"記錄 {i}:\n"
+                    result_content += f"預約日期/時段: {result['date_time']}\n"
+                    result_content += f"車號: {result['car_number']}\n"
+                    result_content += f"指派司機: {result['driver']}\n"
+                    result_content += f"自付金額: {result['self_pay_amount']}\n"
+                    result_content += f"{'='*50}\n\n"
+                
+                # 寫入檔案
+                with open(result_file, 'w', encoding='utf-8') as f:
+                    f.write(result_content)
+                
+                print(f"✅ 派車結果已成功寫入 search_result.txt")
+                print(f"共找到 {len(results)} 筆匹配記錄")
+                print(f"結果內容:\n{result_content}")
+                
+                take_screenshot("result_saved")
+                return True
             else:
-                print(f"❌ 沒有找到日期為 {target_date} 的預約記錄")
-                take_screenshot("no_matching_record")
+                if matching_found:
+                    print(f"⚠️ 找到匹配日期但無法提取詳細資訊")
+                else:
+                    print(f"❌ 沒有找到日期為 {target_date} 的預約記錄")
+                take_screenshot("no_results")
                 return False
             
         except Exception as e:
