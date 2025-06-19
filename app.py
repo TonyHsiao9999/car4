@@ -4583,7 +4583,7 @@ def latest_dispatch():
                 <div class="no-data">
                     <div class="icon">📭</div>
                     <h3>未找到派車記錄</h3>
-                    <p>在指定日期內沒有找到已派車的記錄</p>
+                    <p>在指定日期內沒有找到已派車的記錄<br><span style='color:#888;font-size:0.98em;'>(Tidak ada catatan penugasan mobil yang ditemukan pada tanggal yang ditentukan)</span></p>
                 </div>
             {% endif %}
         {% else %}
