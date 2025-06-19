@@ -3764,9 +3764,17 @@ def index():
             <div class="section section-logs">
                 <h2><span class="icon">📊</span>系統日誌</h2>
                 <p>監控系統執行狀況，查看排程任務和操作記錄</p>
+                <div class="status-bar" style="margin-bottom:18px; background:#f8f9fa; color:#333; font-size:1em;">
+                    <strong>📅 目前系統排程：</strong>
+                    <ul style="margin:8px 0 0 20px; padding:0; list-style:disc inside; font-size:0.98em;">
+                        <li>每週一、四 00:01（台灣時間）自動執行預約</li>
+                        <li>每週一、四 00:10（台灣時間）自動查詢派車結果</li>
+                        <li>（Zeabur 伺服器為 UTC+0，台灣時間為 UTC+8）</li>
+                    </ul>
+                </div>
                 <div class="buttons">
                     <a href="/cron-logs" class="button">
-                        <span class="icon">📊</span>查看 Cron Job 日誌
+                        <span class="icon">📊</span>查看預約日誌
                     </a>
                     <a href="/dispatch-cron-logs" class="button">
                         <span class="icon">📈</span>查看派車查詢日誌
