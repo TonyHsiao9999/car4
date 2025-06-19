@@ -648,9 +648,12 @@ def fetch_dispatch_results():
                                             continue
                                     print(f"👨‍✈️ 指派司機: {driver_name}")
                                     
-                                    # 負擔金額選擇器 - 搜尋「負擔金額」標籤
+                                    # 負擔金額選擇器 - 使用精確的 CSS 選擇器（基於用戶提供的資訊）
                                     amount_selectors = [
-                                        '.order_blocks:nth-child(5) .blocks:nth-child(2)',  # 原始精確選擇器
+                                        '.order_blocks:nth-child(6) > .blocks',  # 用戶提供的精確選擇器
+                                        '.order_blocks:nth-child(6) .blocks',    # 備用（不限制直接子元素）
+                                        '.order_blocks:nth-child(6) .text',      # 第6個區塊的文字內容
+                                        '.order_blocks:nth-child(5) .blocks:nth-child(2)',  # 原始選擇器
                                         '*:contains("負擔金額")',  # 直接搜尋包含「負擔金額」的元素
                                         '.order_blocks .blocks:contains("負擔金額")',
                                         '.blocks .text:contains("負擔金額")',
@@ -661,8 +664,11 @@ def fetch_dispatch_results():
                                     ]
                                     
                                     self_pay_amount = "未找到"
-                                    for amount_selector in amount_selectors:
+                                    print(f"💰 開始搜尋負擔金額，共 {len(amount_selectors)} 個選擇器")
+                                    
+                                    for i, amount_selector in enumerate(amount_selectors, 1):
                                         try:
+                                            print(f"💰 嘗試選擇器 {i}/{len(amount_selectors)}: {amount_selector}")
                                             if ':contains(' in amount_selector:
                                                 # 針對 :contains 選擇器的特殊處理
                                                 # 先找到所有可能的元素，然後檢查文字內容
@@ -727,10 +733,15 @@ def fetch_dispatch_results():
                                                 amount_element = order_element.query_selector(amount_selector)
                                                 if amount_element and amount_element.is_visible():
                                                     amount_text = amount_element.inner_text().strip()
+                                                    print(f"💰 找到元素，文字內容: '{amount_text}'")
                                                     if amount_text and ('元' in amount_text or amount_text.isdigit()):
                                                         self_pay_amount = amount_text
-                                                        print(f"💰 金額選擇器成功: {amount_selector}")
+                                                        print(f"💰 金額選擇器成功: {amount_selector} -> '{amount_text}'")
                                                         break
+                                                    else:
+                                                        print(f"💰 文字內容不符合金額格式，跳過")
+                                                else:
+                                                    print(f"💰 元素不存在或不可見")
                                         except Exception as e:
                                             print(f"⚠️ 金額選擇器 {amount_selector} 發生錯誤: {e}")
                                             continue
