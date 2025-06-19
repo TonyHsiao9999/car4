@@ -648,10 +648,14 @@ def fetch_dispatch_results():
                                             continue
                                     print(f"👨‍✈️ 指派司機: {driver_name}")
                                     
-                                    # 自付金額選擇器 - 在該元素內搜尋
+                                    # 負擔金額選擇器 - 搜尋「負擔金額」標籤
                                     amount_selectors = [
-                                        '.order_blocks:nth-child(5) .blocks:nth-child(2)',
-                                        '.order_blocks .blocks:contains("元")',
+                                        '.order_blocks:nth-child(5) .blocks:nth-child(2)',  # 原始精確選擇器
+                                        '*:contains("負擔金額")',  # 直接搜尋包含「負擔金額」的元素
+                                        '.order_blocks .blocks:contains("負擔金額")',
+                                        '.blocks .text:contains("負擔金額")',
+                                        '.order_blocks:contains("負擔金額")',  # 搜尋更大範圍
+                                        '.order_blocks .blocks:contains("元")',  # 備用方案
                                         '.blocks .text:contains("元")',
                                         '.text:contains("元")'
                                     ]
@@ -659,16 +663,78 @@ def fetch_dispatch_results():
                                     self_pay_amount = "未找到"
                                     for amount_selector in amount_selectors:
                                         try:
-                                            amount_element = order_element.query_selector(amount_selector)
-                                            if amount_element and amount_element.is_visible():
-                                                amount_text = amount_element.inner_text().strip()
-                                                if amount_text and ('元' in amount_text or amount_text.isdigit()):
-                                                    self_pay_amount = amount_text
-                                                    print(f"💰 金額選擇器成功: {amount_selector}")
+                                            if ':contains(' in amount_selector:
+                                                # 針對 :contains 選擇器的特殊處理
+                                                # 先找到所有可能的元素，然後檢查文字內容
+                                                base_selector = amount_selector.split(':contains(')[0]
+                                                search_text = amount_selector.split(':contains(')[1].rstrip(')').strip('"\'')
+                                                
+                                                if base_selector == '*':
+                                                    # 搜尋所有元素
+                                                    possible_elements = order_element.query_selector_all('*')
+                                                else:
+                                                    # 搜尋特定類型的元素
+                                                    possible_elements = order_element.query_selector_all(base_selector)
+                                                
+                                                for element in possible_elements:
+                                                    if element.is_visible():
+                                                        element_text = element.inner_text().strip()
+                                                        if search_text in element_text:
+                                                            # 找到包含「負擔金額」的元素
+                                                            if '負擔金額' in search_text:
+                                                                # 嘗試從該元素或其父/子元素中提取金額
+                                                                # 檢查該元素的文字
+                                                                import re
+                                                                amount_match = re.search(r'(\d+)\s*元', element_text)
+                                                                if amount_match:
+                                                                    self_pay_amount = amount_match.group(0)
+                                                                    print(f"💰 在「負擔金額」元素中找到金額: {self_pay_amount}")
+                                                                    break
+                                                                
+                                                                # 檢查父元素
+                                                                parent = element.locator('..')
+                                                                if parent:
+                                                                    parent_text = parent.inner_text()
+                                                                    amount_match = re.search(r'(\d+)\s*元', parent_text)
+                                                                    if amount_match:
+                                                                        self_pay_amount = amount_match.group(0)
+                                                                        print(f"💰 在「負擔金額」父元素中找到金額: {self_pay_amount}")
+                                                                        break
+                                                                
+                                                                # 檢查下一個兄弟元素
+                                                                try:
+                                                                    next_sibling = element.locator('~ *').first
+                                                                    if next_sibling:
+                                                                        sibling_text = next_sibling.inner_text()
+                                                                        amount_match = re.search(r'(\d+)\s*元', sibling_text)
+                                                                        if amount_match:
+                                                                            self_pay_amount = amount_match.group(0)
+                                                                            print(f"💰 在「負擔金額」兄弟元素中找到金額: {self_pay_amount}")
+                                                                            break
+                                                                except:
+                                                                    pass
+                                                            else:
+                                                                # 包含「元」的元素，直接提取
+                                                                if '元' in element_text and any(c.isdigit() for c in element_text):
+                                                                    self_pay_amount = element_text
+                                                                    print(f"💰 金額選擇器成功: {amount_selector}")
+                                                                    break
+                                                
+                                                if self_pay_amount != "未找到":
                                                     break
-                                        except:
+                                            else:
+                                                # 普通選擇器
+                                                amount_element = order_element.query_selector(amount_selector)
+                                                if amount_element and amount_element.is_visible():
+                                                    amount_text = amount_element.inner_text().strip()
+                                                    if amount_text and ('元' in amount_text or amount_text.isdigit()):
+                                                        self_pay_amount = amount_text
+                                                        print(f"💰 金額選擇器成功: {amount_selector}")
+                                                        break
+                                        except Exception as e:
+                                            print(f"⚠️ 金額選擇器 {amount_selector} 發生錯誤: {e}")
                                             continue
-                                    print(f"💰 自付金額: {self_pay_amount}")
+                                    print(f"💰 負擔金額: {self_pay_amount}")
                                     
                                     # 整理結果
                                     result_entry = {
