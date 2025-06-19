@@ -719,8 +719,21 @@ def fetch_dispatch_results():
                                                                 except:
                                                                     pass
                                                             else:
-                                                                # 包含「元」的元素，直接提取
-                                                                if '元' in element_text and any(c.isdigit() for c in element_text):
+                                                                # 包含金額相關文字的元素，直接提取
+                                                                def is_valid_amount_text(text):
+                                                                    """檢查是否為有效的金額文字"""
+                                                                    if not text:
+                                                                        return False
+                                                                    # 檢查是否包含數字
+                                                                    has_digit = any(c.isdigit() for c in text)
+                                                                    if not has_digit:
+                                                                        return False
+                                                                    # 檢查是否包含金額相關符號或文字
+                                                                    amount_indicators = ['元', '$', '＄', '負擔金額', '自付', '費用', '金額']
+                                                                    has_amount_indicator = any(indicator in text for indicator in amount_indicators)
+                                                                    return has_amount_indicator
+                                                                
+                                                                if is_valid_amount_text(element_text):
                                                                     self_pay_amount = element_text
                                                                     print(f"💰 金額選擇器成功: {amount_selector}")
                                                                     break
@@ -733,12 +746,27 @@ def fetch_dispatch_results():
                                                 if amount_element and amount_element.is_visible():
                                                     amount_text = amount_element.inner_text().strip()
                                                     print(f"💰 找到元素，文字內容: '{amount_text}'")
-                                                    if amount_text and ('元' in amount_text or amount_text.isdigit()):
+                                                    # 檢查是否為有效的金額格式
+                                                    def is_valid_amount(text):
+                                                        """檢查是否為有效的金額格式"""
+                                                        if not text:
+                                                            return False
+                                                        # 檢查是否包含數字
+                                                        has_digit = any(c.isdigit() for c in text)
+                                                        if not has_digit:
+                                                            return False
+                                                        # 檢查是否包含金額相關符號或文字
+                                                        amount_indicators = ['元', '$', '＄', '負擔金額', '自付', '費用', '金額']
+                                                        has_amount_indicator = any(indicator in text for indicator in amount_indicators)
+                                                        return has_amount_indicator
+                                                    
+                                                    if is_valid_amount(amount_text):
                                                         self_pay_amount = amount_text
                                                         print(f"💰 金額選擇器成功: {amount_selector} -> '{amount_text}'")
                                                         break
                                                     else:
-                                                        print(f"💰 文字內容不符合金額格式，跳過")
+                                                        print(f"💰 文字內容不符合金額格式: '{amount_text}'")
+                                                        print(f"💰 檢查結果: 包含數字={any(c.isdigit() for c in amount_text)}, 包含金額指示符={any(indicator in amount_text for indicator in ['元', '$', '＄', '負擔金額', '自付', '費用', '金額'])}")
                                                 else:
                                                     print(f"💰 元素不存在或不可見")
                                         except Exception as e:
