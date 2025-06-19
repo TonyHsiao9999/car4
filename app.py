@@ -3722,8 +3722,10 @@ def index():
             </div>
             
             <div class="status-bar">
-                <strong>🕒 排程狀態：</strong>每週一和週四 00:10 自動執行派車結果查詢 | 
-                <strong>🔄 系統狀態：</strong>正常運行中
+                <strong>🕒 排程狀態：</strong>
+                每週一、四 00:01（台灣時間）自動執行預約 |
+                每週一、四 00:10（台灣時間）自動查詢派車結果
+                <span style="color:#888;font-size:0.95em;">（伺服器為 UTC+0，台灣時間為 UTC+8）</span>
             </div>
             
             <!-- 第一區：預約功能 -->
