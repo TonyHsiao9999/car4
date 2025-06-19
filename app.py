@@ -690,7 +690,6 @@ def fetch_dispatch_results():
                                                             if '負擔金額' in search_text:
                                                                 # 嘗試從該元素或其父/子元素中提取金額
                                                                 # 檢查該元素的文字
-                                                                import re
                                                                 amount_match = re.search(r'(\d+)\s*元', element_text)
                                                                 if amount_match:
                                                                     self_pay_amount = amount_match.group(0)
