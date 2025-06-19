@@ -236,24 +236,50 @@ def fetch_dispatch_results():
             driver['page'].wait_for_load_state("networkidle")
             driver['page'].wait_for_timeout(2000)
             
-            # 使用用戶提供的精確 CSS 選擇器
-            order_selector = '.page:nth-child(2) li:nth-child(2) h2:nth-child(1)'
-            print(f"使用精確選擇器: {order_selector}")
+            # 🎯 使用多種策略尋找訂單查詢按鈕
+            order_selectors = [
+                '.page:nth-child(2) li:nth-child(2) h2:nth-child(1)',  # 原始選擇器
+                '.page:nth-child(2) li:nth-child(2)',  # 簡化版本
+                '.page li:contains("訂單查詢")',  # 包含文字
+                'li:has-text("訂單查詢")',  # Playwright文字選擇器
+                'h2:has-text("訂單查詢")',  # h2標籤文字選擇器
+                '*:has-text("訂單查詢")'  # 通用文字選擇器
+            ]
             
-            try:
-                # 等待元素出現
-                element = driver['page'].wait_for_selector(order_selector, timeout=10000)
-                if element and element.is_visible():
-                    print(f"✅ 找到訂單查詢元素")
-                    element.click()
-                    print(f"🎯 訂單查詢點擊成功")
-                    order_clicked = True
-                else:
-                    print(f"❌ 元素不可見")
-                    order_clicked = False
-            except Exception as e:
-                print(f"❌ 訂單查詢點擊失敗: {e}")
-                order_clicked = False
+            order_clicked = False
+            
+            for selector in order_selectors:
+                try:
+                    print(f"嘗試訂單查詢選擇器: {selector}")
+                    
+                    # 檢查元素是否存在
+                    elements = driver['page'].query_selector_all(selector)
+                    print(f"找到 {len(elements)} 個元素使用選擇器: {selector}")
+                    
+                    if elements:
+                        for i, element in enumerate(elements):
+                            try:
+                                if element.is_visible():
+                                    element_text = element.inner_text().strip()
+                                    print(f"元素 {i+1} 文字: '{element_text}'")
+                                    
+                                    # 檢查是否包含"訂單查詢"文字
+                                    if "訂單查詢" in element_text:
+                                        print(f"✅ 找到訂單查詢元素: {selector}")
+                                        element.click()
+                                        print(f"🎯 訂單查詢點擊成功")
+                                        order_clicked = True
+                                        break
+                            except Exception as click_error:
+                                print(f"點擊元素 {i+1} 失敗: {click_error}")
+                                continue
+                                
+                    if order_clicked:
+                        break
+                        
+                except Exception as e:
+                    print(f"選擇器 {selector} 失敗: {e}")
+                    continue
             
             if not order_clicked:
                 print("❌ 無法找到訂單查詢按鈕")
@@ -342,7 +368,31 @@ def fetch_dispatch_results():
                 scroll_position = 0
                 scroll_step = 500  # 每次捲動500像素
                 
+                # 🔍 先取得頁面所有記錄的總數
+                all_date_elements = driver['page'].query_selector_all('.accept .date .text')
+                print(f"🔢 頁面總共有 {len(all_date_elements)} 個日期元素")
+                
+                # 如果沒有找到任何日期元素，嘗試其他選擇器
+                if not all_date_elements:
+                    alternative_selectors = [
+                        '.date .text',
+                        '.accept .text',
+                        '*[class*="date"] .text',
+                        '*[class*="accept"] *[class*="date"]',
+                        '.card .date',
+                        '.record .date'
+                    ]
+                    
+                    for alt_selector in alternative_selectors:
+                        alt_elements = driver['page'].query_selector_all(alt_selector)
+                        if alt_elements:
+                            print(f"✅ 使用替代選擇器 {alt_selector} 找到 {len(alt_elements)} 個元素")
+                            all_date_elements = alt_elements
+                            break
+                
                 # 🔄 捲動搜尋迴圈
+                processed_elements = set()  # 追蹤已處理的元素
+                
                 while True:
                     print(f"當前捲動位置: {scroll_position}px")
                     
@@ -355,10 +405,20 @@ def fetch_dispatch_results():
                     
                     for i, date_element in enumerate(date_elements):
                         try:
+                            # 獲取元素的唯一標識
+                            element_id = f"{scroll_position}_{i}"
+                            
+                            # 檢查是否已處理過此元素（避免重複）
+                            if element_id in processed_elements:
+                                continue
+                            
                             # 檢查元素是否在可視範圍內
                             is_visible = date_element.is_visible()
                             if not is_visible:
                                 continue
+                            
+                            # 標記為已處理
+                            processed_elements.add(element_id)
                                 
                             date_text = date_element.inner_text().strip()
                             total_records_checked += 1
@@ -474,22 +534,32 @@ def fetch_dispatch_results():
                     
                     # 🔽 捲動到下一個位置
                     scroll_position += scroll_step
-                    previous_height = driver['page'].evaluate("document.body.scrollHeight")
                     driver['page'].evaluate(f"window.scrollTo(0, {scroll_position})")
-                    driver['page'].wait_for_timeout(2000)  # 等待內容載入
+                    driver['page'].wait_for_timeout(3000)  # 增加等待時間確保內容載入
                     
                     # 檢查是否已經到達頁面底部
                     current_height = driver['page'].evaluate("document.body.scrollHeight")
                     current_scroll = driver['page'].evaluate("window.pageYOffset + window.innerHeight")
                     
-                    print(f"頁面高度: {current_height}, 捲動位置: {current_scroll}")
+                    print(f"頁面高度: {current_height}, 捲動位置: {current_scroll}, 已處理元素: {len(processed_elements)}")
                     
-                    # 如果沒有新內容或已到底部，結束當前頁面的捲動
-                    if current_scroll >= current_height - 100 or (loop_processed == 0 and scroll_position > 1000):
-                        print("已到達頁面底部或無更多內容")
+                    # 檢查是否所有記錄都已處理或到達頁面底部
+                    all_elements_processed = len(processed_elements) >= len(all_date_elements)
+                    reached_bottom = current_scroll >= current_height - 100
+                    no_new_content = loop_processed == 0 and scroll_position > 2000
+                    
+                    if all_elements_processed:
+                        print(f"✅ 所有 {len(all_date_elements)} 個記錄都已檢查完畢")
+                        break
+                    elif reached_bottom:
+                        print("已到達頁面底部")
+                        break
+                    elif no_new_content:
+                        print("捲動過多但無新內容，結束搜尋")
                         break
                 
-                print(f"第 {page_count} 頁搜尋完成，找到 {current_page_results} 筆匹配記錄")
+                print(f"第 {page_count} 頁搜尋完成")
+                print(f"📊 統計: 總共 {len(all_date_elements)} 個記錄，已檢查 {len(processed_elements)} 個，找到匹配 {current_page_results} 筆")
                 
                 # 🔄 檢查是否有下一頁
                 print("檢查是否有下一頁...")
