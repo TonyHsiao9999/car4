@@ -4138,41 +4138,370 @@ def favicon():
 @app.route('/latest-dispatch')
 def latest_dispatch():
     """查看最新派車結果"""
-    return '''
-    <!DOCTYPE html>
-    <html lang="zh-TW">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>最新派車結果</title>
-        <style>
-            body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
-            .container { max-width: 1000px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-            .back-button { 
-                background-color: #2196F3; 
-                color: white; 
-                padding: 10px 20px; 
-                text-decoration: none; 
-                border-radius: 4px; 
-                display: inline-block; 
-                margin-bottom: 20px; 
+    try:
+        import re
+        
+        # 讀取 search_result.txt 檔案
+        result_file = 'search_result.txt'
+        results = []
+        file_info = {
+            'exists': False,
+            'query_time': '未知',
+            'search_date': '未知',
+            'total_attempts': 0,
+            'total_records': 0,
+            'matched_records': 0
+        }
+        
+        if os.path.exists(result_file):
+            file_info['exists'] = True
+            
+            with open(result_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            if content.strip():
+                # 解析檔案標題資訊
+                lines = content.split('\n')
+                for line in lines:
+                    if '派車結果查詢時間:' in line:
+                        file_info['query_time'] = line.split(':', 1)[1].strip()
+                    elif '搜尋目標日期:' in line:
+                        file_info['search_date'] = line.split(':', 1)[1].strip()
+                    elif '總共嘗試次數:' in line:
+                        try:
+                            file_info['total_attempts'] = int(re.search(r'\d+', line).group())
+                        except:
+                            pass
+                    elif '總共檢查記錄數:' in line:
+                        try:
+                            file_info['total_records'] = int(re.search(r'\d+', line).group())
+                        except:
+                            pass
+                    elif '符合條件的已派車記錄數:' in line:
+                        try:
+                            file_info['matched_records'] = int(re.search(r'\d+', line).group())
+                        except:
+                            pass
+                
+                # 解析派車記錄
+                # 尋找以 "🚗 已派車記錄" 開頭的區塊
+                record_pattern = r'🚗 已派車記錄 \d+.*?\n(.*?)(?=🚗 已派車記錄|\Z)'
+                record_matches = re.findall(record_pattern, content, re.DOTALL)
+                
+                for match in record_matches:
+                    record_data = {'date_time': '', 'car_number': '', 'driver': '', 'amount': ''}
+                    
+                    # 解析每個欄位
+                    for line in match.split('\n'):
+                        line = line.strip()
+                        if '預約日期/時段:' in line:
+                            record_data['date_time'] = line.split(':', 1)[1].strip()
+                        elif '車號:' in line:
+                            record_data['car_number'] = line.split(':', 1)[1].strip()
+                        elif '指派司機:' in line:
+                            record_data['driver'] = line.split(':', 1)[1].strip()
+                        elif '自付金額:' in line:
+                            record_data['amount'] = line.split(':', 1)[1].strip()
+                    
+                    # 只有當至少有日期時間資訊時才加入結果
+                    if record_data['date_time']:
+                        results.append(record_data)
+        
+        return render_template_string('''
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>最新派車結果</title>
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            margin: 0; 
+            padding: 20px; 
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+        }
+        .container { 
+            max-width: 1200px; 
+            margin: 0 auto; 
+            background: white; 
+            border-radius: 16px; 
+            padding: 30px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #f0f0f0;
+        }
+        .header h1 {
+            color: #2c3e50;
+            margin: 0;
+            font-size: 2.2em;
+            font-weight: 400;
+        }
+        .back-button { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; 
+            padding: 12px 24px; 
+            text-decoration: none; 
+            border-radius: 25px; 
+            display: inline-block; 
+            margin-bottom: 20px; 
+            font-weight: 500;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+        .back-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+        .info-panel {
+            background: linear-gradient(135deg, #e8f5e8 0%, #d4edda 100%);
+            border-left: 5px solid #28a745;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        .info-panel h3 {
+            margin: 0 0 15px 0;
+            color: #155724;
+            font-size: 1.3em;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+        .info-item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .info-label {
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 5px;
+        }
+        .info-value {
+            color: #6c757d;
+            font-size: 1.1em;
+        }
+        .table-container {
+            overflow-x: auto;
+            margin-top: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .results-table th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 18px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 1.1em;
+            border: none;
+        }
+        .results-table td {
+            padding: 16px 18px;
+            border-bottom: 1px solid #e9ecef;
+            color: #495057;
+        }
+        .results-table tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        .results-table tr:hover {
+            background-color: #e3f2fd;
+            transition: background-color 0.3s ease;
+        }
+        .no-data {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }
+        .no-data .icon {
+            font-size: 4em;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+        .no-data h3 {
+            margin: 0 0 10px 0;
+            font-size: 1.5em;
+            color: #495057;
+        }
+        .no-data p {
+            margin: 0;
+            font-size: 1.1em;
+        }
+        .actions {
+            text-align: center;
+            margin-top: 30px;
+        }
+        .action-btn {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 25px;
+            margin: 0 10px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+        }
+        .action-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(40, 167, 69, 0.4);
+        }
+        .status-badge {
+            background: #28a745;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: 500;
+        }
+        @media (max-width: 768px) {
+            .container { 
+                margin: 10px; 
+                padding: 20px; 
             }
-            h1 { color: #333; text-align: center; }
-            .placeholder { text-align: center; color: #666; padding: 40px; }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <a href="/" class="back-button">返回首頁</a>
+            .header h1 { 
+                font-size: 1.8em; 
+            }
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+            .results-table th,
+            .results-table td {
+                padding: 12px 8px;
+                font-size: 0.9em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-button">← 返回首頁</a>
+        
+        <div class="header">
             <h1>📋 最新派車結果</h1>
-            <div class="placeholder">
-                <p>此功能尚未實作，請稍後...</p>
-                <p>這裡將顯示最新的派車結果資訊</p>
-            </div>
         </div>
-    </body>
-    </html>
-    '''
+        
+        {% if file_info.exists %}
+            <div class="info-panel">
+                <h3>📊 查詢資訊摘要</h3>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <div class="info-label">🕒 查詢時間</div>
+                        <div class="info-value">{{ file_info.query_time }}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">📅 搜尋日期</div>
+                        <div class="info-value">{{ file_info.search_date }}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">🔄 嘗試次數</div>
+                        <div class="info-value">{{ file_info.total_attempts }} 次</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">📝 檢查記錄</div>
+                        <div class="info-value">{{ file_info.total_records }} 筆</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">✅ 派車記錄</div>
+                        <div class="info-value">{{ file_info.matched_records }} 筆</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">🎯 搜尋狀態</div>
+                        <div class="info-value">
+                            <span class="status-badge">已派車記錄</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            {% if results %}
+                <div class="table-container">
+                    <table class="results-table">
+                        <thead>
+                            <tr>
+                                <th>🕒 搭車日期時間</th>
+                                <th>🚗 車號</th>
+                                <th>👨‍✈️ 司機電話</th>
+                                <th>💰 搭車金額</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for result in results %}
+                            <tr>
+                                <td>{{ result.date_time or '未提供' }}</td>
+                                <td>{{ result.car_number or '未提供' }}</td>
+                                <td>{{ result.driver or '未提供' }}</td>
+                                <td>{{ result.amount or '未提供' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="no-data">
+                    <div class="icon">📭</div>
+                    <h3>未找到派車記錄</h3>
+                    <p>在指定日期內沒有找到已派車的記錄</p>
+                </div>
+            {% endif %}
+        {% else %}
+            <div class="no-data">
+                <div class="icon">📄</div>
+                <h3>尚未查詢派車結果</h3>
+                <p>請先執行「抓取派車結果」功能來獲取最新資料</p>
+            </div>
+        {% endif %}
+        
+        <div class="actions">
+            <a href="/fetch-dispatch" class="action-btn">🔄 重新抓取派車結果</a>
+            <a href="/dispatch-result-file" class="action-btn">📄 查看完整檔案</a>
+        </div>
+    </div>
+</body>
+</html>
+        ''', 
+        file_info=file_info,
+        results=results
+        )
+        
+    except Exception as e:
+        print(f"讀取派車結果時發生錯誤: {e}")
+        return f'''
+        <!DOCTYPE html>
+        <html lang="zh-TW">
+        <head>
+            <meta charset="UTF-8">
+            <title>錯誤</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 20px; }}
+                .error {{ background: #f8d7da; color: #721c24; padding: 20px; border-radius: 8px; }}
+            </style>
+        </head>
+        <body>
+            <a href="/">← 返回首頁</a>
+            <div class="error">
+                <h2>讀取派車結果時發生錯誤</h2>
+                <p>錯誤訊息: {str(e)}</p>
+            </div>
+        </body>
+        </html>
+        '''
 
 @app.route('/fetch-dispatch')
 def fetch_dispatch():
