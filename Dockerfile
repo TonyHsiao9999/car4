@@ -14,12 +14,12 @@ WORKDIR /app
 
 COPY requirements.txt .
 COPY app.py .
+COPY cron_dispatch.py .
 COPY static/ ./static/
 
 # 安裝 Python 依賴
 RUN pip install --upgrade pip
-RUN pip install --no-cache-dir flask==3.0.2
-RUN pip install --no-cache-dir playwright==1.41.2
+RUN pip install --no-cache-dir -r requirements.txt
 
 # 安裝 Playwright 瀏覽器和依賴
 RUN playwright install-deps
