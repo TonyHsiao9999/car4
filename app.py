@@ -4311,6 +4311,14 @@ def latest_dispatch():
             font-weight: 600;
             font-size: 1.1em;
             border: none;
+            line-height: 1.3;
+        }
+        .results-table th small {
+            display: block;
+            font-size: 0.8em;
+            font-weight: 400;
+            opacity: 0.9;
+            margin-top: 4px;
         }
         .results-table td {
             padding: 16px 18px;
@@ -4323,6 +4331,64 @@ def latest_dispatch():
         .results-table tr:hover {
             background-color: #e3f2fd;
             transition: background-color 0.3s ease;
+        }
+        .mobile-cards {
+            display: none;
+        }
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            border-left: 4px solid #667eea;
+        }
+        .card-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .card-icon {
+            font-size: 1.5em;
+            margin-right: 10px;
+            color: #667eea;
+        }
+        .card-title {
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        .card-field {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+            padding: 8px 0;
+        }
+        .card-field:last-child {
+            margin-bottom: 0;
+        }
+        .field-label {
+            font-weight: 600;
+            color: #495057;
+            margin-right: 15px;
+            flex-shrink: 0;
+            min-width: 40%;
+            font-size: 0.95em;
+        }
+        .field-label small {
+            display: block;
+            font-size: 0.8em;
+            font-weight: 400;
+            color: #6c757d;
+            margin-top: 2px;
+        }
+        .field-value {
+            color: #2c3e50;
+            text-align: right;
+            word-break: break-word;
         }
         .no-data {
             text-align: center;
@@ -4381,10 +4447,19 @@ def latest_dispatch():
             .info-grid {
                 grid-template-columns: 1fr;
             }
-            .results-table th,
-            .results-table td {
-                padding: 12px 8px;
-                font-size: 0.9em;
+            .table-container {
+                display: none;
+            }
+            .mobile-cards {
+                display: block;
+            }
+            .actions {
+                margin-top: 20px;
+            }
+            .action-btn {
+                display: block;
+                margin: 10px 0;
+                text-align: center;
             }
         }
     </style>
@@ -4431,14 +4506,15 @@ def latest_dispatch():
             </div>
             
             {% if results %}
+                <!-- 桌面版表格 -->
                 <div class="table-container">
                     <table class="results-table">
                         <thead>
                             <tr>
-                                <th>🕒 搭車日期時間</th>
-                                <th>🚗 車號</th>
-                                <th>👨‍✈️ 司機電話</th>
-                                <th>💰 搭車金額</th>
+                                <th>🕒 搭車日期時間<br><small>Tanggal dan waktu naik kendaraan</small></th>
+                                <th>🚗 車號<br><small>Nomor kendaraan</small></th>
+                                <th>👨‍✈️ 司機電話<br><small>Nomor telepon sopir</small></th>
+                                <th>💰 搭車金額<br><small>Jumlah biaya naik kendaraan</small></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -4452,6 +4528,46 @@ def latest_dispatch():
                             {% endfor %}
                         </tbody>
                     </table>
+                </div>
+                
+                <!-- 手機版卡片 -->
+                <div class="mobile-cards">
+                    {% for result in results %}
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-icon">🚗</div>
+                            <div class="card-title">派車記錄 {{ loop.index }}</div>
+                        </div>
+                        <div class="card-field">
+                            <div class="field-label">
+                                🕒 搭車日期時間
+                                <small>Tanggal dan waktu naik kendaraan</small>
+                            </div>
+                            <div class="field-value">{{ result.date_time or '未提供' }}</div>
+                        </div>
+                        <div class="card-field">
+                            <div class="field-label">
+                                🚗 車號
+                                <small>Nomor kendaraan</small>
+                            </div>
+                            <div class="field-value">{{ result.car_number or '未提供' }}</div>
+                        </div>
+                        <div class="card-field">
+                            <div class="field-label">
+                                👨‍✈️ 司機電話
+                                <small>Nomor telepon sopir</small>
+                            </div>
+                            <div class="field-value">{{ result.driver or '未提供' }}</div>
+                        </div>
+                        <div class="card-field">
+                            <div class="field-label">
+                                💰 搭車金額
+                                <small>Jumlah biaya naik kendaraan</small>
+                            </div>
+                            <div class="field-value">{{ result.amount or '未提供' }}</div>
+                        </div>
+                    </div>
+                    {% endfor %}
                 </div>
             {% else %}
                 <div class="no-data">
