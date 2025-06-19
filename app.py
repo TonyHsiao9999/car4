@@ -283,8 +283,25 @@ def fetch_dispatch_results():
                                         print(f"✅ 找到訂單查詢元素: {selector}")
                                         element.click()
                                         print(f"🎯 訂單查詢點擊成功")
-                                        order_clicked = True
-                                        break
+                                        
+                                        # 🔍 關鍵改進：等待頁面導航並驗證URL
+                                        print("等待頁面導航...")
+                                        driver['page'].wait_for_load_state("networkidle", timeout=10000)
+                                        driver['page'].wait_for_timeout(3000)
+                                        
+                                        # 檢查當前URL是否為訂單查詢頁面
+                                        current_url = driver['page'].url
+                                        print(f"當前URL: {current_url}")
+                                        
+                                        if "ReservationOrder" in current_url:
+                                            print("✅ 成功導航到訂單查詢頁面!")
+                                            order_clicked = True
+                                            break
+                                        else:
+                                            print(f"❌ URL不正確，預期包含 'ReservationOrder'，實際: {current_url}")
+                                            print("繼續嘗試其他選擇器...")
+                                            continue
+                                            
                             except Exception as click_error:
                                 print(f"點擊元素 {i+1} 失敗: {click_error}")
                                 continue
@@ -297,49 +314,83 @@ def fetch_dispatch_results():
                     continue
             
             if not order_clicked:
-                print("❌ 無法找到訂單查詢按鈕")
+                print("❌ 無法找到訂單查詢按鈕，嘗試直接導航到訂單查詢頁面...")
                 take_screenshot("order_query_not_found")
-                return False
+                
+                # 🎯 直接導航到訂單查詢頁面作為備用方案
+                try:
+                    print("🔄 直接導航到 ReservationOrder 頁面...")
+                    driver['page'].goto("https://www.ntpc.ltc-car.org/ReservationOrder/")
+                    driver['page'].wait_for_load_state("networkidle", timeout=15000)
+                    driver['page'].wait_for_timeout(3000)
+                    
+                    # 驗證導航是否成功
+                    current_url = driver['page'].url
+                    print(f"直接導航後的URL: {current_url}")
+                    
+                    if "ReservationOrder" in current_url:
+                        print("✅ 直接導航成功！")
+                        order_clicked = True
+                        take_screenshot("direct_navigation_success")
+                    else:
+                        print(f"❌ 直接導航也失敗，URL: {current_url}")
+                        take_screenshot("direct_navigation_failed")
+                        return False
+                        
+                except Exception as nav_error:
+                    print(f"❌ 直接導航失敗: {nav_error}")
+                    take_screenshot("direct_navigation_error")
+                    return False
             
-            # 驗證點擊是否成功 - 檢查頁面是否有變化
-            print("驗證訂單查詢點擊效果...")
+            # 🔍 強化驗證：確保在正確的訂單查詢頁面
+            print("驗證是否成功到達訂單查詢頁面...")
             try:
-                # 等待頁面變化的指標
-                change_indicators = [
+                # 再次確認URL
+                final_url = driver['page'].url
+                print(f"最終URL: {final_url}")
+                
+                if "ReservationOrder" not in final_url:
+                    print(f"❌ 最終URL不正確: {final_url}")
+                    take_screenshot("wrong_final_url")
+                    return False
+                
+                # 等待頁面特定元素載入，確認這是訂單查詢頁面
+                order_page_indicators = [
+                    '.order_list',              # 訂單列表容器
                     'text=預約記錄',
                     'text=訂單記錄', 
                     'text=預約列表',
-                    '.order-list',
                     '.reservation-list',
                     '.record-list',
                     'table',
-                    '.card',
-                    '.order-item'
+                    '.order-item',
+                    '.date',                    # 日期元素
+                    '.see_more'                 # 展開按鈕
                 ]
                 
-                page_changed = False
-                for indicator in change_indicators:
+                page_verified = False
+                for indicator in order_page_indicators:
                     try:
-                        driver['page'].wait_for_selector(indicator, timeout=3000)
-                        print(f"✅ 頁面變化確認: 找到 {indicator}")
-                        page_changed = True
+                        driver['page'].wait_for_selector(indicator, timeout=5000)
+                        print(f"✅ 訂單頁面確認: 找到 {indicator}")
+                        page_verified = True
                         break
                     except:
                         continue
                 
-                if not page_changed:
-                    print("⚠️ 未檢測到明顯的頁面變化，可能點擊未成功")
-                    take_screenshot("page_change_uncertain")
+                if not page_verified:
+                    print("⚠️ 無法確認訂單查詢頁面元素，但URL正確，繼續執行...")
+                    take_screenshot("page_elements_uncertain")
                 else:
-                    print("✅ 頁面變化確認，訂單查詢頁面已載入")
+                    print("✅ 訂單查詢頁面載入確認")
                     
             except Exception as e:
-                print(f"頁面變化檢測失敗: {e}")
+                print(f"頁面驗證失敗: {e}")
             
-            # 等待訂單列表載入
-            print("等待訂單列表載入...")
+            # 等待訂單列表完全載入
+            print("等待訂單列表完全載入...")
             driver['page'].wait_for_load_state("networkidle")
-            driver['page'].wait_for_timeout(3000)  # 額外等待確保內容載入
+            driver['page'].wait_for_timeout(5000)  # 增加等待時間確保SPA內容載入
             take_screenshot("order_list_loaded")
             
             # 🎯 使用系統當日日期 (修正格式為 2025/06/19)
