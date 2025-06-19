@@ -441,8 +441,8 @@ def fetch_dispatch_results():
                 total_elements_on_page = len(all_order_elements)
                 print(f"📊 當前頁面總共有 {total_elements_on_page} 個 order_list 元素")
                 
-                # 分析每個元素的狀態，只保留「已派車」記錄
-                dispatch_record_indices = []
+                # 🔧 改進的記錄檢測邏輯：直接使用元素而非索引
+                dispatch_records = []
                 for i, element in enumerate(all_order_elements, 1):
                     try:
                         is_visible = element.is_visible()
@@ -463,7 +463,7 @@ def fetch_dispatch_results():
                         
                         # 🎯 只記錄可見且為「已派車」狀態的記錄
                         if is_visible and is_dispatch:
-                            dispatch_record_indices.append(i)
+                            dispatch_records.append({'index': i, 'element': element})
                             print(f"✅ 元素 {i} 是已派車記錄 - 這是我們要的！")
                         elif is_visible:
                             if is_cancelled:
@@ -484,34 +484,35 @@ def fetch_dispatch_results():
                         print(f"⚠️ 檢查元素 {i} 時發生錯誤: {e}")
                         continue
                 
-                print(f"🎯 已派車記錄索引: {dispatch_record_indices}")
+                print(f"🎯 已派車記錄: {[r['index'] for r in dispatch_records]}")
                 
-                # 🎯 只檢查已派車狀態的記錄
-                for record_index in dispatch_record_indices:
+                # 🎯 直接使用元素處理已派車狀態的記錄
+                for record_info in dispatch_records:
+                    record_index = record_info['index']
+                    order_element = record_info['element']
                     try:
-                        # 🎯 基於原始碼分析的精確 CSS 選擇器
-                        # 根據 CSS 分析，.order_list 結構包含 .order_blocks.date
-                        date_selector = f'.order_list:nth-child({record_index}) .order_blocks.date .text'
-                        expand_selector = f'.order_list:nth-child({record_index}) .see_more span'
+                        # 🔧 直接從已派車元素中找日期元素
+                        print(f"🔍 處理第 {record_index} 筆已派車記錄...")
                         
-                        print(f"🔍 檢查第 {record_index} 筆記錄...")
-                        print(f"   日期選擇器: {date_selector}")
+                        # 在該元素內找日期元素
+                        date_selectors = [
+                            '.order_blocks.date .text',
+                            '.date .text',
+                            '.order_blocks .text'
+                        ]
                         
-                        # 檢查這個記錄是否存在
-                        date_element = driver['page'].query_selector(date_selector)
+                        date_element = None
+                        for date_sel in date_selectors:
+                            try:
+                                date_element = order_element.query_selector(date_sel)
+                                if date_element and date_element.is_visible():
+                                    print(f"✅ 使用選擇器 '{date_sel}' 找到日期元素")
+                                    break
+                            except:
+                                continue
+                        
                         if not date_element:
-                            # 嘗試備用選擇器
-                            alt_date_selector = f'.order_list:nth-child({record_index}) .date .text'
-                            date_element = driver['page'].query_selector(alt_date_selector)
-                            if not date_element:
-                                print(f"❌ 第 {record_index} 筆記錄不存在，結束檢查")
-                                break
-                            else:
-                                print(f"✅ 使用備用日期選擇器找到記錄")
-                        
-                        # 檢查元素是否可見
-                        if not date_element.is_visible():
-                            print(f"⚠️ 第 {record_index} 筆記錄不可見，跳過")
+                            print(f"❌ 在第 {record_index} 筆記錄中找不到日期元素")
                             continue
                         
                         # 🎯 記錄已經在前面過濾為已派車狀態，這裡直接處理
@@ -556,23 +557,22 @@ def fetch_dispatch_results():
                             driver['page'].wait_for_timeout(1000)
                             take_screenshot(f"page_{page_count}_record_{record_index}_found")
                             
-                            # 🎯 點擊展開按鈕 - 基於原始碼分析
-                            print(f"   展開選擇器: {expand_selector}")
-                            expand_button = driver['page'].query_selector(expand_selector)
+                            # 🔧 在該元素內找展開按鈕
+                            expand_selectors = [
+                                '.see_more span',
+                                '.see_more',
+                                '.see_more i'
+                            ]
                             
-                            if not expand_button:
-                                # 嘗試其他展開按鈕選擇器
-                                alt_expand_selectors = [
-                                    f'.order_list:nth-child({record_index}) > .see_more > span',
-                                    f'.order_list:nth-child({record_index}) .see_more',
-                                    f'.order_list:nth-child({record_index}) .see_more i'
-                                ]
-                                
-                                for alt_expand in alt_expand_selectors:
-                                    expand_button = driver['page'].query_selector(alt_expand)
+                            expand_button = None
+                            for expand_sel in expand_selectors:
+                                try:
+                                    expand_button = order_element.query_selector(expand_sel)
                                     if expand_button and expand_button.is_visible():
-                                        print(f"✅ 使用備用展開選擇器: {alt_expand}")
+                                        print(f"✅ 使用選擇器 '{expand_sel}' 找到展開按鈕")
                                         break
+                                except:
+                                    continue
                             
                             if expand_button and expand_button.is_visible():
                                 print(f"✅ 找到展開按鈕，準備點擊...")
@@ -585,51 +585,57 @@ def fetch_dispatch_results():
                                 driver['page'].wait_for_timeout(3000)
                                 take_screenshot(f"page_{page_count}_record_{record_index}_expanded")
                                 
-                                # 🎯 基於原始碼分析的精確資訊提取選擇器
+                                # 🔧 直接在該元素內提取資訊
                                 try:
-                                    # 車號選擇器 - 基於 CSS 結構 .order_blocks.style2 .blocks
+                                    # 車號選擇器 - 在該元素內搜尋
                                     car_selectors = [
-                                        f'.order_list:nth-child({record_index}) .order_blocks.style2 .blocks > div:nth-child(2)',
-                                        f'.order_list:nth-child({record_index}) .style2 > .blocks > div:nth-child(2)',
-                                        f'.order_list:nth-child({record_index}) .blocks > div:nth-child(2)'
+                                        '.order_blocks.style2 .blocks > div:nth-child(2)',
+                                        '.style2 > .blocks > div:nth-child(2)',
+                                        '.blocks > div:nth-child(2)'
                                     ]
                                     
                                     car_number = "未找到"
                                     for car_selector in car_selectors:
-                                        car_element = driver['page'].query_selector(car_selector)
-                                        if car_element and car_element.is_visible():
-                                            car_number = car_element.inner_text().strip()
-                                            print(f"🚗 車號選擇器成功: {car_selector}")
-                                            break
+                                        try:
+                                            car_element = order_element.query_selector(car_selector)
+                                            if car_element and car_element.is_visible():
+                                                car_number = car_element.inner_text().strip()
+                                                print(f"🚗 車號選擇器成功: {car_selector}")
+                                                break
+                                        except:
+                                            continue
                                     print(f"🚗 車號: {car_number}")
                                     
-                                    # 指派司機選擇器 - 基於 CSS 結構
+                                    # 指派司機選擇器 - 在該元素內搜尋
                                     driver_selectors = [
-                                        f'.order_list:nth-child({record_index}) .order_blocks .blocks > div:nth-child(1)',
-                                        f'.order_list:nth-child({record_index}) .blocks > div:nth-child(1)'
+                                        '.order_blocks .blocks > div:nth-child(1)',
+                                        '.blocks > div:nth-child(1)'
                                     ]
                                     
                                     driver_name = "未找到"
                                     for driver_selector in driver_selectors:
-                                        driver_element = driver['page'].query_selector(driver_selector)
-                                        if driver_element and driver_element.is_visible():
-                                            driver_name = driver_element.inner_text().strip()
-                                            print(f"👨‍✈️ 司機選擇器成功: {driver_selector}")
-                                            break
+                                        try:
+                                            driver_element = order_element.query_selector(driver_selector)
+                                            if driver_element and driver_element.is_visible():
+                                                driver_name = driver_element.inner_text().strip()
+                                                print(f"👨‍✈️ 司機選擇器成功: {driver_selector}")
+                                                break
+                                        except:
+                                            continue
                                     print(f"👨‍✈️ 指派司機: {driver_name}")
                                     
-                                    # 自付金額選擇器 - 基於 CSS 結構和 .open 類別
+                                    # 自付金額選擇器 - 在該元素內搜尋
                                     amount_selectors = [
-                                        f'.order_list:nth-child({record_index}).open .order_blocks:nth-child(5) .blocks:nth-child(2)',
-                                        f'.order_list:nth-child({record_index}) .order_blocks:nth-child(5) .blocks:nth-child(2)',
-                                        f'.order_list:nth-child({record_index}) .order_blocks .blocks:contains("元")',
-                                        f'.order_list:nth-child({record_index}) .blocks .text:contains("元")'
+                                        '.order_blocks:nth-child(5) .blocks:nth-child(2)',
+                                        '.order_blocks .blocks:contains("元")',
+                                        '.blocks .text:contains("元")',
+                                        '.text:contains("元")'
                                     ]
                                     
                                     self_pay_amount = "未找到"
                                     for amount_selector in amount_selectors:
                                         try:
-                                            amount_element = driver['page'].query_selector(amount_selector)
+                                            amount_element = order_element.query_selector(amount_selector)
                                             if amount_element and amount_element.is_visible():
                                                 amount_text = amount_element.inner_text().strip()
                                                 if amount_text and ('元' in amount_text or amount_text.isdigit()):
@@ -676,7 +682,7 @@ def fetch_dispatch_results():
                 print("檢查是否有下一頁...")
                 
                 # 先檢查是否還有更多記錄在當前頁面
-                print(f"📊 當前頁面統計: 總共 {total_elements_on_page} 個元素，已派車記錄 {len(dispatch_record_indices)} 個，匹配記錄 {current_page_results} 筆")
+                print(f"📊 當前頁面統計: 總共 {total_elements_on_page} 個元素，已派車記錄 {len(dispatch_records)} 個，匹配記錄 {current_page_results} 筆")
                 
                 # 捲動到頁面底部尋找分頁按鈕
                 driver['page'].evaluate("window.scrollTo(0, document.body.scrollHeight)")
@@ -734,6 +740,16 @@ def fetch_dispatch_results():
                             if is_visible and is_enabled:
                                 print(f"✅ 找到可用的下一頁按鈕: {selector}")
                                 
+                                # 🔧 記錄翻頁前的頁面內容用於驗證
+                                old_page_content = None
+                                try:
+                                    first_record = driver['page'].query_selector('.order_list:nth-child(1) .date .text')
+                                    if first_record:
+                                        old_page_content = first_record.inner_text().strip()
+                                        print(f"📋 翻頁前第一筆記錄: {old_page_content}")
+                                except:
+                                    pass
+                                
                                 # 記錄點擊前的URL
                                 current_url = driver['page'].url
                                 print(f"點擊前URL: {current_url}")
@@ -744,15 +760,43 @@ def fetch_dispatch_results():
                                 print(f"✅ 點擊下一頁按鈕成功")
                                 
                                 # 等待頁面變化
-                                driver['page'].wait_for_timeout(2000)
-                                
-                                # 檢查URL是否改變或內容是否更新
-                                new_url = driver['page'].url
-                                print(f"點擊後URL: {new_url}")
+                                driver['page'].wait_for_timeout(3000)
                                 
                                 # 等待新內容載入
                                 driver['page'].wait_for_load_state("networkidle")
-                                driver['page'].wait_for_timeout(3000)
+                                driver['page'].wait_for_timeout(2000)
+                                
+                                # 🔧 驗證頁面是否真的改變了
+                                page_changed = False
+                                new_page_content = None
+                                try:
+                                    first_record_new = driver['page'].query_selector('.order_list:nth-child(1) .date .text')
+                                    if first_record_new:
+                                        new_page_content = first_record_new.inner_text().strip()
+                                        print(f"📋 翻頁後第一筆記錄: {new_page_content}")
+                                        
+                                        if old_page_content and new_page_content:
+                                            if old_page_content != new_page_content:
+                                                page_changed = True
+                                                print(f"✅ 頁面內容已改變: {old_page_content} → {new_page_content}")
+                                            else:
+                                                print(f"❌ 頁面內容沒有改變，翻頁可能失敗")
+                                        else:
+                                            # 如果無法比較，檢查URL
+                                            new_url = driver['page'].url
+                                            if current_url != new_url:
+                                                page_changed = True
+                                                print(f"✅ URL已改變: {current_url} → {new_url}")
+                                            else:
+                                                print(f"⚠️ 無法確認頁面是否改變，假設成功")
+                                                page_changed = True
+                                except Exception as check_error:
+                                    print(f"⚠️ 檢查頁面變化時發生錯誤: {check_error}")
+                                    page_changed = True  # 假設成功
+                                
+                                if not page_changed:
+                                    print(f"❌ 翻頁失敗，繼續嘗試其他選擇器")
+                                    continue
                                 
                                 # 🔝 切換頁面後立即捲動到最頂部
                                 print("切換頁面後，捲動到最頂部...")
