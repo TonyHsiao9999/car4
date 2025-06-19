@@ -309,17 +309,8 @@ def fetch_dispatch_results():
             # 分析訂單記錄
             print("開始分析訂單記錄...")
             
-            # 🎯 使用新的 CSS 選擇器尋找預約記錄
+            # 🎯 使用新的 CSS 選擇器尋找預約記錄（支援分頁和捲動）
             print("使用新的 CSS 選擇器尋找預約記錄...")
-            
-            # 尋找所有包含日期的元素
-            date_elements = driver['page'].query_selector_all('.accept .date .text')
-            print(f"找到 {len(date_elements)} 個日期元素")
-            
-            if not date_elements:
-                print("❌ 未找到任何日期元素")
-                take_screenshot("no_date_elements_found")
-                return False
             
             # 清空結果檔案
             result_file = "search_result.txt"
@@ -327,132 +318,251 @@ def fetch_dispatch_results():
                 f.write("")  # 清空檔案
             
             results = []
-            matching_found = False
+            page_count = 1
+            total_records_checked = 0
             
-            for i, date_element in enumerate(date_elements):
-                try:
-                    date_text = date_element.inner_text().strip()
-                    print(f"檢查日期 {i+1}: {date_text}")
+            # 🔄 開始分頁搜尋迴圈
+            while True:
+                print(f"\n=== 搜尋第 {page_count} 頁 ===")
+                take_screenshot(f"page_{page_count}_start")
+                
+                # 🔽 先捲動到頁面頂部
+                print("捲動到頁面頂部...")
+                driver['page'].evaluate("window.scrollTo(0, 0)")
+                driver['page'].wait_for_timeout(1000)
+                
+                # 📋 搜尋當前頁面的所有記錄
+                current_page_results = 0
+                scroll_position = 0
+                scroll_step = 500  # 每次捲動500像素
+                
+                # 🔄 捲動搜尋迴圈
+                while True:
+                    print(f"當前捲動位置: {scroll_position}px")
                     
-                    # 檢查是否包含目標日期
-                    if target_date in date_text:
-                        print(f"✅ 找到匹配日期的記錄 {i+1}: {date_text}")
-                        matching_found = True
-                        
-                        # 🎯 找到對應的展開按鈕並點擊
+                    # 尋找當前可見區域的日期元素
+                    date_elements = driver['page'].query_selector_all('.accept .date .text')
+                    print(f"在當前位置找到 {len(date_elements)} 個日期元素")
+                    
+                    # 記錄本次迴圈處理的記錄數
+                    loop_processed = 0
+                    
+                    for i, date_element in enumerate(date_elements):
                         try:
-                            # 尋找同一個記錄容器中的展開按鈕
-                            # 先找到包含這個日期元素的父容器
-                            parent_record = date_element
-                            attempts = 0
-                            expand_button = None
+                            # 檢查元素是否在可視範圍內
+                            is_visible = date_element.is_visible()
+                            if not is_visible:
+                                continue
+                                
+                            date_text = date_element.inner_text().strip()
+                            total_records_checked += 1
+                            print(f"檢查記錄 {total_records_checked}: {date_text}")
                             
-                            # 向上尋找父容器，直到找到展開按鈕
-                            while attempts < 5:
+                            # 檢查是否包含目標日期
+                            if target_date in date_text:
+                                print(f"✅ 找到匹配日期的記錄: {date_text}")
+                                current_page_results += 1
+                                
+                                # 🎯 將匹配的元素捲動到可視範圍
+                                date_element.scroll_into_view_if_needed()
+                                driver['page'].wait_for_timeout(1000)
+                                
+                                # 🎯 找到對應的展開按鈕並點擊
                                 try:
-                                    parent_record = parent_record.locator('xpath=..').first
-                                    expand_button = parent_record.query_selector('.dispatch .icon-slide_down')
+                                    # 尋找同一個記錄容器中的展開按鈕
+                                    parent_record = date_element
+                                    attempts = 0
+                                    expand_button = None
+                                    
+                                    # 向上尋找父容器，直到找到展開按鈕
+                                    while attempts < 5:
+                                        try:
+                                            parent_record = parent_record.locator('xpath=..').first
+                                            expand_button = parent_record.query_selector('.dispatch .icon-slide_down')
+                                            if expand_button:
+                                                break
+                                            attempts += 1
+                                        except:
+                                            break
+                                    
                                     if expand_button:
-                                        break
-                                    attempts += 1
-                                except:
-                                    break
-                            
-                            if expand_button:
-                                print(f"找到展開按鈕，準備點擊...")
-                                expand_button.click()
-                                print(f"✅ 展開按鈕點擊成功")
-                                
-                                # 等待展開內容載入
-                                driver['page'].wait_for_timeout(3000)
-                                take_screenshot(f"record_{i+1}_expanded")
-                                
-                                # 在展開的內容中尋找車號、指派司機和自付金額
-                                expanded_content = parent_record.inner_text()
-                                print(f"展開內容: {expanded_content}")
-                                
-                                # 🎯 提取所需資訊
-                                import re
-                                
-                                # 提取車號
-                                car_number_match = re.search(r'車號[：:\s]*([A-Z0-9\-]+)', expanded_content)
-                                if not car_number_match:
-                                    car_number_match = re.search(r'([A-Z]{2,3}-\d{4})', expanded_content)
-                                
-                                # 提取指派司機
-                                driver_match = re.search(r'指派司機[：:\s]*([^\n\r]+)', expanded_content)
-                                if not driver_match:
-                                    driver_match = re.search(r'司機[：:\s]*([^\n\r]+)', expanded_content)
-                                
-                                # 🆕 提取自付金額
-                                amount_match = re.search(r'自付金額[：:\s]*([0-9,]+)', expanded_content)
-                                if not amount_match:
-                                    amount_match = re.search(r'金額[：:\s]*([0-9,]+)', expanded_content)
-                                    if not amount_match:
-                                        amount_match = re.search(r'(\d+)元', expanded_content)
+                                        print(f"找到展開按鈕，準備點擊...")
+                                        expand_button.scroll_into_view_if_needed()
+                                        driver['page'].wait_for_timeout(500)
+                                        expand_button.click()
+                                        print(f"✅ 展開按鈕點擊成功")
+                                        
+                                        # 等待展開內容載入
+                                        driver['page'].wait_for_timeout(3000)
+                                        take_screenshot(f"page_{page_count}_record_{current_page_results}_expanded")
+                                        
+                                        # 在展開的內容中尋找車號、指派司機和自付金額
+                                        expanded_content = parent_record.inner_text()
+                                        print(f"展開內容: {expanded_content}")
+                                        
+                                        # 🎯 提取所需資訊
+                                        import re
+                                        
+                                        # 提取車號
+                                        car_number_match = re.search(r'車號[：:\s]*([A-Z0-9\-]+)', expanded_content)
+                                        if not car_number_match:
+                                            car_number_match = re.search(r'([A-Z]{2,3}-\d{4})', expanded_content)
+                                        
+                                        # 提取指派司機
+                                        driver_match = re.search(r'指派司機[：:\s]*([^\n\r]+)', expanded_content)
+                                        if not driver_match:
+                                            driver_match = re.search(r'司機[：:\s]*([^\n\r]+)', expanded_content)
+                                        
+                                        # 🆕 提取自付金額
+                                        amount_match = re.search(r'自付金額[：:\s]*([0-9,]+)', expanded_content)
                                         if not amount_match:
-                                            amount_match = re.search(r'費用[：:\s]*([0-9,]+)', expanded_content)
-                                
-                                # 整理提取的資訊
-                                reservation_date_time = date_text
-                                car_number = car_number_match.group(1).strip() if car_number_match else "未找到"
-                                driver_name = driver_match.group(1).strip() if driver_match else "未找到"
-                                self_pay_amount = amount_match.group(1).strip() if amount_match else "未找到"
-                                
-                                result_entry = {
-                                    'date_time': reservation_date_time,
-                                    'car_number': car_number,
-                                    'driver': driver_name,
-                                    'self_pay_amount': self_pay_amount
-                                }
-                                
-                                results.append(result_entry)
-                                print(f"✅ 提取結果: {result_entry}")
-                                
-                            else:
-                                print(f"❌ 未找到展開按鈕")
-                                take_screenshot(f"no_expand_button_{i+1}")
-                                
-                        except Exception as expand_error:
-                            print(f"展開記錄時發生錯誤: {expand_error}")
-                            take_screenshot(f"expand_error_{i+1}")
-                            continue
+                                            amount_match = re.search(r'金額[：:\s]*([0-9,]+)', expanded_content)
+                                            if not amount_match:
+                                                amount_match = re.search(r'(\d+)元', expanded_content)
+                                                if not amount_match:
+                                                    amount_match = re.search(r'費用[：:\s]*([0-9,]+)', expanded_content)
+                                        
+                                        # 整理提取的資訊
+                                        reservation_date_time = date_text
+                                        car_number = car_number_match.group(1).strip() if car_number_match else "未找到"
+                                        driver_name = driver_match.group(1).strip() if driver_match else "未找到"
+                                        self_pay_amount = amount_match.group(1).strip() if amount_match else "未找到"
+                                        
+                                        result_entry = {
+                                            'date_time': reservation_date_time,
+                                            'car_number': car_number,
+                                            'driver': driver_name,
+                                            'self_pay_amount': self_pay_amount,
+                                            'page': page_count
+                                        }
+                                        
+                                        results.append(result_entry)
+                                        print(f"✅ 提取結果: {result_entry}")
+                                        
+                                        # 收合展開的記錄以避免影響後續搜尋
+                                        try:
+                                            close_button = parent_record.query_selector('.dispatch .icon-slide_up')
+                                            if close_button:
+                                                close_button.click()
+                                                driver['page'].wait_for_timeout(1000)
+                                        except:
+                                            pass
+                                        
+                                    else:
+                                        print(f"❌ 未找到展開按鈕")
+                                        take_screenshot(f"page_{page_count}_no_expand_button_{current_page_results}")
+                                        
+                                except Exception as expand_error:
+                                    print(f"展開記錄時發生錯誤: {expand_error}")
+                                    take_screenshot(f"page_{page_count}_expand_error_{current_page_results}")
+                                    continue
+                                    
+                            loop_processed += 1
                             
-                except Exception as e:
-                    print(f"處理日期元素 {i+1} 時發生錯誤: {e}")
-                    continue
+                        except Exception as e:
+                            print(f"處理日期元素時發生錯誤: {e}")
+                            continue
+                    
+                    # 🔽 捲動到下一個位置
+                    scroll_position += scroll_step
+                    previous_height = driver['page'].evaluate("document.body.scrollHeight")
+                    driver['page'].evaluate(f"window.scrollTo(0, {scroll_position})")
+                    driver['page'].wait_for_timeout(2000)  # 等待內容載入
+                    
+                    # 檢查是否已經到達頁面底部
+                    current_height = driver['page'].evaluate("document.body.scrollHeight")
+                    current_scroll = driver['page'].evaluate("window.pageYOffset + window.innerHeight")
+                    
+                    print(f"頁面高度: {current_height}, 捲動位置: {current_scroll}")
+                    
+                    # 如果沒有新內容或已到底部，結束當前頁面的捲動
+                    if current_scroll >= current_height - 100 or (loop_processed == 0 and scroll_position > 1000):
+                        print("已到達頁面底部或無更多內容")
+                        break
+                
+                print(f"第 {page_count} 頁搜尋完成，找到 {current_page_results} 筆匹配記錄")
+                
+                # 🔄 檢查是否有下一頁
+                print("檢查是否有下一頁...")
+                
+                # 捲動到頁面底部尋找分頁按鈕
+                driver['page'].evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                driver['page'].wait_for_timeout(2000)
+                take_screenshot(f"page_{page_count}_bottom")
+                
+                # 使用精確的下一頁按鈕 CSS 選擇器
+                next_page_selectors = [
+                    'i.icon-pager_next',  # 主要選擇器
+                    'a:has-text("下一頁")',  # 備用選擇器
+                    'button:has-text("下一頁")',
+                    'a:has-text(">")',
+                    'button:has-text(">")'
+                ]
+                
+                next_page_found = False
+                for selector in next_page_selectors:
+                    try:
+                        next_button = driver['page'].query_selector(selector)
+                        if next_button and next_button.is_visible():
+                            print(f"找到下一頁按鈕: {selector}")
+                            next_button.scroll_into_view_if_needed()
+                            driver['page'].wait_for_timeout(1000)
+                            next_button.click()
+                            print(f"✅ 點擊下一頁成功")
+                            
+                            # 等待新頁面載入
+                            driver['page'].wait_for_load_state("networkidle")
+                            driver['page'].wait_for_timeout(3000)
+                            
+                            page_count += 1
+                            next_page_found = True
+                            break
+                    except Exception as e:
+                        continue
+                
+                if not next_page_found:
+                    print("❌ 沒有找到下一頁按鈕，搜尋結束")
+                    break
+                
+                # 防止無限迴圈，最多搜尋10頁
+                if page_count > 10:
+                    print("⚠️ 已搜尋10頁，停止搜尋")
+                    break
             
             # 🎯 寫入結果檔案
+            print("將搜尋結果寫入 search_result.txt...")
+            
+            result_content = f"派車結果查詢時間: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+            result_content += f"搜尋目標日期: {target_date}\n"
+            result_content += f"總共搜尋頁數: {page_count}\n"
+            result_content += f"總共檢查記錄數: {total_records_checked}\n"
+            result_content += f"符合條件記錄數: {len(results)}\n"
+            result_content += f"{'='*60}\n\n"
+            
             if results:
-                print("將結果寫入 search_result.txt...")
-                
-                result_content = f"派車結果查詢時間: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-                
                 for i, result in enumerate(results, 1):
-                    result_content += f"記錄 {i}:\n"
+                    result_content += f"記錄 {i} (第 {result['page']} 頁):\n"
                     result_content += f"預約日期/時段: {result['date_time']}\n"
                     result_content += f"車號: {result['car_number']}\n"
                     result_content += f"指派司機: {result['driver']}\n"
                     result_content += f"自付金額: {result['self_pay_amount']}\n"
                     result_content += f"{'='*50}\n\n"
                 
-                # 寫入檔案
-                with open(result_file, 'w', encoding='utf-8') as f:
-                    f.write(result_content)
-                
-                print(f"✅ 派車結果已成功寫入 search_result.txt")
-                print(f"共找到 {len(results)} 筆匹配記錄")
-                print(f"結果內容:\n{result_content}")
-                
-                take_screenshot("result_saved")
-                return True
+                print(f"✅ 找到 {len(results)} 筆匹配記錄")
             else:
-                if matching_found:
-                    print(f"⚠️ 找到匹配日期但無法提取詳細資訊")
-                else:
-                    print(f"❌ 沒有找到日期為 {target_date} 的預約記錄")
-                take_screenshot("no_results")
-                return False
+                result_content += "❌ 未找到符合條件的記錄\n\n"
+                print(f"❌ 沒有找到日期為 {target_date} 的預約記錄")
+            
+            # 寫入檔案
+            with open(result_file, 'w', encoding='utf-8') as f:
+                f.write(result_content)
+            
+            print(f"✅ 搜尋結果已寫入 search_result.txt")
+            print(f"搜尋統計: 共搜尋 {page_count} 頁，檢查 {total_records_checked} 筆記錄，找到 {len(results)} 筆匹配")
+            print(f"結果內容:\n{result_content}")
+            
+            take_screenshot("final_result_saved")
+            return len(results) > 0
             
         except Exception as e:
             print(f"訂單查詢過程發生錯誤: {e}")
