@@ -3585,35 +3585,194 @@ def index():
     <head>
         <title>長照交通接送預約系統</title>
         <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            .container { max-width: 800px; margin: 0 auto; }
+            body { 
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                margin: 0; 
+                padding: 20px; 
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
+            }
+            .container { 
+                max-width: 1200px; 
+                margin: 0 auto; 
+                background: white; 
+                border-radius: 16px; 
+                padding: 30px; 
+                box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            }
+            .header {
+                text-align: center;
+                margin-bottom: 40px;
+                padding-bottom: 20px;
+                border-bottom: 3px solid #f0f0f0;
+            }
+            .header h1 {
+                color: #2c3e50;
+                margin: 0;
+                font-size: 2.5em;
+                font-weight: 300;
+            }
+            .header p {
+                color: #7f8c8d;
+                margin: 10px 0 0 0;
+                font-size: 1.1em;
+            }
+            .section {
+                margin-bottom: 40px;
+                padding: 25px;
+                border-radius: 12px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            }
+            .section-reservation {
+                background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+                border-left: 5px solid #2196f3;
+            }
+            .section-dispatch {
+                background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+                border-left: 5px solid #9c27b0;
+            }
+            .section-logs {
+                background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+                border-left: 5px solid #ff9800;
+            }
+            .section h2 {
+                margin: 0 0 20px 0;
+                font-size: 1.6em;
+                font-weight: 500;
+            }
+            .section-reservation h2 { color: #1976d2; }
+            .section-dispatch h2 { color: #7b1fa2; }
+            .section-logs h2 { color: #f57c00; }
+            .section p {
+                margin: 0 0 20px 0;
+                color: #5a6c7d;
+                line-height: 1.5;
+            }
+            .buttons {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+                gap: 15px;
+            }
             .button { 
-                background-color: #4CAF50; 
-                color: white; 
-                padding: 15px 32px; 
+                background: white;
+                color: #2c3e50;
+                padding: 18px 24px; 
                 text-align: center; 
                 text-decoration: none; 
-                display: inline-block; 
+                display: block; 
                 font-size: 16px; 
-                margin: 4px 2px; 
-                cursor: pointer; 
-                border: none; 
-                border-radius: 4px; 
+                font-weight: 500;
+                border: 2px solid transparent;
+                border-radius: 10px; 
+                transition: all 0.3s ease;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            }
+            .button:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+            }
+            .section-reservation .button:hover {
+                border-color: #2196f3;
+                background: #e3f2fd;
+            }
+            .section-dispatch .button:hover {
+                border-color: #9c27b0;
+                background: #f3e5f5;
+            }
+            .section-logs .button:hover {
+                border-color: #ff9800;
+                background: #fff3e0;
+            }
+            .icon {
+                font-size: 1.2em;
+                margin-right: 8px;
+            }
+            .status-bar {
+                background: #ecf0f1;
+                padding: 15px;
+                border-radius: 8px;
+                margin-bottom: 30px;
+                text-align: center;
+                color: #34495e;
+            }
+            @media (max-width: 768px) {
+                .container { 
+                    margin: 10px; 
+                    padding: 20px; 
+                }
+                .header h1 { 
+                    font-size: 2em; 
+                }
+                .buttons {
+                    grid-template-columns: 1fr;
+                }
+                .section {
+                    padding: 20px;
+                }
             }
         </style>
     </head>
     <body>
         <div class="container">
-            <h1>長照交通接送預約系統</h1>
-            <a href="/reserve" class="button">🚗 開始預約</a>
-            <a href="/latest-dispatch" class="button">📋 看最新派車結果</a>
-            <a href="/fetch-dispatch" class="button">🔄 抓取派車結果</a>
-            <a href="/cron-logs" class="button">📊 查看 Cron Job 日誌</a>
-            <a href="/dispatch-cron-logs" class="button">📊 查看派車查詢日誌</a>
-            <a href="/screenshots" class="button">📸 查看預約時截圖</a>
-            <a href="/dispatch-screenshots" class="button">🔍 查看尋找派車結果截圖</a>
-            <a href="/dispatch-result-file" class="button">📄 查看派車結果本地檔案</a>
+            <div class="header">
+                <h1>🚗 長照交通接送預約系統</h1>
+                <p>新北市長期照護交通預約服務 - 智能自動化管理平台</p>
+            </div>
+            
+            <div class="status-bar">
+                <strong>🕒 排程狀態：</strong>每週一和週四 00:10 自動執行派車結果查詢 | 
+                <strong>🔄 系統狀態：</strong>正常運行中
+            </div>
+            
+            <!-- 第一區：預約功能 -->
+            <div class="section section-reservation">
+                <h2><span class="icon">📋</span>預約功能</h2>
+                <p>執行長照交通預約作業，包含完整的預約流程和過程記錄</p>
+                <div class="buttons">
+                    <a href="/reserve" class="button">
+                        <span class="icon">🚗</span>開始預約
+                    </a>
+                    <a href="/screenshots" class="button">
+                        <span class="icon">📸</span>查看預約時截圖
+                    </a>
+                </div>
+            </div>
+            
+            <!-- 第二區：派車查詢 -->
+            <div class="section section-dispatch">
+                <h2><span class="icon">🔍</span>派車查詢</h2>
+                <p>查詢和管理派車結果，提供多種檢視和匯出功能</p>
+                <div class="buttons">
+                    <a href="/fetch-dispatch" class="button">
+                        <span class="icon">🔄</span>抓取派車結果
+                    </a>
+                    <a href="/latest-dispatch" class="button">
+                        <span class="icon">📋</span>看最新派車結果
+                    </a>
+                    <a href="/dispatch-screenshots" class="button">
+                        <span class="icon">🔍</span>查看尋找派車結果截圖
+                    </a>
+                    <a href="/dispatch-result-file" class="button">
+                        <span class="icon">📄</span>查看派車結果本地檔案
+                    </a>
+                </div>
+            </div>
+            
+            <!-- 第三區：日誌類 -->
+            <div class="section section-logs">
+                <h2><span class="icon">📊</span>系統日誌</h2>
+                <p>監控系統執行狀況，查看排程任務和操作記錄</p>
+                <div class="buttons">
+                    <a href="/cron-logs" class="button">
+                        <span class="icon">📊</span>查看 Cron Job 日誌
+                    </a>
+                    <a href="/dispatch-cron-logs" class="button">
+                        <span class="icon">📈</span>查看派車查詢日誌
+                    </a>
+                </div>
+            </div>
         </div>
     </body>
     </html>
