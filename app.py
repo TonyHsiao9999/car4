@@ -233,15 +233,32 @@ def fetch_dispatch_results():
             driver['page'].wait_for_load_state("networkidle")
             driver['page'].wait_for_timeout(2000)
             
-            # 🎯 使用多種策略尋找訂單查詢按鈕
+            # 🎯 基於原始碼分析的訂單查詢按鈕選擇器
+            # 這是一個單頁面應用程式，需要等待 JavaScript 動態載入內容
+            print("等待 JavaScript 內容載入...")
+            driver['page'].wait_for_timeout(3000)  # 等待 SPA 載入
+            
             order_selectors = [
-                '.page:nth-child(2) .pc_header li:nth-child(2)',  # 新的精確選擇器
-                '.page:nth-child(2) li:nth-child(2) h2:nth-child(1)',  # 原始選擇器
+                # 基於 SPA 結構的選擇器
+                '.page:nth-child(2) li:nth-child(2) h2:nth-child(1)',  # 原始精確選擇器
                 '.page:nth-child(2) li:nth-child(2)',  # 簡化版本
-                '.page li:contains("訂單查詢")',  # 包含文字
+                '.page li:nth-child(2)',  # 更簡化
+                
+                # 文字內容匹配
                 'li:has-text("訂單查詢")',  # Playwright文字選擇器
                 'h2:has-text("訂單查詢")',  # h2標籤文字選擇器
-                '*:has-text("訂單查詢")'  # 通用文字選擇器
+                'a:has-text("訂單查詢")',   # 連結文字選擇器
+                '*:has-text("訂單查詢")',   # 通用文字選擇器
+                
+                # 導航相關選擇器
+                'nav li:nth-child(2)',      # 導航第二項
+                '.nav li:nth-child(2)',     # 導航類別第二項
+                '.menu li:nth-child(2)',    # 選單第二項
+                
+                # 更寬泛的匹配
+                'li:contains("訂單")',      # 包含"訂單"的列表項
+                'li:contains("查詢")',      # 包含"查詢"的列表項
+                '*:contains("訂單查詢")'    # 包含完整文字的任何元素
             ]
             
             order_clicked = False
@@ -371,9 +388,10 @@ def fetch_dispatch_results():
                 
                 for record_index in range(1, max_records_to_check + 1):
                     try:
-                        # 🎯 使用您提供的精確 CSS 選擇器
-                        date_selector = f'.order_list:nth-child({record_index}) .date .text'
-                        expand_selector = f'.order_list:nth-child({record_index}) > .see_more > span'
+                        # 🎯 基於原始碼分析的精確 CSS 選擇器
+                        # 根據 CSS 分析，.order_list 結構包含 .order_blocks.date
+                        date_selector = f'.order_list:nth-child({record_index}) .order_blocks.date .text'
+                        expand_selector = f'.order_list:nth-child({record_index}) .see_more span'
                         
                         print(f"🔍 檢查第 {record_index} 筆記錄...")
                         print(f"   日期選擇器: {date_selector}")
@@ -381,8 +399,14 @@ def fetch_dispatch_results():
                         # 檢查這個記錄是否存在
                         date_element = driver['page'].query_selector(date_selector)
                         if not date_element:
-                            print(f"❌ 第 {record_index} 筆記錄不存在，結束檢查")
-                            break
+                            # 嘗試備用選擇器
+                            alt_date_selector = f'.order_list:nth-child({record_index}) .date .text'
+                            date_element = driver['page'].query_selector(alt_date_selector)
+                            if not date_element:
+                                print(f"❌ 第 {record_index} 筆記錄不存在，結束檢查")
+                                break
+                            else:
+                                print(f"✅ 使用備用日期選擇器找到記錄")
                         
                         # 檢查元素是否可見
                         if not date_element.is_visible():
@@ -407,9 +431,23 @@ def fetch_dispatch_results():
                             driver['page'].wait_for_timeout(1000)
                             take_screenshot(f"page_{page_count}_record_{record_index}_found")
                             
-                            # 🎯 點擊展開按鈕
+                            # 🎯 點擊展開按鈕 - 基於原始碼分析
                             print(f"   展開選擇器: {expand_selector}")
                             expand_button = driver['page'].query_selector(expand_selector)
+                            
+                            if not expand_button:
+                                # 嘗試其他展開按鈕選擇器
+                                alt_expand_selectors = [
+                                    f'.order_list:nth-child({record_index}) > .see_more > span',
+                                    f'.order_list:nth-child({record_index}) .see_more',
+                                    f'.order_list:nth-child({record_index}) .see_more i'
+                                ]
+                                
+                                for alt_expand in alt_expand_selectors:
+                                    expand_button = driver['page'].query_selector(alt_expand)
+                                    if expand_button and expand_button.is_visible():
+                                        print(f"✅ 使用備用展開選擇器: {alt_expand}")
+                                        break
                             
                             if expand_button and expand_button.is_visible():
                                 print(f"✅ 找到展開按鈕，準備點擊...")
@@ -422,27 +460,59 @@ def fetch_dispatch_results():
                                 driver['page'].wait_for_timeout(3000)
                                 take_screenshot(f"page_{page_count}_record_{record_index}_expanded")
                                 
-                                # 🎯 使用您提供的精確 CSS 選擇器提取資訊
+                                # 🎯 基於原始碼分析的精確資訊提取選擇器
                                 try:
-                                    # 車號選擇器
-                                    car_selector = f'.order_list:nth-child({record_index}) .style2 > .blocks > div:nth-child(2)'
-                                    car_element = driver['page'].query_selector(car_selector)
-                                    car_number = car_element.inner_text().strip() if car_element else "未找到"
-                                    print(f"🚗 車號選擇器: {car_selector}")
+                                    # 車號選擇器 - 基於 CSS 結構 .order_blocks.style2 .blocks
+                                    car_selectors = [
+                                        f'.order_list:nth-child({record_index}) .order_blocks.style2 .blocks > div:nth-child(2)',
+                                        f'.order_list:nth-child({record_index}) .style2 > .blocks > div:nth-child(2)',
+                                        f'.order_list:nth-child({record_index}) .blocks > div:nth-child(2)'
+                                    ]
+                                    
+                                    car_number = "未找到"
+                                    for car_selector in car_selectors:
+                                        car_element = driver['page'].query_selector(car_selector)
+                                        if car_element and car_element.is_visible():
+                                            car_number = car_element.inner_text().strip()
+                                            print(f"🚗 車號選擇器成功: {car_selector}")
+                                            break
                                     print(f"🚗 車號: {car_number}")
                                     
-                                    # 指派司機選擇器
-                                    driver_selector = f'.order_list:nth-child({record_index}) .blocks > div:nth-child(1)'
-                                    driver_element = driver['page'].query_selector(driver_selector)
-                                    driver_name = driver_element.inner_text().strip() if driver_element else "未找到"
-                                    print(f"👨‍✈️ 司機選擇器: {driver_selector}")
+                                    # 指派司機選擇器 - 基於 CSS 結構
+                                    driver_selectors = [
+                                        f'.order_list:nth-child({record_index}) .order_blocks .blocks > div:nth-child(1)',
+                                        f'.order_list:nth-child({record_index}) .blocks > div:nth-child(1)'
+                                    ]
+                                    
+                                    driver_name = "未找到"
+                                    for driver_selector in driver_selectors:
+                                        driver_element = driver['page'].query_selector(driver_selector)
+                                        if driver_element and driver_element.is_visible():
+                                            driver_name = driver_element.inner_text().strip()
+                                            print(f"👨‍✈️ 司機選擇器成功: {driver_selector}")
+                                            break
                                     print(f"👨‍✈️ 指派司機: {driver_name}")
                                     
-                                    # 自付金額選擇器
-                                    amount_selector = f'.order_list:nth-child({record_index}) .open > .order_blocks:nth-child(5) > .blocks:nth-child(2)'
-                                    amount_element = driver['page'].query_selector(amount_selector)
-                                    self_pay_amount = amount_element.inner_text().strip() if amount_element else "未找到"
-                                    print(f"💰 金額選擇器: {amount_selector}")
+                                    # 自付金額選擇器 - 基於 CSS 結構和 .open 類別
+                                    amount_selectors = [
+                                        f'.order_list:nth-child({record_index}).open .order_blocks:nth-child(5) .blocks:nth-child(2)',
+                                        f'.order_list:nth-child({record_index}) .order_blocks:nth-child(5) .blocks:nth-child(2)',
+                                        f'.order_list:nth-child({record_index}) .order_blocks .blocks:contains("元")',
+                                        f'.order_list:nth-child({record_index}) .blocks .text:contains("元")'
+                                    ]
+                                    
+                                    self_pay_amount = "未找到"
+                                    for amount_selector in amount_selectors:
+                                        try:
+                                            amount_element = driver['page'].query_selector(amount_selector)
+                                            if amount_element and amount_element.is_visible():
+                                                amount_text = amount_element.inner_text().strip()
+                                                if amount_text and ('元' in amount_text or amount_text.isdigit()):
+                                                    self_pay_amount = amount_text
+                                                    print(f"💰 金額選擇器成功: {amount_selector}")
+                                                    break
+                                        except:
+                                            continue
                                     print(f"💰 自付金額: {self_pay_amount}")
                                     
                                     # 整理結果
