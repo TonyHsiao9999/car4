@@ -433,12 +433,61 @@ def fetch_dispatch_results():
                 # 📋 搜尋當前頁面的所有記錄
                 current_page_results = 0
                 
-                # 🎯 使用您提供的精確 CSS 選擇器逐一檢查記錄
-                print("📋 使用精確的 CSS 選擇器檢查每個 order_list 記錄...")
+                # 🎯 使用改進的記錄檢測邏輯 (處理隱藏記錄)
+                print("📋 使用智慧記錄檢測，跳過隱藏的取消記錄...")
                 
-                max_records_to_check = 10  # 每頁最多檢查10筆記錄
+                # 🔍 先獲取當前頁面所有的 order_list 元素
+                all_order_elements = driver['page'].query_selector_all('.order_list')
+                total_elements_on_page = len(all_order_elements)
+                print(f"📊 當前頁面總共有 {total_elements_on_page} 個 order_list 元素")
                 
-                for record_index in range(1, max_records_to_check + 1):
+                # 分析每個元素的狀態，只保留「已派車」記錄
+                dispatch_record_indices = []
+                for i, element in enumerate(all_order_elements, 1):
+                    try:
+                        is_visible = element.is_visible()
+                        class_list = element.get_attribute('class') or ''
+                        
+                        # 🎯 檢查各種訂單狀態
+                        is_cancelled = 'cancel' in class_list.lower()
+                        is_accept = 'accept' in class_list.lower()
+                        is_established = 'established' in class_list.lower()
+                        is_dispatch = 'dispatch' in class_list.lower()  # 🎯 這是我們要的狀態
+                        is_implement = 'implement' in class_list.lower()
+                        is_finish = 'finish' in class_list.lower()
+                        
+                        print(f"🔍 檢查元素 {i}: 可見={is_visible}")
+                        print(f"   📋 狀態分析: class='{class_list}'")
+                        print(f"   🏷️ 狀態標籤: 取消={is_cancelled}, 接受={is_accept}, 確立={is_established}")
+                        print(f"   🎯 派車={is_dispatch}, 執行={is_implement}, 完成={is_finish}")
+                        
+                        # 🎯 只記錄可見且為「已派車」狀態的記錄
+                        if is_visible and is_dispatch:
+                            dispatch_record_indices.append(i)
+                            print(f"✅ 元素 {i} 是已派車記錄 - 這是我們要的！")
+                        elif is_visible:
+                            if is_cancelled:
+                                print(f"❌ 元素 {i} 是已取消記錄，跳過")
+                            elif is_accept:
+                                print(f"❌ 元素 {i} 是已接受記錄（尚未派車），跳過")
+                            elif is_established:
+                                print(f"❌ 元素 {i} 是已確立記錄（尚未派車），跳過")
+                            elif is_implement:
+                                print(f"❌ 元素 {i} 是執行中記錄（已過派車階段），跳過")
+                            elif is_finish:
+                                print(f"❌ 元素 {i} 是已完成記錄（已過派車階段），跳過")
+                            else:
+                                print(f"❌ 元素 {i} 是其他狀態記錄，跳過")
+                        else:
+                            print(f"❌ 元素 {i} 不可見，跳過")
+                    except Exception as e:
+                        print(f"⚠️ 檢查元素 {i} 時發生錯誤: {e}")
+                        continue
+                
+                print(f"🎯 已派車記錄索引: {dispatch_record_indices}")
+                
+                # 🎯 只檢查已派車狀態的記錄
+                for record_index in dispatch_record_indices:
                     try:
                         # 🎯 基於原始碼分析的精確 CSS 選擇器
                         # 根據 CSS 分析，.order_list 結構包含 .order_blocks.date
@@ -464,6 +513,9 @@ def fetch_dispatch_results():
                         if not date_element.is_visible():
                             print(f"⚠️ 第 {record_index} 筆記錄不可見，跳過")
                             continue
+                        
+                        # 🎯 記錄已經在前面過濾為已派車狀態，這裡直接處理
+                        print(f"🚗 處理已派車記錄 {record_index}")
                         
                         # 取得日期文字
                         date_text = date_element.inner_text().strip()
@@ -620,54 +672,110 @@ def fetch_dispatch_results():
                 print(f"第 {page_count} 頁搜尋完成")
                 print(f"📊 統計: 已檢查 {total_records_checked} 個記錄，找到匹配 {current_page_results} 筆")
                 
-                # 🔄 檢查是否有下一頁
+                # 🔄 檢查是否有下一頁 (改進邏輯)
                 print("檢查是否有下一頁...")
+                
+                # 先檢查是否還有更多記錄在當前頁面
+                print(f"📊 當前頁面統計: 總共 {total_elements_on_page} 個元素，已派車記錄 {len(dispatch_record_indices)} 個，匹配記錄 {current_page_results} 筆")
                 
                 # 捲動到頁面底部尋找分頁按鈕
                 driver['page'].evaluate("window.scrollTo(0, document.body.scrollHeight)")
                 driver['page'].wait_for_timeout(2000)
                 take_screenshot(f"page_{page_count}_bottom")
                 
-                # 使用精確的下一頁按鈕 CSS 選擇器
+                # 🔍 改進的下一頁檢測邏輯
+                # 首先檢查是否有分頁器存在
+                pagination_exists = False
+                pagination_selectors = [
+                    '.pagination', '.pager', '.page-nav', '[class*="pag"]', '[class*="page"]'
+                ]
+                
+                for pag_selector in pagination_selectors:
+                    if driver['page'].query_selector(pag_selector):
+                        pagination_exists = True
+                        print(f"✅ 找到分頁器: {pag_selector}")
+                        break
+                
+                if not pagination_exists:
+                    print("❌ 沒有找到分頁器，可能只有一頁，搜尋結束")
+                    break
+                
+                # 檢查下一頁按鈕
                 next_page_selectors = [
                     'i.icon-pager_next',  # 主要選擇器
-                    'a:has-text("下一頁")',  # 備用選擇器
+                    'a:has-text("下一頁")', 
                     'button:has-text("下一頁")',
                     'a:has-text(">")',
-                    'button:has-text(">")'
+                    'button:has-text(">")',
+                    '.pager .next',
+                    '.pagination .next',
+                    '[class*="next"]'
                 ]
                 
                 next_page_found = False
+                next_button_disabled = False
+                
                 for selector in next_page_selectors:
                     try:
                         next_button = driver['page'].query_selector(selector)
-                        if next_button and next_button.is_visible():
-                            print(f"找到下一頁按鈕: {selector}")
-                            next_button.scroll_into_view_if_needed()
-                            driver['page'].wait_for_timeout(1000)
-                            next_button.click()
-                            print(f"✅ 點擊下一頁成功")
+                        if next_button:
+                            is_visible = next_button.is_visible()
+                            is_enabled = next_button.is_enabled()
+                            button_class = next_button.get_attribute('class') or ''
                             
-                            # 等待新頁面載入
-                            driver['page'].wait_for_load_state("networkidle")
-                            driver['page'].wait_for_timeout(3000)
+                            print(f"🔍 檢查下一頁按鈕 {selector}: 可見={is_visible}, 啟用={is_enabled}, class='{button_class}'")
                             
-                            # 🔝 切換頁面後立即捲動到最頂部
-                            print("切換頁面後，捲動到最頂部...")
-                            driver['page'].evaluate("window.scrollTo(0, 0)")
-                            driver['page'].wait_for_timeout(1000)
-                            driver['page'].evaluate("document.documentElement.scrollTop = 0")
-                            driver['page'].evaluate("document.body.scrollTop = 0")
-                            driver['page'].wait_for_timeout(1000)
-                            
-                            page_count += 1
-                            next_page_found = True
-                            break
+                            # 檢查按鈕是否被禁用
+                            if 'disabled' in button_class.lower() or not is_enabled:
+                                print(f"❌ 下一頁按鈕已禁用: {selector}")
+                                next_button_disabled = True
+                                continue
+                                
+                            if is_visible and is_enabled:
+                                print(f"✅ 找到可用的下一頁按鈕: {selector}")
+                                
+                                # 記錄點擊前的URL
+                                current_url = driver['page'].url
+                                print(f"點擊前URL: {current_url}")
+                                
+                                next_button.scroll_into_view_if_needed()
+                                driver['page'].wait_for_timeout(1000)
+                                next_button.click()
+                                print(f"✅ 點擊下一頁按鈕成功")
+                                
+                                # 等待頁面變化
+                                driver['page'].wait_for_timeout(2000)
+                                
+                                # 檢查URL是否改變或內容是否更新
+                                new_url = driver['page'].url
+                                print(f"點擊後URL: {new_url}")
+                                
+                                # 等待新內容載入
+                                driver['page'].wait_for_load_state("networkidle")
+                                driver['page'].wait_for_timeout(3000)
+                                
+                                # 🔝 切換頁面後立即捲動到最頂部
+                                print("切換頁面後，捲動到最頂部...")
+                                for scroll_attempt in range(3):
+                                    driver['page'].evaluate("window.scrollTo(0, 0)")
+                                    driver['page'].evaluate("document.documentElement.scrollTop = 0")
+                                    driver['page'].evaluate("document.body.scrollTop = 0")
+                                    driver['page'].wait_for_timeout(1000)
+                                
+                                page_count += 1
+                                next_page_found = True
+                                print(f"🎉 成功進入第 {page_count} 頁")
+                                break
                     except Exception as e:
+                        print(f"檢查下一頁按鈕 {selector} 時發生錯誤: {e}")
                         continue
                 
+                # 改進的結束條件邏輯
                 if not next_page_found:
-                    print("❌ 沒有找到下一頁按鈕，搜尋結束")
+                    if next_button_disabled:
+                        print("✅ 下一頁按鈕已禁用，已到達最後一頁，搜尋結束")
+                    else:
+                        print("❌ 沒有找到可用的下一頁按鈕，搜尋結束")
                     break
                 
                 # 防止無限迴圈，最多搜尋10頁
@@ -680,31 +788,34 @@ def fetch_dispatch_results():
             
             result_content = f"派車結果查詢時間: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
             result_content += f"搜尋目標日期: {target_date}\n"
+            result_content += f"🎯 搜尋範圍: 只查詢「已派車」狀態的記錄\n"
             result_content += f"總共搜尋頁數: {page_count}\n"
             result_content += f"總共檢查記錄數: {total_records_checked}\n"
-            result_content += f"符合條件記錄數: {len(results)}\n"
+            result_content += f"符合條件的已派車記錄數: {len(results)}\n"
             result_content += f"{'='*60}\n\n"
             
             if results:
                 for i, result in enumerate(results, 1):
-                    result_content += f"記錄 {i} (第 {result['page']} 頁):\n"
+                    result_content += f"🚗 已派車記錄 {i} (第 {result['page']} 頁):\n"
                     result_content += f"預約日期/時段: {result['date_time']}\n"
                     result_content += f"車號: {result['car_number']}\n"
                     result_content += f"指派司機: {result['driver']}\n"
                     result_content += f"自付金額: {result['self_pay_amount']}\n"
+                    result_content += f"狀態: 已派車 🚗\n"
                     result_content += f"{'='*50}\n\n"
                 
-                print(f"✅ 找到 {len(results)} 筆匹配記錄")
+                print(f"✅ 找到 {len(results)} 筆已派車記錄")
             else:
-                result_content += "❌ 未找到符合條件的記錄\n\n"
-                print(f"❌ 沒有找到日期為 {target_date} 的預約記錄")
+                result_content += "❌ 未找到符合條件的已派車記錄\n\n"
+                result_content += "💡 提示: 只搜尋「已派車」狀態的記錄，其他狀態(已接受、已確立、執行中、已完成、已取消)都會被跳過\n\n"
+                print(f"❌ 沒有找到日期為 {target_date} 的已派車記錄")
             
             # 寫入檔案
             with open(result_file, 'w', encoding='utf-8') as f:
                 f.write(result_content)
             
             print(f"✅ 搜尋結果已寫入 search_result.txt")
-            print(f"搜尋統計: 共搜尋 {page_count} 頁，檢查 {total_records_checked} 筆記錄，找到 {len(results)} 筆匹配")
+            print(f"搜尋統計: 共搜尋 {page_count} 頁，檢查 {total_records_checked} 筆記錄，找到 {len(results)} 筆已派車記錄")
             print(f"結果內容:\n{result_content}")
             
             take_screenshot("final_result_saved")
