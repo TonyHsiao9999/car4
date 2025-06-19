@@ -238,6 +238,7 @@ def fetch_dispatch_results():
             
             # 🎯 使用多種策略尋找訂單查詢按鈕
             order_selectors = [
+                '.page:nth-child(2) .pc_header li:nth-child(2)',  # 新的精確選擇器
                 '.page:nth-child(2) li:nth-child(2) h2:nth-child(1)',  # 原始選擇器
                 '.page:nth-child(2) li:nth-child(2)',  # 簡化版本
                 '.page li:contains("訂單查詢")',  # 包含文字
@@ -396,14 +397,24 @@ def fetch_dispatch_results():
                 while True:
                     print(f"當前捲動位置: {scroll_position}px")
                     
-                    # 尋找當前可見區域的日期元素
-                    date_elements = driver['page'].query_selector_all('.accept .date .text')
-                    print(f"在當前位置找到 {len(date_elements)} 個日期元素")
+                    # 🎯 優先使用 div.order_list 選擇器，否則使用舊的日期選擇器
+                    order_list_elements = driver['page'].query_selector_all('div.order_list')
+                    
+                    if order_list_elements:
+                        print(f"✅ 使用 div.order_list 選擇器，找到 {len(order_list_elements)} 個記錄")
+                        elements = order_list_elements
+                        use_order_list = True
+                    else:
+                        print(f"❌ 未找到 order_list，使用舊的日期選擇器...")
+                        date_elements = driver['page'].query_selector_all('.accept .date .text')
+                        print(f"找到 {len(date_elements)} 個日期元素")
+                        elements = date_elements
+                        use_order_list = False
                     
                     # 記錄本次迴圈處理的記錄數
                     loop_processed = 0
                     
-                    for i, date_element in enumerate(date_elements):
+                    for i, element in enumerate(elements):
                         try:
                             # 獲取元素的唯一標識
                             element_id = f"{scroll_position}_{i}"
@@ -413,28 +424,74 @@ def fetch_dispatch_results():
                                 continue
                             
                             # 檢查元素是否在可視範圍內
-                            is_visible = date_element.is_visible()
+                            is_visible = element.is_visible()
                             if not is_visible:
                                 continue
                             
                             # 標記為已處理
                             processed_elements.add(element_id)
-                                
-                            date_text = date_element.inner_text().strip()
                             total_records_checked += 1
-                            print(f"檢查記錄 {total_records_checked}: {date_text}")
                             
-                            # 檢查是否包含目標日期 (確保格式匹配)
-                            date_match = target_date in date_text
-                            print(f"目標日期: {target_date}, 記錄日期: {date_text}, 匹配: {date_match}")
-                            
-                            if date_match:
-                                print(f"✅ 找到匹配日期的記錄: {date_text}")
-                                current_page_results += 1
+                            # 根據選擇器類型進行不同的處理
+                            if use_order_list:
+                                # 新方式：直接從 order_list 記錄中提取所有資訊
+                                record_text = element.inner_text().strip()
+                                print(f"檢查 order_list 記錄 {total_records_checked}: {record_text[:80]}...")
                                 
-                                # 🎯 將匹配的元素捲動到可視範圍
-                                date_element.scroll_into_view_if_needed()
-                                driver['page'].wait_for_timeout(1000)
+                                # 搜尋目標日期
+                                import re
+                                date_pattern = r'(\d{4}/\d{2}/\d{2})'
+                                found_dates = re.findall(date_pattern, record_text)
+                                date_match = target_date in found_dates
+                                
+                                print(f"目標日期: {target_date}, 找到日期: {found_dates}, 匹配: {date_match}")
+                                
+                                if date_match:
+                                    print(f"✅ 找到匹配的 order_list 記錄")
+                                    current_page_results += 1
+                                    
+                                    # 直接提取所有資訊
+                                    car_number_match = re.search(r'車號[：:\s]*([A-Z0-9\-]+)', record_text)
+                                    if not car_number_match:
+                                        car_number_match = re.search(r'([A-Z]{2,3}-\d{4})', record_text)
+                                    
+                                    driver_match = re.search(r'指派司機[：:\s]*([^\n\r]+)', record_text)
+                                    if not driver_match:
+                                        driver_match = re.search(r'司機[：:\s]*([^\n\r]+)', record_text)
+                                    
+                                    amount_match = re.search(r'自付金額[：:\s]*([0-9,]+)', record_text)
+                                    if not amount_match:
+                                        amount_match = re.search(r'金額[：:\s]*([0-9,]+)', record_text)
+                                        if not amount_match:
+                                            amount_match = re.search(r'(\d+)元', record_text)
+                                    
+                                    result_entry = {
+                                        'date_time': target_date,
+                                        'car_number': car_number_match.group(1).strip() if car_number_match else "未找到",
+                                        'driver': driver_match.group(1).strip() if driver_match else "未找到",
+                                        'self_pay_amount': amount_match.group(1).strip() if amount_match else "未找到",
+                                        'page': page_count
+                                    }
+                                    
+                                    results.append(result_entry)
+                                    print(f"✅ order_list 提取結果: {result_entry}")
+                                    take_screenshot(f"page_{page_count}_orderlist_{current_page_results}")
+                                    
+                            else:
+                                # 舊方式：處理日期元素
+                                date_text = element.inner_text().strip()
+                                print(f"檢查記錄 {total_records_checked}: {date_text}")
+                                
+                                date_match = target_date in date_text
+                                print(f"目標日期: {target_date}, 記錄日期: {date_text}, 匹配: {date_match}")
+                                
+                                if date_match:
+                                    print(f"✅ 找到匹配日期的記錄: {date_text}")
+                                    current_page_results += 1
+                                    
+                                    # 🎯 將匹配的元素捲動到可視範圍
+                                    element.scroll_into_view_if_needed()
+                                    driver['page'].wait_for_timeout(1000)
                                 
                                 # 🎯 找到對應的展開按鈕並點擊
                                 try:
