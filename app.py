@@ -418,6 +418,7 @@ def fetch_dispatch_results():
             
             results = []
             total_records_checked = 0
+            total_dispatch_records_found = 0  # 新增：統計已派車記錄總數
             
             print("🔍 系統分析：檢測到 Vue.js SPA 架構")
             print("💡 新策略：透過網路請求監聽和智慧等待獲取所有資料")
@@ -494,6 +495,7 @@ def fetch_dispatch_results():
                         # 🎯 只記錄可見且為「已派車」狀態的記錄
                         if is_visible and is_dispatch:
                             dispatch_records.append({'index': i, 'element': element})
+                            total_dispatch_records_found += 1
                             print(f"✅ 元素 {i} 是已派車記錄 - 這是我們要的！")
                         elif is_visible:
                             if is_cancelled:
@@ -514,9 +516,10 @@ def fetch_dispatch_results():
                         print(f"⚠️ 檢查元素 {i} 時發生錯誤: {e}")
                         continue
                 
-                print(f"🎯 已派車記錄: {[r['index'] for r in dispatch_records]}")
+                print(f"🎯 本次找到已派車記錄: {[r['index'] for r in dispatch_records]}")
+                print(f"📊 累計已派車記錄總數: {total_dispatch_records_found}")
                 
-                # 🎯 直接使用元素處理已派車狀態的記錄
+                # 🎯 直接使用元素處理已派車狀態的記錄（移除日期篩選）
                 for record_info in dispatch_records:
                     record_index = record_info['index']
                     order_element = record_info['element']
@@ -545,7 +548,7 @@ def fetch_dispatch_results():
                             print(f"❌ 在第 {record_index} 筆記錄中找不到日期元素")
                             continue
                         
-                        # 🎯 記錄已經在前面過濾為已派車狀態，這裡直接處理
+                        # 🎯 記錄已經在前面過濾為已派車狀態，這裡直接處理（不檢查日期）
                         print(f"🚗 處理已派車記錄 {record_index}")
                         
                         # 取得日期文字
@@ -553,257 +556,229 @@ def fetch_dispatch_results():
                         total_records_checked += 1
                         print(f"📅 第 {record_index} 筆記錄日期: {date_text}")
                         
-                        # 🎯 改進日期比對邏輯：只比對日期部分，忽略時間
-                        # 從日期文字中提取日期部分（YYYY/MM/DD 格式）
-                        date_pattern = r'(\d{4}/\d{1,2}/\d{1,2})'
-                        date_match_result = re.search(date_pattern, date_text)
+                        # 🎯 移除日期篩選，直接處理所有已派車記錄
+                        print(f"✅ 找到已派車記錄 {record_index}，直接處理（不檢查日期）")
+                        current_attempt_results += 1
                         
-                        if date_match_result:
-                            extracted_date = date_match_result.group(1)
-                            # 標準化日期格式，確保月份和日期是兩位數
-                            date_parts = extracted_date.split('/')
-                            normalized_date = f"{date_parts[0]}/{date_parts[1].zfill(2)}/{date_parts[2].zfill(2)}"
-                            
-                            # 標準化目標日期格式
-                            target_parts = target_date.split('/')
-                            normalized_target = f"{target_parts[0]}/{target_parts[1].zfill(2)}/{target_parts[2].zfill(2)}"
-                            
-                            date_match = normalized_date == normalized_target
-                            print(f"🎯 目標日期: {normalized_target}")
-                            print(f"📅 記錄日期: {normalized_date} (完整文字: {date_text})")
-                            print(f"✅ 日期匹配: {date_match}")
-                        else:
-                            # 如果無法解析日期格式，回到原始比對方式
-                            date_match = target_date in date_text
-                            print(f"⚠️ 無法解析日期格式，使用原始比對")
-                            print(f"🎯 目標日期: {target_date}, 記錄日期: {date_text}, 匹配: {date_match}")
+                        # 捲動到記錄位置
+                        date_element.scroll_into_view_if_needed()
+                        driver['page'].wait_for_timeout(1000)
+                        take_screenshot(f"attempt_{current_attempt}_record_{record_index}_found")
                         
-                        if date_match:
-                            print(f"✅ 找到匹配的第 {record_index} 筆記錄!")
-                            current_attempt_results += 1
+                        # 🔧 在該元素內找展開按鈕
+                        expand_selectors = [
+                            '.see_more span',
+                            '.see_more',
+                            '.see_more i'
+                        ]
+                        
+                        expand_button = None
+                        for expand_sel in expand_selectors:
+                            try:
+                                expand_button = order_element.query_selector(expand_sel)
+                                if expand_button and expand_button.is_visible():
+                                    print(f"✅ 使用選擇器 '{expand_sel}' 找到展開按鈕")
+                                    break
+                            except:
+                                continue
+                        
+                        if expand_button and expand_button.is_visible():
+                            print(f"✅ 找到展開按鈕，準備點擊...")
+                            expand_button.scroll_into_view_if_needed()
+                            driver['page'].wait_for_timeout(500)
+                            expand_button.click()
+                            print(f"✅ 展開按鈕點擊成功")
                             
-                            # 捲動到記錄位置
-                            date_element.scroll_into_view_if_needed()
-                            driver['page'].wait_for_timeout(1000)
-                            take_screenshot(f"attempt_{current_attempt}_record_{record_index}_found")
+                            # 等待展開內容載入
+                            driver['page'].wait_for_timeout(3000)
+                            take_screenshot(f"attempt_{current_attempt}_record_{record_index}_expanded")
                             
-                            # 🔧 在該元素內找展開按鈕
-                            expand_selectors = [
-                                '.see_more span',
-                                '.see_more',
-                                '.see_more i'
-                            ]
-                            
-                            expand_button = None
-                            for expand_sel in expand_selectors:
-                                try:
-                                    expand_button = order_element.query_selector(expand_sel)
-                                    if expand_button and expand_button.is_visible():
-                                        print(f"✅ 使用選擇器 '{expand_sel}' 找到展開按鈕")
-                                        break
-                                except:
-                                    continue
-                            
-                            if expand_button and expand_button.is_visible():
-                                print(f"✅ 找到展開按鈕，準備點擊...")
-                                expand_button.scroll_into_view_if_needed()
-                                driver['page'].wait_for_timeout(500)
-                                expand_button.click()
-                                print(f"✅ 展開按鈕點擊成功")
+                            # 🔧 直接在該元素內提取資訊
+                            try:
+                                # 車號選擇器 - 在該元素內搜尋
+                                car_selectors = [
+                                    '.order_blocks.style2 .blocks > div:nth-child(2)',
+                                    '.style2 > .blocks > div:nth-child(2)',
+                                    '.blocks > div:nth-child(2)'
+                                ]
                                 
-                                # 等待展開內容載入
-                                driver['page'].wait_for_timeout(3000)
-                                take_screenshot(f"attempt_{current_attempt}_record_{record_index}_expanded")
+                                car_number = "未找到"
+                                for car_selector in car_selectors:
+                                    try:
+                                        car_element = order_element.query_selector(car_selector)
+                                        if car_element and car_element.is_visible():
+                                            car_number = car_element.inner_text().strip()
+                                            print(f"🚗 車號選擇器成功: {car_selector}")
+                                            break
+                                    except:
+                                        continue
+                                print(f"🚗 車號: {car_number}")
                                 
-                                # 🔧 直接在該元素內提取資訊
-                                try:
-                                    # 車號選擇器 - 在該元素內搜尋
-                                    car_selectors = [
-                                        '.order_blocks.style2 .blocks > div:nth-child(2)',
-                                        '.style2 > .blocks > div:nth-child(2)',
-                                        '.blocks > div:nth-child(2)'
-                                    ]
-                                    
-                                    car_number = "未找到"
-                                    for car_selector in car_selectors:
-                                        try:
-                                            car_element = order_element.query_selector(car_selector)
-                                            if car_element and car_element.is_visible():
-                                                car_number = car_element.inner_text().strip()
-                                                print(f"🚗 車號選擇器成功: {car_selector}")
-                                                break
-                                        except:
-                                            continue
-                                    print(f"🚗 車號: {car_number}")
-                                    
-                                    # 指派司機選擇器 - 在該元素內搜尋
-                                    driver_selectors = [
-                                        '.order_blocks .blocks > div:nth-child(1)',
-                                        '.blocks > div:nth-child(1)'
-                                    ]
-                                    
-                                    driver_name = "未找到"
-                                    for driver_selector in driver_selectors:
-                                        try:
-                                            driver_element = order_element.query_selector(driver_selector)
-                                            if driver_element and driver_element.is_visible():
-                                                driver_name = driver_element.inner_text().strip()
-                                                print(f"👨‍✈️ 司機選擇器成功: {driver_selector}")
-                                                break
-                                        except:
-                                            continue
-                                    print(f"👨‍✈️ 指派司機: {driver_name}")
-                                    
-                                    # 負擔金額選擇器 - 使用精確的 CSS 選擇器（基於用戶提供的資訊）
-                                    amount_selectors = [
-                                        '.order_blocks:nth-child(6) > .blocks',  # 用戶提供的精確選擇器
-                                        '.order_blocks:nth-child(6) .blocks',    # 備用（不限制直接子元素）
-                                        '.order_blocks:nth-child(6) .text',      # 第6個區塊的文字內容
-                                        '.order_blocks:nth-child(5) .blocks:nth-child(2)',  # 原始選擇器
-                                        '*:contains("負擔金額")',  # 直接搜尋包含「負擔金額」的元素
-                                        '.order_blocks .blocks:contains("負擔金額")',
-                                        '.blocks .text:contains("負擔金額")',
-                                        '.order_blocks:contains("負擔金額")',  # 搜尋更大範圍
-                                        '.order_blocks .blocks:contains("元")',  # 備用方案
-                                        '.blocks .text:contains("元")',
-                                        '.text:contains("元")'
-                                    ]
-                                    
-                                    self_pay_amount = "未找到"
-                                    print(f"💰 開始搜尋負擔金額，共 {len(amount_selectors)} 個選擇器")
-                                    
-                                    for i, amount_selector in enumerate(amount_selectors, 1):
-                                        try:
-                                            print(f"💰 嘗試選擇器 {i}/{len(amount_selectors)}: {amount_selector}")
-                                            if ':contains(' in amount_selector:
-                                                # 針對 :contains 選擇器的特殊處理
-                                                # 先找到所有可能的元素，然後檢查文字內容
-                                                base_selector = amount_selector.split(':contains(')[0]
-                                                search_text = amount_selector.split(':contains(')[1].rstrip(')').strip('"\'')
-                                                
-                                                if base_selector == '*':
-                                                    # 搜尋所有元素
-                                                    possible_elements = order_element.query_selector_all('*')
-                                                else:
-                                                    # 搜尋特定類型的元素
-                                                    possible_elements = order_element.query_selector_all(base_selector)
-                                                
-                                                for element in possible_elements:
-                                                    if element.is_visible():
-                                                        element_text = element.inner_text().strip()
-                                                        if search_text in element_text:
-                                                            # 找到包含「負擔金額」的元素
-                                                            if '負擔金額' in search_text:
-                                                                # 嘗試從該元素或其父/子元素中提取金額
-                                                                # 檢查該元素的文字
-                                                                amount_match = re.search(r'(\d+)\s*元', element_text)
+                                # 指派司機選擇器 - 在該元素內搜尋
+                                driver_selectors = [
+                                    '.order_blocks .blocks > div:nth-child(1)',
+                                    '.blocks > div:nth-child(1)'
+                                ]
+                                
+                                driver_name = "未找到"
+                                for driver_selector in driver_selectors:
+                                    try:
+                                        driver_element = order_element.query_selector(driver_selector)
+                                        if driver_element and driver_element.is_visible():
+                                            driver_name = driver_element.inner_text().strip()
+                                            print(f"👨‍✈️ 司機選擇器成功: {driver_selector}")
+                                            break
+                                    except:
+                                        continue
+                                print(f"👨‍✈️ 指派司機: {driver_name}")
+                                
+                                # 負擔金額選擇器 - 使用精確的 CSS 選擇器（基於用戶提供的資訊）
+                                amount_selectors = [
+                                    '.order_blocks:nth-child(6) > .blocks',  # 用戶提供的精確選擇器
+                                    '.order_blocks:nth-child(6) .blocks',    # 備用（不限制直接子元素）
+                                    '.order_blocks:nth-child(6) .text',      # 第6個區塊的文字內容
+                                    '.order_blocks:nth-child(5) .blocks:nth-child(2)',  # 原始選擇器
+                                    '*:contains("負擔金額")',  # 直接搜尋包含「負擔金額」的元素
+                                    '.order_blocks .blocks:contains("負擔金額")',
+                                    '.blocks .text:contains("負擔金額")',
+                                    '.order_blocks:contains("負擔金額")',  # 搜尋更大範圍
+                                    '.order_blocks .blocks:contains("元")',  # 備用方案
+                                    '.blocks .text:contains("元")',
+                                    '.text:contains("元")'
+                                ]
+                                
+                                self_pay_amount = "未找到"
+                                print(f"💰 開始搜尋負擔金額，共 {len(amount_selectors)} 個選擇器")
+                                
+                                for i, amount_selector in enumerate(amount_selectors, 1):
+                                    try:
+                                        print(f"💰 嘗試選擇器 {i}/{len(amount_selectors)}: {amount_selector}")
+                                        if ':contains(' in amount_selector:
+                                            # 針對 :contains 選擇器的特殊處理
+                                            # 先找到所有可能的元素，然後檢查文字內容
+                                            base_selector = amount_selector.split(':contains(')[0]
+                                            search_text = amount_selector.split(':contains(')[1].rstrip(')').strip('"\'')
+                                            
+                                            if base_selector == '*':
+                                                # 搜尋所有元素
+                                                possible_elements = order_element.query_selector_all('*')
+                                            else:
+                                                # 搜尋特定類型的元素
+                                                possible_elements = order_element.query_selector_all(base_selector)
+                                            
+                                            for element in possible_elements:
+                                                if element.is_visible():
+                                                    element_text = element.inner_text().strip()
+                                                    if search_text in element_text:
+                                                        # 找到包含「負擔金額」的元素
+                                                        if '負擔金額' in search_text:
+                                                            # 嘗試從該元素或其父/子元素中提取金額
+                                                            # 檢查該元素的文字
+                                                            amount_match = re.search(r'(\d+)\s*元', element_text)
+                                                            if amount_match:
+                                                                self_pay_amount = amount_match.group(0)
+                                                                print(f"💰 在「負擔金額」元素中找到金額: {self_pay_amount}")
+                                                                break
+                                                            
+                                                            # 檢查父元素
+                                                            parent = element.locator('..')
+                                                            if parent:
+                                                                parent_text = parent.inner_text()
+                                                                amount_match = re.search(r'(\d+)\s*元', parent_text)
                                                                 if amount_match:
                                                                     self_pay_amount = amount_match.group(0)
-                                                                    print(f"💰 在「負擔金額」元素中找到金額: {self_pay_amount}")
+                                                                    print(f"💰 在「負擔金額」父元素中找到金額: {self_pay_amount}")
                                                                     break
-                                                                
-                                                                # 檢查父元素
-                                                                parent = element.locator('..')
-                                                                if parent:
-                                                                    parent_text = parent.inner_text()
-                                                                    amount_match = re.search(r'(\d+)\s*元', parent_text)
+                                                            
+                                                            # 檢查下一個兄弟元素
+                                                            try:
+                                                                next_sibling = element.locator('~ *').first
+                                                                if next_sibling:
+                                                                    sibling_text = next_sibling.inner_text()
+                                                                    amount_match = re.search(r'(\d+)\s*元', sibling_text)
                                                                     if amount_match:
                                                                         self_pay_amount = amount_match.group(0)
-                                                                        print(f"💰 在「負擔金額」父元素中找到金額: {self_pay_amount}")
+                                                                        print(f"💰 在「負擔金額」兄弟元素中找到金額: {self_pay_amount}")
                                                                         break
-                                                                
-                                                                # 檢查下一個兄弟元素
-                                                                try:
-                                                                    next_sibling = element.locator('~ *').first
-                                                                    if next_sibling:
-                                                                        sibling_text = next_sibling.inner_text()
-                                                                        amount_match = re.search(r'(\d+)\s*元', sibling_text)
-                                                                        if amount_match:
-                                                                            self_pay_amount = amount_match.group(0)
-                                                                            print(f"💰 在「負擔金額」兄弟元素中找到金額: {self_pay_amount}")
-                                                                            break
-                                                                except:
-                                                                    pass
-                                                            else:
-                                                                # 包含金額相關文字的元素，直接提取
-                                                                def is_valid_amount_text(text):
-                                                                    """檢查是否為有效的金額文字"""
-                                                                    if not text:
-                                                                        return False
-                                                                    # 檢查是否包含數字
-                                                                    has_digit = any(c.isdigit() for c in text)
-                                                                    if not has_digit:
-                                                                        return False
-                                                                    # 檢查是否包含金額相關符號或文字
-                                                                    amount_indicators = ['元', '$', '＄', '負擔金額', '自付', '費用', '金額']
-                                                                    has_amount_indicator = any(indicator in text for indicator in amount_indicators)
-                                                                    return has_amount_indicator
-                                                                
-                                                                if is_valid_amount_text(element_text):
-                                                                    self_pay_amount = element_text
-                                                                    print(f"💰 金額選擇器成功: {amount_selector}")
-                                                                    break
+                                                            except:
+                                                                pass
+                                                        else:
+                                                            # 包含金額相關文字的元素，直接提取
+                                                            def is_valid_amount_text(text):
+                                                                """檢查是否為有效的金額文字"""
+                                                                if not text:
+                                                                    return False
+                                                                # 檢查是否包含數字
+                                                                has_digit = any(c.isdigit() for c in text)
+                                                                if not has_digit:
+                                                                    return False
+                                                                # 檢查是否包含金額相關符號或文字
+                                                                amount_indicators = ['元', '$', '＄', '負擔金額', '自付', '費用', '金額']
+                                                                has_amount_indicator = any(indicator in text for indicator in amount_indicators)
+                                                                return has_amount_indicator
+                                                            
+                                                            if is_valid_amount_text(element_text):
+                                                                self_pay_amount = element_text
+                                                                print(f"💰 金額選擇器成功: {amount_selector}")
+                                                                break
                                                 
                                                 if self_pay_amount != "未找到":
                                                     break
-                                            else:
-                                                # 普通選擇器
-                                                amount_element = order_element.query_selector(amount_selector)
-                                                if amount_element and amount_element.is_visible():
-                                                    amount_text = amount_element.inner_text().strip()
-                                                    print(f"💰 找到元素，文字內容: '{amount_text}'")
-                                                    # 檢查是否為有效的金額格式
-                                                    def is_valid_amount(text):
-                                                        """檢查是否為有效的金額格式"""
-                                                        if not text:
-                                                            return False
-                                                        # 檢查是否包含數字
-                                                        has_digit = any(c.isdigit() for c in text)
-                                                        if not has_digit:
-                                                            return False
-                                                        # 檢查是否包含金額相關符號或文字
-                                                        amount_indicators = ['元', '$', '＄', '負擔金額', '自付', '費用', '金額']
-                                                        has_amount_indicator = any(indicator in text for indicator in amount_indicators)
-                                                        return has_amount_indicator
-                                                    
-                                                    if is_valid_amount(amount_text):
-                                                        self_pay_amount = amount_text
-                                                        print(f"💰 金額選擇器成功: {amount_selector} -> '{amount_text}'")
-                                                        break
-                                                    else:
-                                                        print(f"💰 文字內容不符合金額格式: '{amount_text}'")
-                                                        print(f"💰 檢查結果: 包含數字={any(c.isdigit() for c in amount_text)}, 包含金額指示符={any(indicator in amount_text for indicator in ['元', '$', '＄', '負擔金額', '自付', '費用', '金額'])}")
+                                        else:
+                                            # 普通選擇器
+                                            amount_element = order_element.query_selector(amount_selector)
+                                            if amount_element and amount_element.is_visible():
+                                                amount_text = amount_element.inner_text().strip()
+                                                print(f"💰 找到元素，文字內容: '{amount_text}'")
+                                                # 檢查是否為有效的金額格式
+                                                def is_valid_amount(text):
+                                                    """檢查是否為有效的金額格式"""
+                                                    if not text:
+                                                        return False
+                                                    # 檢查是否包含數字
+                                                    has_digit = any(c.isdigit() for c in text)
+                                                    if not has_digit:
+                                                        return False
+                                                    # 檢查是否包含金額相關符號或文字
+                                                    amount_indicators = ['元', '$', '＄', '負擔金額', '自付', '費用', '金額']
+                                                    has_amount_indicator = any(indicator in text for indicator in amount_indicators)
+                                                    return has_amount_indicator
+                                                
+                                                if is_valid_amount(amount_text):
+                                                    self_pay_amount = amount_text
+                                                    print(f"💰 金額選擇器成功: {amount_selector} -> '{amount_text}'")
+                                                    break
                                                 else:
-                                                    print(f"💰 元素不存在或不可見")
-                                        except Exception as e:
-                                            print(f"⚠️ 金額選擇器 {amount_selector} 發生錯誤: {e}")
-                                            continue
-                                    print(f"💰 負擔金額: {self_pay_amount}")
-                                    
-                                    # 整理結果
-                                    result_entry = {
-                                        'date_time': date_text,
-                                        'car_number': car_number,
-                                        'driver': driver_name,
-                                        'self_pay_amount': self_pay_amount,
-                                        'attempt': current_attempt
-                                    }
-                                    
-                                    results.append(result_entry)
-                                    print(f"✅ 第 {record_index} 筆記錄提取結果: {result_entry}")
-                                    take_screenshot(f"attempt_{current_attempt}_record_{record_index}_extracted")
-                                    
-                                except Exception as extract_error:
-                                    print(f"❌ 提取第 {record_index} 筆記錄資訊時發生錯誤: {extract_error}")
-                                    take_screenshot(f"attempt_{current_attempt}_record_{record_index}_extract_error")
-                                    continue
-                                    
-                            else:
-                                print(f"❌ 未找到第 {record_index} 筆記錄的展開按鈕")
-                                take_screenshot(f"attempt_{current_attempt}_record_{record_index}_no_expand")
+                                                    print(f"💰 文字內容不符合金額格式: '{amount_text}'")
+                                                    print(f"💰 檢查結果: 包含數字={any(c.isdigit() for c in amount_text)}, 包含金額指示符={any(indicator in amount_text for indicator in ['元', '$', '＄', '負擔金額', '自付', '費用', '金額'])}")
+                                            else:
+                                                print(f"💰 元素不存在或不可見")
+                                    except Exception as e:
+                                        print(f"⚠️ 金額選擇器 {amount_selector} 發生錯誤: {e}")
+                                        continue
+                                print(f"💰 負擔金額: {self_pay_amount}")
+                                
+                                # 整理結果
+                                result_entry = {
+                                    'date_time': date_text,
+                                    'car_number': car_number,
+                                    'driver': driver_name,
+                                    'self_pay_amount': self_pay_amount,
+                                    'attempt': current_attempt
+                                }
+                                
+                                results.append(result_entry)
+                                print(f"✅ 第 {record_index} 筆記錄提取結果: {result_entry}")
+                                take_screenshot(f"attempt_{current_attempt}_record_{record_index}_extracted")
+                                
+                            except Exception as extract_error:
+                                print(f"❌ 提取第 {record_index} 筆記錄資訊時發生錯誤: {extract_error}")
+                                take_screenshot(f"attempt_{current_attempt}_record_{record_index}_extract_error")
+                                continue
                                 
                         else:
-                            print(f"⏭️ 第 {record_index} 筆記錄日期不匹配，跳過")
+                            print(f"❌ 未找到第 {record_index} 筆記錄的展開按鈕")
+                            take_screenshot(f"attempt_{current_attempt}_record_{record_index}_no_expand")
                             
                     except Exception as record_error:
                         print(f"❌ 處理第 {record_index} 筆記錄時發生錯誤: {record_error}")
@@ -909,11 +884,11 @@ def fetch_dispatch_results():
             taipei_tz = pytz.timezone('Asia/Taipei')
             query_time = datetime.now(taipei_tz)
             result_content = f"派車結果查詢時間: {query_time.strftime('%Y-%m-%d %H:%M:%S')} (台北時區)\n"
-            result_content += f"搜尋目標日期: {target_date}\n"
-            result_content += f"🎯 搜尋範圍: 只查詢「已派車」狀態的記錄\n"
+            result_content += f"🎯 搜尋範圍: 所有「已派車」狀態的記錄 (不限制日期)\n"
             result_content += f"總共嘗試次數: {current_attempt}\n"
             result_content += f"總共檢查記錄數: {total_records_checked}\n"
-            result_content += f"符合條件的已派車記錄數: {len(results)}\n"
+            result_content += f"累計找到已派車記錄數: {total_dispatch_records_found}\n"
+            result_content += f"成功處理的已派車記錄數: {len(results)}\n"
             result_content += f"{'='*60}\n\n"
             
             if results:
@@ -930,14 +905,15 @@ def fetch_dispatch_results():
             else:
                 result_content += "❌ 未找到符合條件的已派車記錄\n\n"
                 result_content += "💡 提示: 只搜尋「已派車」狀態的記錄，其他狀態(已接受、已確立、執行中、已完成、已取消)都會被跳過\n\n"
-                print(f"❌ 沒有找到日期為 {target_date} 的已派車記錄")
+                print(f"❌ 沒有找到已派車記錄")
             
             # 寫入檔案
             with open(result_file, 'w', encoding='utf-8') as f:
                 f.write(result_content)
             
             print(f"✅ 搜尋結果已寫入 search_result.txt")
-            print(f"搜尋統計: 共嘗試 {current_attempt} 次，檢查 {total_records_checked} 筆記錄，找到 {len(results)} 筆已派車記錄")
+            print(f"搜尋統計: 共嘗試 {current_attempt} 次，檢查 {total_records_checked} 筆記錄")
+            print(f"📊 已派車記錄統計: 累計找到 {total_dispatch_records_found} 筆已派車記錄，成功處理 {len(results)} 筆")
             print(f"結果內容:\n{result_content}")
             
             take_screenshot("final_result_saved")
