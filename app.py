@@ -486,19 +486,58 @@ def fetch_dispatch_results():
                         is_dispatch = 'dispatch' in class_list.lower()  # 🎯 這是我們要的狀態
                         is_implement = 'implement' in class_list.lower()
                         is_finish = 'finish' in class_list.lower()
+                        is_recently = 'recently' in class_list.lower()  # 新增：最近記錄
                         
                         print(f"🔍 檢查元素 {i}: 可見={is_visible}")
                         print(f"   📋 狀態分析: class='{class_list}'")
                         print(f"   🏷️ 狀態標籤: 取消={is_cancelled}, 接受={is_accept}, 確立={is_established}")
                         print(f"   🎯 派車={is_dispatch}, 執行={is_implement}, 完成={is_finish}")
+                        print(f"   📅 最近={is_recently}")
                         
-                        # 🎯 只記錄可見且為「已派車」狀態的記錄
-                        if is_visible and is_dispatch:
-                            dispatch_records.append({'index': i, 'element': element})
-                            total_dispatch_records_found += 1
-                            print(f"✅ 元素 {i} 是已派車記錄 - 這是我們要的！")
-                        elif is_visible:
-                            if is_cancelled:
+                        # 🎯 改進的記錄篩選邏輯
+                        if is_visible:
+                            if is_dispatch:
+                                # 明確的已派車狀態
+                                dispatch_records.append({'index': i, 'element': element})
+                                total_dispatch_records_found += 1
+                                print(f"✅ 元素 {i} 是已派車記錄 - 這是我們要的！")
+                            elif is_recently and not is_cancelled:
+                                # 最近記錄且未取消，可能是已派車但狀態未更新
+                                print(f"🔍 元素 {i} 是最近記錄，需要進一步檢查...")
+                                
+                                # 嘗試在該元素內尋找派車相關資訊
+                                try:
+                                    # 檢查是否有車號或司機資訊
+                                    car_selectors = [
+                                        '.car_number',
+                                        '.driver_name', 
+                                        '.vehicle_info',
+                                        '.dispatch_info'
+                                    ]
+                                    
+                                    has_dispatch_info = False
+                                    for car_sel in car_selectors:
+                                        car_element = element.query_selector(car_sel)
+                                        if car_element and car_element.is_visible():
+                                            car_text = car_element.inner_text().strip()
+                                            if car_text and len(car_text) > 0:
+                                                print(f"   🚗 找到派車資訊: {car_text}")
+                                                has_dispatch_info = True
+                                                break
+                                    
+                                    if has_dispatch_info:
+                                        dispatch_records.append({'index': i, 'element': element})
+                                        total_dispatch_records_found += 1
+                                        print(f"✅ 元素 {i} 是最近記錄但包含派車資訊 - 加入處理！")
+                                    else:
+                                        print(f"❌ 元素 {i} 是最近記錄但沒有派車資訊，跳過")
+                                except Exception as e:
+                                    print(f"⚠️ 檢查元素 {i} 派車資訊時發生錯誤: {e}")
+                                    # 如果檢查失敗，保守起見還是加入處理
+                                    dispatch_records.append({'index': i, 'element': element})
+                                    total_dispatch_records_found += 1
+                                    print(f"✅ 元素 {i} 檢查失敗，保守加入處理")
+                            elif is_cancelled:
                                 print(f"❌ 元素 {i} 是已取消記錄，跳過")
                             elif is_accept:
                                 print(f"❌ 元素 {i} 是已接受記錄（尚未派車），跳過")
