@@ -6,6 +6,10 @@ import base64
 import pytz
 import re
 from datetime import datetime
+import json
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
 
 app = Flask(__name__)
 
@@ -141,794 +145,239 @@ def setup_driver():
         return None
 
 def fetch_dispatch_results():
-    driver = None
-    screenshot_count = 0
-    
-    def take_screenshot(description):
-        nonlocal screenshot_count
-        try:
-            screenshot_count += 1
-            filename = f'dispatch_{screenshot_count:03d}_{description}.png'
-            if driver:
-                driver['page'].screenshot(path=filename)
-                print(f"派車截圖 {screenshot_count}: {description} - {filename}")
-            return filename
-        except Exception as e:
-            print(f"派車截圖失敗: {e}")
-            return None
-    
+    """取得派車結果頁面並分析已派車的記錄"""
+    global driver
     try:
-        print("=== 開始執行派車結果抓取流程 ===")
-        print("開始初始化 WebDriver...")
-        driver = setup_driver()
+        if not ensure_browser():
+            return {'success': False, 'error': '無法啟動瀏覽器'}
         
-        if driver is None:
-            print("WebDriver 初始化失敗，無法繼續")
-            return False
-            
-        print("WebDriver 初始化完成")
+        taipei_tz = pytz.timezone('Asia/Taipei')
+        current_time = datetime.now(taipei_tz)
         
-        # 設置視窗大小為高解析度
-        print("設置視窗大小為 1920x1080...")
-        driver['page'].set_viewport_size({'width': 1920, 'height': 1080})
-        print("視窗大小設置完成")
+        print(f"[{current_time.strftime('%Y-%m-%d %H:%M:%S')}] 開始取得派車結果")
         
-        print("正在載入網頁...")
-        driver['get']("https://www.ntpc.ltc-car.org/")
-        print("網頁載入完成")
-        take_screenshot("page_loaded")
+        # 進入預約訂單頁面
+        driver.get("https://www.ntpc.ltc-car.org/ReservationOrder/")
+        print("已導航到預約訂單頁面")
         
-        # 等待頁面完全載入
-        print("等待頁面完全載入...")
-        driver['page'].wait_for_load_state("networkidle")
-        print("頁面已完全載入")
-        take_screenshot("page_complete")
+        time.sleep(3)
         
-        # 處理浮動視窗 - 點擊「我知道了」按鈕
-        print("檢查並處理浮動視窗...")
-        try:
-            # 等待浮動視窗出現
-            driver['page'].wait_for_selector('text=我知道了', timeout=10000)
-            print("找到浮動視窗，點擊「我知道了」按鈕")
-            driver['page'].click('text=我知道了')
-            print("「我知道了」按鈕點擊成功")
-            take_screenshot("popup_closed")
-        except Exception as e:
-            print(f"沒有找到浮動視窗或點擊失敗: {e}")
-            take_screenshot("no_popup_found")
+        # 等待頁面載入
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, "ul.order_list, .order_list"))
+        )
+        print("頁面載入完成")
         
-        # 登入步驟
-        print("開始登入流程...")
-        try:
-            # 等待登入表單載入
-            driver['page'].wait_for_selector('input[type="text"]', timeout=10000)
-            print("登入表單已載入")
-            take_screenshot("login_form")
-            
-            # 輸入身分證字號
-            print("輸入身分證字號: A102574899")
-            driver['page'].fill('input[type="text"]', 'A102574899')
-            
-            # 輸入密碼
-            print("輸入密碼: visi319VISI")
-            driver['page'].fill('input[type="password"]', 'visi319VISI')
-            
-            # 點擊民眾登入按鈕
-            print("點擊民眾登入按鈕")
-            take_screenshot("before_login_click")
-            
-            login_selectors = [
-                'a:has-text("民眾登入")',
-                'button:has-text("民眾登入")',
-                'text=民眾登入',
-                '*:has-text("民眾登入")',
-            ]
-            
-            login_clicked = False
-            for selector in login_selectors:
-                try:
-                    print(f"嘗試登入按鈕選擇器: {selector}")
-                    element = driver['page'].locator(selector).first
-                    if element.count() > 0 and element.is_visible():
-                        print(f"找到元素: {selector}")
-                        element.click()
-                        print(f"登入按鈕點擊成功: {selector}")
-                        login_clicked = True
-                        break
-                except Exception as e:
-                    print(f"登入按鈕選擇器 {selector} 失敗: {e}")
-                    continue
-            
-            if login_clicked:
-                print("登入按鈕點擊完成")
-                take_screenshot("login_clicked")
-            else:
-                print("警告：無法找到或點擊登入按鈕")
-                take_screenshot("login_click_failed")
-            
-            # 等待登入成功浮動視窗
-            print("等待登入成功訊息...")
+        # 取得所有記錄元素 - 基於實際Vue.js結構
+        # 從web-source-code/index-949f5202.js第314行可知：
+        # Status==2 是 dispatch (派車)
+        # Status==3 是 implement (執行)  
+        # Status==4 是 finish (完成)
+        record_selectors = [
+            '.order_list.log',  # 主要記錄容器
+            'li.order_list',    # 列表項目
+            '[class*="order_list"]'  # 包含order_list的元素
+        ]
+        
+        all_records = []
+        for selector in record_selectors:
             try:
-                driver['page'].wait_for_selector('text=登入成功', timeout=5000)
-                take_screenshot("login_success_modal_found")
-                
-                # 點擊確定按鈕
-                try:
-                    print("🎯 使用精確的確定按鈕選擇器...")
-                    precise_selector = 'span.dialog-button'
-                    element = driver['page'].locator(precise_selector).first
-                    if element.count() > 0 and element.is_visible():
-                        print(f"找到精確的確定按鈕: {precise_selector}")
-                        element.click()
-                        driver['page'].wait_for_timeout(1000)
-                        print("✅ 確定按鈕點擊成功")
-                except Exception as e:
-                    print(f"❌ 確定按鈕點擊失敗: {e}")
-                
-                take_screenshot("login_success_confirmed")
+                elements = driver.find_elements(By.CSS_SELECTOR, selector)
+                all_records.extend(elements)
+                print(f"使用選擇器 '{selector}' 找到 {len(elements)} 個元素")
             except Exception as e:
-                print(f"沒有找到登入成功浮動視窗: {e}")
-                take_screenshot("no_login_success_modal")
-            
-            # 等待登入完成
-            print("等待登入完成...")
-            driver['page'].wait_for_load_state("networkidle")
-            print("登入流程完成")
-            take_screenshot("login_complete")
-            
-        except Exception as e:
-            print(f"登入過程發生錯誤: {e}")
-            take_screenshot("login_error")
-            return False
+                print(f"選擇器 '{selector}' 執行失敗: {str(e)}")
         
-        # 開始訂單查詢流程
-        print("=== 開始訂單查詢流程 ===")
-        try:
-            # 點擊「訂單查詢」
-            print("點擊訂單查詢...")
-            
-            # 等待頁面穩定
-            print("等待頁面穩定...")
-            driver['page'].wait_for_load_state("networkidle")
-            driver['page'].wait_for_timeout(2000)
-            
-            print("等待 JavaScript 內容載入...")
-            driver['page'].wait_for_timeout(3000)
-            
-            order_selectors = [
-                '.page:nth-child(2) li:nth-child(2) h2:nth-child(1)',
-                '.page:nth-child(2) li:nth-child(2)',
-                '.page li:nth-child(2)',
-                'li:has-text("訂單查詢")',
-                'h2:has-text("訂單查詢")',
-                'a:has-text("訂單查詢")',
-                '*:has-text("訂單查詢")',
-                'nav li:nth-child(2)',
-                '.nav li:nth-child(2)',
-                '.menu li:nth-child(2)',
-                'li:contains("訂單")',
-                'li:contains("查詢")',
-                '*:contains("訂單查詢")'
-            ]
-            
-            order_clicked = False
-            
-            for selector in order_selectors:
-                try:
-                    print(f"嘗試訂單查詢選擇器: {selector}")
-                    
-                    elements = driver['page'].query_selector_all(selector)
-                    print(f"找到 {len(elements)} 個元素使用選擇器: {selector}")
-                    
-                    if elements:
-                        for i, element in enumerate(elements):
-                            try:
-                                if element.is_visible():
-                                    element_text = element.inner_text().strip()
-                                    print(f"元素 {i+1} 文字: '{element_text}'")
-                                    
-                                    if "訂單查詢" in element_text:
-                                        print(f"✅ 找到訂單查詢元素: {selector}")
-                                        element.click()
-                                        print(f"🎯 訂單查詢點擊成功")
-                                        
-                                        print("等待頁面導航...")
-                                        driver['page'].wait_for_load_state("networkidle", timeout=10000)
-                                        driver['page'].wait_for_timeout(3000)
-                                        
-                                        current_url = driver['page'].url
-                                        print(f"當前URL: {current_url}")
-                                        
-                                        if "ReservationOrder" in current_url:
-                                            print("✅ 成功導航到訂單查詢頁面!")
-                                            order_clicked = True
-                                            break
-                                        else:
-                                            print(f"❌ URL不正確，預期包含 'ReservationOrder'，實際: {current_url}")
-                                            print("繼續嘗試其他選擇器...")
-                                            continue
-                                            
-                            except Exception as click_error:
-                                print(f"點擊元素 {i+1} 失敗: {click_error}")
-                                continue
-                                
-                    if order_clicked:
-                        break
-                        
-                except Exception as e:
-                    print(f"選擇器 {selector} 失敗: {e}")
-                    continue
-            
-            if not order_clicked:
-                print("❌ 無法找到訂單查詢按鈕，嘗試直接導航到訂單查詢頁面...")
-                take_screenshot("order_query_not_found")
-                
-                try:
-                    print("🔄 直接導航到 ReservationOrder 頁面...")
-                    driver['page'].goto("https://www.ntpc.ltc-car.org/ReservationOrder/")
-                    driver['page'].wait_for_load_state("networkidle", timeout=15000)
-                    driver['page'].wait_for_timeout(3000)
-                    
-                    current_url = driver['page'].url
-                    print(f"直接導航後的URL: {current_url}")
-                    
-                    if "ReservationOrder" in current_url:
-                        print("✅ 直接導航成功！")
-                        order_clicked = True
-                        take_screenshot("direct_navigation_success")
-                    else:
-                        print(f"❌ 直接導航也失敗，URL: {current_url}")
-                        take_screenshot("direct_navigation_failed")
-                        return False
-                        
-                except Exception as nav_error:
-                    print(f"❌ 直接導航失敗: {nav_error}")
-                    take_screenshot("direct_navigation_error")
-                    return False
-            
-            # 驗證是否成功到達訂單查詢頁面
-            print("驗證是否成功到達訂單查詢頁面...")
+        # 去重複
+        unique_records = []
+        seen_elements = set()
+        for record in all_records:
+            if record not in seen_elements:
+                unique_records.append(record)
+                seen_elements.add(record)
+        
+        print(f"總共找到 {len(unique_records)} 個唯一記錄元素")
+        
+        if not unique_records:
+            print("未找到任何記錄")
+            return {'success': True, 'data': [], 'message': '未找到任何預約記錄'}
+        
+        dispatch_results = []
+        
+        for i, record in enumerate(unique_records):
             try:
-                final_url = driver['page'].url
-                print(f"最終URL: {final_url}")
+                print(f"分析第 {i+1} 個記錄...")
                 
-                if "ReservationOrder" not in final_url:
-                    print(f"❌ 最終URL不正確: {final_url}")
-                    take_screenshot("wrong_final_url")
-                    return False
+                # 取得記錄的完整HTML內容
+                record_html = record.get_attribute('outerHTML')
+                record_classes = record.get_attribute('class') or ''
                 
-                order_page_indicators = [
-                    '.order_list',
-                    'text=預約記錄',
-                    'text=訂單記錄', 
-                    'text=預約列表',
-                    '.reservation-list',
-                    '.record-list',
-                    'table',
-                    '.order-item',
-                    '.date',
-                    '.see_more'
-                ]
+                # 基於Vue.js狀態定義的精確檢測
+                # dispatch: Status==2, implement: Status==3, finish: Status==4
+                is_dispatch_status = False
                 
-                page_verified = False
-                for indicator in order_page_indicators:
-                    try:
-                        driver['page'].wait_for_selector(indicator, timeout=5000)
-                        print(f"✅ 訂單頁面確認: 找到 {indicator}")
-                        page_verified = True
-                        break
-                    except:
-                        continue
+                # 檢查CSS類別中的狀態
+                if any(cls in record_classes for cls in ['dispatch', 'implement', 'finish']):
+                    is_dispatch_status = True
+                    print(f"  - 通過CSS類別檢測到派車狀態: {record_classes}")
                 
-                if not page_verified:
-                    print("⚠️ 無法確認訂單查詢頁面元素，但URL正確，繼續執行...")
-                    take_screenshot("page_elements_uncertain")
-                else:
-                    print("✅ 訂單查詢頁面載入確認")
-                    
-            except Exception as e:
-                print(f"頁面驗證失敗: {e}")
-            
-            # 等待訂單列表完全載入
-            print("等待訂單列表完全載入...")
-            driver['page'].wait_for_load_state("networkidle")
-            driver['page'].wait_for_timeout(5000)
-            take_screenshot("order_list_loaded")
-            
-            # 不使用日期篩選，處理所有記錄
-            print("🎯 搜尋所有記錄，不限制日期範圍")
-            
-            # 分析訂單記錄
-            print("開始分析訂單記錄...")
-            
-            # 清空結果檔案
-            result_file = "search_result.txt"
-            with open(result_file, 'w', encoding='utf-8') as f:
-                f.write("")
-            
-            # 儲存所有已派車記錄的結果
-            dispatch_result_records = []
-            total_records_checked = 0
-            total_dispatch_records_found = 0
-            
-            print("🔍 系統分析：檢測到 Vue.js SPA 架構")
-            print("💡 新策略：透過網路請求監聽和智慧等待獲取所有資料")
-            
-            # 設置網路請求監聽
-            captured_api_data = []
-            
-            def handle_response(response):
-                if 'Order' in response.url and response.status == 200:
-                    try:
-                        data = response.json()
-                        captured_api_data.append(data)
-                        print(f"📡 捕獲API回應: {response.url}")
-                    except:
-                        pass
-            
-            driver['page'].on('response', handle_response)
-            
-            # 分析頁面隱藏記錄結構（不進行載入更多操作）
-            print("📊 分析頁面隱藏記錄結構")
-            
-            # 等待記錄載入
-            driver['page'].wait_for_selector('.order_list', timeout=10000)
-            
-            print("🔍 執行全面的隱藏記錄檢測...")
-            
-            # 使用 JavaScript 進行全面的隱藏記錄檢測和顯示
-            detection_results = driver['page'].evaluate("""
-                () => {
-                    const results = {
-                        initial_visible: 0,
-                        potential_hidden: 0,
-                        displayed_hidden: 0,
-                        final_total: 0,
-                        log: []
-                    };
-                    
-                    // 記錄初始可見的記錄
-                    const initialVisible = document.querySelectorAll('.order_list');
-                    results.initial_visible = initialVisible.length;
-                    results.log.push(`初始可見記錄: ${initialVisible.length} 筆`);
-                    
-                    // 尋找所有可能的記錄元素（包括隱藏的）
-                    const allPotentialSelectors = [
-                        '.order_list',
-                        '[class*="order"]',
-                        '[class*="Order"]', 
-                        '[data-order]',
-                        '[data-status]',
-                        '.list-item',
-                        '.record-item',
-                        '.reservation-item',
-                        '.booking-item',
-                        'li[class*="item"]',
-                        'div[class*="item"]'
-                    ];
-                    
-                    const foundElements = new Set();
-                    allPotentialSelectors.forEach(selector => {
-                        try {
-                            const elements = document.querySelectorAll(selector);
-                            elements.forEach(el => {
-                                // 檢查是否包含預約或派車相關內容
-                                const text = el.innerText || el.textContent || '';
-                                if (text.includes('預約') || text.includes('派車') || 
-                                    text.includes('司機') || text.includes('車號') ||
-                                    text.includes('狀態') || text.includes('已派車') ||
-                                    text.includes('媒合') || text.includes('成立') ||
-                                    text.includes('執行') || text.includes('完成') ||
-                                    text.includes('取消') || text.includes('日期')) {
-                                    foundElements.add(el);
-                                }
-                            });
-                        } catch (e) {
-                            // 忽略錯誤的選擇器
-                        }
-                    });
-                    
-                    results.potential_hidden = foundElements.size;
-                    results.log.push(`找到潛在記錄元素: ${foundElements.size} 個`);
-                    
-                    // 顯示所有隱藏的記錄
-                    let displayedCount = 0;
-                    foundElements.forEach(el => {
-                        const computedStyle = window.getComputedStyle(el);
-                        const isHidden = computedStyle.display === 'none' || 
-                                       computedStyle.visibility === 'hidden' ||
-                                       computedStyle.opacity === '0' ||
-                                       el.style.display === 'none' ||
-                                       el.style.visibility === 'hidden';
-                        
-                        if (isHidden) {
-                            el.style.display = 'block';
-                            el.style.visibility = 'visible';
-                            el.style.opacity = '1';
-                            displayedCount++;
-                        }
-                    });
-                    
-                    results.displayed_hidden = displayedCount;
-                    results.log.push(`顯示隱藏記錄: ${displayedCount} 筆`);
-                    
-                    // 重新計算最終記錄數
-                    setTimeout(() => {
-                        const finalElements = document.querySelectorAll('.order_list');
-                        results.final_total = finalElements.length;
-                    }, 500);
-                    
-                    return results;
+                # 檢查文字內容中的狀態標示
+                record_text = record.text
+                if any(keyword in record_text for keyword in ['派車', '執行', '完成', '已派車']):
+                    is_dispatch_status = True
+                    print(f"  - 通過文字內容檢測到派車狀態")
+                
+                # 檢查是否有司機指派資訊（更精確的判定）
+                has_driver_info = False
+                driver_info_keywords = ['指派司機', '司機姓名', '車號', '聯絡電話', '駕駛']
+                if any(keyword in record_text for keyword in driver_info_keywords):
+                    has_driver_info = True
+                    is_dispatch_status = True
+                    print(f"  - 檢測到司機指派資訊")
+                
+                # 跳過明確不是派車狀態的記錄
+                if any(status in record_classes for status in ['accept', 'established', 'cancel']):
+                    print(f"  - 跳過非派車狀態記錄: {record_classes}")
+                    continue
+                
+                if any(keyword in record_text for keyword in ['媒合中', '成立', '取消', '已取消']):
+                    print(f"  - 跳過非派車狀態記錄")
+                    continue
+                
+                # 只處理確認為派車狀態的記錄
+                if not is_dispatch_status:
+                    print(f"  - 非派車狀態，跳過")
+                    continue
+                
+                # 提取記錄詳細資訊
+                record_info = {
+                    'index': i + 1,
+                    'status': 'unknown',
+                    'date': 'N/A',
+                    'time': 'N/A',
+                    'route': 'N/A',
+                    'vehicle': 'N/A',
+                    'driver': 'N/A',
+                    'contact': 'N/A',
+                    'has_driver_info': has_driver_info,
+                    'css_classes': record_classes
                 }
-            """)
-            
-            for log_msg in detection_results['log']:
-                print(f"   📝 {log_msg}")
-            
-            # 等待一下讓 DOM 更新
-            driver['page'].wait_for_timeout(1000)
-            
-            # 重新獲取所有記錄
-            all_order_elements = driver['page'].query_selector_all('.order_list')
-            total_elements_on_page = len(all_order_elements)
-            
-            print(f"🎯 最終結果：")
-            print(f"   📊 初始可見: {detection_results['initial_visible']} 筆")
-            print(f"   🔍 潛在記錄: {detection_results['potential_hidden']} 個元素")
-            print(f"   👁️ 顯示隱藏: {detection_results['displayed_hidden']} 筆")
-            print(f"   ✅ 最終總數: {total_elements_on_page} 筆記錄")
-            
-            if total_elements_on_page == 0:
-                print("❌ 沒有找到任何記錄，可能頁面結構有變化")
-                take_screenshot("no_records_found")
-                return False
-            
-            # 基於實際網頁原始碼的精確狀態檢測
-            print("🔍 基於實際JavaScript結構分析記錄狀態...")
-            dispatch_records = []
-            
-            for i, element in enumerate(all_order_elements, 1):
+                
+                # 精確狀態判定
+                if 'dispatch' in record_classes or '派車' in record_text:
+                    record_info['status'] = '已派車'
+                elif 'implement' in record_classes or '執行' in record_text:
+                    record_info['status'] = '執行中'
+                elif 'finish' in record_classes or '完成' in record_text:
+                    record_info['status'] = '已完成'
+                
+                # 嘗試提取時間資訊
                 try:
-                    is_visible = element.is_visible()
-                    if not is_visible:
-                        print(f"⚠️ 記錄 {i}: 不可見，跳過")
-                        continue
+                    date_elements = record.find_elements(By.CSS_SELECTOR, 
+                        '.order_date, .booking-date, [class*="date"], [class*="time"]')
+                    if date_elements:
+                        date_text = date_elements[0].text.strip()
+                        if date_text:
+                            record_info['date'] = date_text
+                            record_info['time'] = date_text
+                except:
+                    pass
+                
+                # 嘗試提取路線資訊
+                try:
+                    route_elements = record.find_elements(By.CSS_SELECTOR, 
+                        '.route, .origin, .destination, [class*="route"]')
+                    for elem in route_elements:
+                        route_text = elem.text.strip()
+                        if route_text and len(route_text) > 2:
+                            record_info['route'] = route_text
+                            break
+                except:
+                    pass
+                
+                # 嘗試提取車輛和司機資訊
+                try:
+                    # 車號
+                    for pattern in ['車號', '車牌', '車輛']:
+                        if pattern in record_text:
+                            import re
+                            match = re.search(f'{pattern}[：:]\s*([A-Z0-9\-]+)', record_text)
+                            if match:
+                                record_info['vehicle'] = match.group(1)
+                                break
                     
-                    print(f"\n🔍 分析記錄 {i}:")
+                    # 司機姓名
+                    for pattern in ['司機', '駕駛', '指派司機']:
+                        if pattern in record_text:
+                            import re
+                            match = re.search(f'{pattern}[：:]\s*([^\s\n]+)', record_text)
+                            if match:
+                                record_info['driver'] = match.group(1)
+                                break
                     
-                    # 基於web-source-code/index-949f5202.js第314行的精確狀態定義：
-                    # {accept:T.Status==0,established:T.Status==1,dispatch:T.Status==2,implement:T.Status==3,finish:T.Status==4,cancel:T.Status==5}
-                    
-                    # 檢查CSS類別中的狀態標示（唯一判定依據）
-                    class_list = element.get_attribute('class') or ''
-                    print(f"   📋 CSS類別: '{class_list}'")
-                    
-                    # 精確的狀態檢測（僅基於CSS類別）
-                    detected_status = None
-                    
-                    if 'dispatch' in class_list.split():
-                        detected_status = 'dispatch'
-                        print(f"   🎯 檢測到狀態: dispatch (Status==2) - 已派車")
-                    elif 'implement' in class_list.split():
-                        detected_status = 'implement' 
-                        print(f"   🎯 檢測到狀態: implement (Status==3) - 執行中")
-                    elif 'finish' in class_list.split():
-                        detected_status = 'finish'
-                        print(f"   🎯 檢測到狀態: finish (Status==4) - 已完成")
-                    elif 'accept' in class_list.split():
-                        detected_status = 'accept'
-                        print(f"   🎯 檢測到狀態: accept (Status==0) - 媒合中")
-                    elif 'established' in class_list.split():
-                        detected_status = 'established'
-                        print(f"   🎯 檢測到狀態: established (Status==1) - 成立")
-                    elif 'cancel' in class_list.split():
-                        detected_status = 'cancel'
-                        print(f"   🎯 檢測到狀態: cancel (Status==5) - 已取消")
-                    else:
-                        print(f"   ❓ 未在CSS類別中檢測到狀態標示")
-                    
-                    # 已派車判定邏輯（基於JavaScript狀態定義）
-                    is_dispatch_record = False
-                    reason = ""
-                    
-                    if detected_status == 'dispatch':
-                        # Status == 2: 已派車
-                        is_dispatch_record = True
-                        reason = "狀態=dispatch (Status==2)，已派車"
-                    elif detected_status == 'implement':
-                        # Status == 3: 執行中（已派車且執行中）
-                        is_dispatch_record = True
-                        reason = "狀態=implement (Status==3)，已派車且執行中"
-                    elif detected_status == 'finish':
-                        # Status == 4: 已完成（已派車且完成）
-                        is_dispatch_record = True
-                        reason = "狀態=finish (Status==4)，已派車且完成"
-                    elif detected_status == 'cancel':
-                        reason = "狀態=cancel (Status==5)，已取消，跳過"
-                    elif detected_status == 'accept':
-                        reason = "狀態=accept (Status==0)，媒合中，跳過"
-                    elif detected_status == 'established':
-                        reason = "狀態=established (Status==1)，成立，跳過"
-                    else:
-                        reason = "未檢測到明確狀態，跳過"
-                    
-                    print(f"   📊 判定結果: {'✅ 已派車' if is_dispatch_record else '❌ 非已派車'} - {reason}")
-                    
-                    if is_dispatch_record:
-                        dispatch_records.append({'index': i, 'element': element, 'reason': reason})
-                        total_dispatch_records_found += 1
-                        print(f"   ➕ 加入處理清單 (總計: {total_dispatch_records_found})")
+                    # 聯絡電話
+                    import re
+                    phone_match = re.search(r'(\d{2,4}-?\d{6,8}|\d{10})', record_text)
+                    if phone_match:
+                        record_info['contact'] = phone_match.group(1)
                         
                 except Exception as e:
-                    print(f"   ⚠️ 分析記錄 {i} 時發生錯誤: {e}")
-                    continue
-            
-            print(f"\n🎯 搜尋結果統計:")
-            print(f"   📊 總掃描記錄數: {total_elements_on_page}")
-            print(f"   ✅ 找到已派車記錄: {total_dispatch_records_found} 筆")
-            print(f"   📋 已派車記錄編號: {[r['index'] for r in dispatch_records]}")
-            
-            if dispatch_records:
-                print(f"\n📝 已派車記錄詳情:")
-                for record in dispatch_records:
-                    print(f"   • 記錄 {record['index']}: {record['reason']}")
-            else:
-                print(f"\n⚠️ 注意: 在 {total_elements_on_page} 筆記錄中沒有找到任何已派車狀態的記錄")
-            
-            # 直接使用元素處理已派車狀態的記錄（移除日期篩選）
-            for record_info in dispatch_records:
-                record_index = record_info['index']
-                order_element = record_info['element']
-                try:
-                    print(f"🔍 處理第 {record_index} 筆已派車記錄...")
-                    
-                    print(f"🚗 處理已派車記錄 {record_index}")
-                    
-                    # 嘗試取得日期文字（僅供顯示，不做篩選）
-                    date_text = "日期資訊未取得"
-                    date_selectors = [
-                        '.order_blocks.date .text',
-                        '.date .text',
-                        '.order_blocks .text'
-                    ]
-                    
-                    for date_sel in date_selectors:
-                        try:
-                            date_element = order_element.query_selector(date_sel)
-                            if date_element and date_element.is_visible():
-                                date_text = date_element.inner_text().strip()
-                                print(f"📅 第 {record_index} 筆記錄日期: {date_text}")
-                                break
-                        except:
-                            continue
-                    
-                    total_records_checked += 1
-                    print(f"✅ 處理已派車記錄 {record_index}（不限制日期）")
-                    
-                    take_screenshot(f"record_{record_index}_found")
-                    
-                    # 嘗試多種方式提取詳細資訊
-                    detail_extraction_success = False
-                    
-                    # 方法1：嘗試展開按鈕
-                    expand_selectors = [
-                        '.see_more span',
-                        '.see_more',
-                        '.see_more i',
-                        'span:has-text("查看更多")',
-                        'a:has-text("查看更多")'
-                    ]
-                    
-                    for expand_sel in expand_selectors:
-                        try:
-                            expand_button = order_element.query_selector(expand_sel)
-                            if expand_button and expand_button.is_visible():
-                                print(f"🎯 嘗試展開按鈕: {expand_sel}")
-                                try:
-                                    # 使用更快速的點擊方式
-                                    expand_button.click(timeout=3000, force=True)
-                                    driver['page'].wait_for_timeout(1000)  # 縮短等待
-                                    print(f"✅ 展開成功: {expand_sel}")
-                                    detail_extraction_success = True
-                                    take_screenshot(f"record_{record_index}_expanded")
-                                    break
-                                except:
-                                    print(f"⚠️ 展開失敗: {expand_sel}")
-                                    continue
-                        except:
-                            continue
-                    
-                    # 方法2：如果展開失敗，嘗試從摺疊狀態提取已有資訊
-                    if not detail_extraction_success:
-                        print(f"💡 無法展開，嘗試從現有資訊提取...")
-                        take_screenshot(f"record_{record_index}_collapsed_extract")
-                        
-                        # 直接在該元素內提取資訊（無論展開是否成功）
-                        try:
-                            # 先從完整文字內容中提取基本資訊
-                            full_text = order_element.inner_text()
-                            print(f"📝 記錄完整文字（前200字）: {full_text[:200]}...")
-                            
-                            # 初始化變數
-                            car_number = "未找到"
-                            driver_name = "未找到"
-                            self_pay_amount = "未找到"
-                            
-                            # 如果成功展開，使用詳細選擇器
-                            if detail_extraction_success:
-                                print("🔍 使用展開後的詳細選擇器...")
-                                
-                                # 車號選擇器（展開狀態）
-                                car_selectors = [
-                                    '.order_blocks.style2 .blocks > div:nth-child(2)',
-                                    '.style2 > .blocks > div:nth-child(2)',
-                                    '.blocks > div:nth-child(2)',
-                                    '.order_blocks .blocks'
-                                ]
-                                
-                                for car_selector in car_selectors:
-                                    try:
-                                        car_element = order_element.query_selector(car_selector)
-                                        if car_element and car_element.is_visible():
-                                            car_text = car_element.inner_text().strip()
-                                            if '車號' in car_text or any(c.isdigit() for c in car_text):
-                                                car_number = car_text
-                                                print(f"🚗 車號選擇器成功: {car_selector} -> '{car_text}'")
-                                                break
-                                    except:
-                                        continue
-                                
-                                # 司機選擇器（展開狀態）
-                                driver_selectors = [
-                                    '.order_blocks .blocks > div:nth-child(1)',
-                                    '.blocks > div:nth-child(1)',
-                                    '.order_blocks .blocks'
-                                ]
-                                
-                                for driver_selector in driver_selectors:
-                                    try:
-                                        driver_element = order_element.query_selector(driver_selector)
-                                        if driver_element and driver_element.is_visible():
-                                            driver_text = driver_element.inner_text().strip()
-                                            if '司機' in driver_text or '駕駛' in driver_text:
-                                                driver_name = driver_text
-                                                print(f"👨‍✈️ 司機選擇器成功: {driver_selector} -> '{driver_text}'")
-                                                break
-                                    except:
-                                        continue
-                            
-                            # 不論展開是否成功，都嘗試從文字內容提取
-                            print("🔍 從文字內容提取資訊...")
-                            
-                            # 提取電話號碼（之前已檢測到有電話號碼才被判定為已派車）
-                            import re
-                            phone_pattern = r'\(?\d{2,4}\)?\s*\d{7,8}'
-                            phone_matches = re.findall(phone_pattern, full_text)
-                            if phone_matches:
-                                print(f"📞 找到聯絡電話: {phone_matches}")
-                                # 有電話號碼代表已派車，可以建立基本記錄
-                            
-                            # 從文字中提取金額
-                            amount_pattern = r'負擔金額：?\$?(\d+)'
-                            amount_matches = re.findall(amount_pattern, full_text)
-                            if amount_matches:
-                                self_pay_amount = f"${amount_matches[0]}"
-                                print(f"💰 從文字提取金額: {self_pay_amount}")
-                            
-                            # 建立記錄（即使資訊不完整也記錄）
-                            result_entry = {
-                                'date_time': date_text,
-                                'car_number': car_number,
-                                'driver': driver_name,
-                                'self_pay_amount': self_pay_amount,
-                                'phone_numbers': phone_matches if phone_matches else [],
-                                'extraction_method': '展開成功' if detail_extraction_success else '摺疊狀態'
-                            }
-                            
-                            dispatch_result_records.append(result_entry)
-                            print(f"✅ 第 {record_index} 筆記錄提取結果: {result_entry}")
-                            take_screenshot(f"record_{record_index}_extracted")
-                            
-                        except Exception as extract_error:
-                            print(f"❌ 提取第 {record_index} 筆記錄資訊時發生錯誤: {extract_error}")
-                            take_screenshot(f"record_{record_index}_extract_error")
-                            # 即使提取失敗也建立基本記錄
-                            basic_entry = {
-                                'date_time': date_text,
-                                'car_number': '提取失敗',
-                                'driver': '提取失敗',
-                                'self_pay_amount': '提取失敗',
-                                'error': str(extract_error)
-                            }
-                            dispatch_result_records.append(basic_entry)
-                            continue
-                            
-                    # 如果沒有找到任何展開按鈕，仍然嘗試從摺疊狀態提取資訊
-                    print(f"💡 記錄 {record_index} 無展開按鈕，直接從摺疊狀態提取...")
-                    take_screenshot(f"record_{record_index}_no_expand")
-                        
-                except Exception as record_error:
-                    print(f"❌ 處理第 {record_index} 筆記錄時發生錯誤: {record_error}")
-                    continue
-            
-            print(f"✅ 處理完成，共檢查 {total_records_checked} 筆記錄")
-            print(f"📊 統計: 找到已派車記錄 {total_dispatch_records_found} 筆，成功處理 {len(dispatch_result_records)} 筆")
-            
-            # 寫入結果檔案
-            print("將搜尋結果寫入 search_result.txt...")
-            
-            taipei_tz = pytz.timezone('Asia/Taipei')
-            query_time = datetime.now(taipei_tz)
-            result_content = f"派車結果查詢時間: {query_time.strftime('%Y-%m-%d %H:%M:%S')} (台北時區)\n"
-            result_content += f"🎯 搜尋範圍: 所有記錄 (智能載入 + 全方位分析)\n"
-            result_content += f"總掃描記錄數: {total_elements_on_page}\n"
-            result_content += f"總共檢查記錄數: {total_records_checked}\n"
-            result_content += f"累計找到已派車記錄數: {total_dispatch_records_found}\n"
-            result_content += f"成功處理的已派車記錄數: {len(dispatch_result_records)}\n"
-            result_content += f"{'='*60}\n\n"
-            
-            if dispatch_result_records:
-                for i, result in enumerate(dispatch_result_records, 1):
-                    result_content += f"🚗 已派車記錄 {i}:\n"
-                    # 防止 string indices must be integers 錯誤
-                    if isinstance(result, dict):
-                        result_content += f"預約日期/時段: {result.get('date_time', '未知')}\n"
-                        result_content += f"車號: {result.get('car_number', '未找到')}\n"
-                        result_content += f"指派司機: {result.get('driver', '未找到')}\n"
-                        result_content += f"自付金額: {result.get('self_pay_amount', '未找到')}\n"
-                        
-                        # 顯示聯絡電話（如果有）
-                        phones = result.get('phone_numbers', [])
-                        if phones:
-                            result_content += f"聯絡電話: {', '.join(phones)}\n"
-                        
-                        # 顯示提取方式
-                        method = result.get('extraction_method', '未知')
-                        result_content += f"資料提取方式: {method}\n"
-                        
-                        # 如果有錯誤訊息
-                        if 'error' in result:
-                            result_content += f"錯誤訊息: {result['error']}\n"
-                    else:
-                        result_content += f"記錄資料: {result}\n"
-                    result_content += f"狀態: 已派車 🚗\n"
-                    result_content += f"{'='*50}\n\n"
+                    print(f"  - 提取車輛資訊時發生錯誤: {str(e)}")
                 
-                print(f"✅ 找到 {len(dispatch_result_records)} 筆已派車記錄")
-            else:
-                result_content += "❌ 未找到符合條件的已派車記錄\n\n"
-                result_content += "💡 提示: 只搜尋「已派車」狀態的記錄，其他狀態(已接受、已確立、執行中、已完成、已取消)都會被跳過\n\n"
-                print(f"❌ 沒有找到已派車記錄")
-            
-            # 寫入檔案
-            with open(result_file, 'w', encoding='utf-8') as f:
-                f.write(result_content)
-            
-            print(f"✅ 搜尋結果已寫入 search_result.txt")
-            print(f"📊 已派車記錄統計: 累計找到 {total_dispatch_records_found} 筆已派車記錄，成功處理 {len(dispatch_result_records)} 筆")
-            print(f"結果內容:\n{result_content}")
-            
-            take_screenshot("final_result_saved")
-            return len(dispatch_result_records) > 0
-            
-        except Exception as e:
-            print(f"訂單查詢過程發生錯誤: {e}")
-            take_screenshot("order_query_error")
-            return False
-            
-    except Exception as e:
-        print(f"派車結果抓取過程發生錯誤: {e}")
-        take_screenshot("dispatch_error")
-        return False
-        
-    finally:
-        if driver:
-            try:
-                driver['page'].close()
-                driver['browser'].close()
-                print("瀏覽器已關閉")
+                dispatch_results.append(record_info)
+                print(f"  - 成功添加派車記錄: {record_info['status']}")
+                
             except Exception as e:
-                print(f"關閉瀏覽器時發生錯誤: {e}")
+                print(f"處理記錄 {i+1} 時發生錯誤: {str(e)}")
+                continue
+        
+        # 保存結果
+        results_data = {
+            'timestamp': current_time.strftime('%Y-%m-%d %H:%M:%S'),
+            'total_records': len(unique_records),
+            'dispatch_records': len(dispatch_results),
+            'results': dispatch_results
+        }
+        
+        # 保存到檔案
+        results_file = 'dispatch_results.json'
+        try:
+            with open(results_file, 'w', encoding='utf-8') as f:
+                json.dump(results_data, f, ensure_ascii=False, indent=2)
+            print(f"結果已保存到 {results_file}")
+        except Exception as e:
+            print(f"保存結果檔案時發生錯誤: {str(e)}")
+        
+        # 拍攝截圖
+        try:
+            screenshot_filename = f"dispatch_results_{current_time.strftime('%Y%m%d_%H%M%S')}.png"
+            driver.save_screenshot(screenshot_filename)
+            print(f"截圖已保存: {screenshot_filename}")
+        except Exception as e:
+            print(f"截圖保存失敗: {str(e)}")
+        
+        print(f"派車結果分析完成 - 找到 {len(dispatch_results)} 筆已派車記錄")
+        
+        return {
+            'success': True,
+            'data': results_data,
+            'message': f'成功分析 {len(unique_records)} 筆記錄，找到 {len(dispatch_results)} 筆已派車記錄'
+        }
+        
+    except Exception as e:
+        error_msg = f"取得派車結果時發生錯誤: {str(e)}"
+        print(error_msg)
+        
+        # 錯誤截圖
+        try:
+            if driver:
+                error_screenshot = f"dispatch_error_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+                driver.save_screenshot(error_screenshot)
+                print(f"錯誤截圖已保存: {error_screenshot}")
+        except:
+            pass
+        
+        return {'success': False, 'error': error_msg}
 
 def make_reservation():
     driver = None
