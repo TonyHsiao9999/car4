@@ -49,8 +49,8 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 # 創建截圖目錄
 RUN mkdir -p /app/screenshots
 
-# 暴露端口
+# 暴露端口（動態）
 EXPOSE $PORT
 
-# 直接啟動應用
-CMD ["python", "app.py"] 
+# 啟動應用，使用動態端口
+CMD ["sh", "-c", "python app.py"] 

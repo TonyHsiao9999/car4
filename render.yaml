@@ -1,12 +1,9 @@
 services:
   - type: web
-    name: car4
-    env: python
+    name: car4-booking-system
+    env: docker
     plan: starter
-    buildCommand: |
-      pip install --no-cache-dir -r requirements.txt
-      python -m playwright install chromium --with-deps
-    startCommand: python app.py
+    dockerfilePath: ./Dockerfile.playwright
     envVars:
       - key: PORT
         value: 10000
@@ -15,7 +12,7 @@ services:
       - key: RENDER
         value: 1
       - key: PLAYWRIGHT_BROWSERS_PATH
-        value: /opt/render/.cache/ms-playwright
+        value: /ms-playwright
       - key: PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS
         value: 1
     healthCheckPath: /

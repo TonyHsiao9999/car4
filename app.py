@@ -2895,8 +2895,12 @@ def dispatch_result_file():
     return html
 
 if __name__ == '__main__':
-    # 支援多種平台的端口設置
-    port = int(os.environ.get('PORT', 8080))  # Render.com 使用 PORT
-    if port == 8080 and 'RENDER' in os.environ:
-        port = 10000  # Render.com 預設
-    app.run(host='0.0.0.0', port=port) 
+    port = int(os.environ.get('PORT', 5000))
+    host = '0.0.0.0' if os.environ.get('RENDER') else '127.0.0.1'
+    debug = not bool(os.environ.get('RENDER'))
+    
+    print(f"Starting Flask app on {host}:{port}")
+    print(f"Debug mode: {debug}")
+    print(f"Render environment: {bool(os.environ.get('RENDER'))}")
+    
+    app.run(host=host, port=port, debug=debug) 
