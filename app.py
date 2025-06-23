@@ -407,10 +407,13 @@ def fetch_dispatch_results():
             # 步驟4: 等待登入成功浮動視窗 - 使用預約功能的完整邏輯
             print("✅ 步驟4: 等待登入成功訊息...")
             try:
-                # 專門針對浮動視窗的選擇器
+                # 專門針對浮動視窗的選擇器 - 按照成功率排序
                 modal_selectors = [
+                    # ✅ 已驗證有效的選擇器（優先使用）
+                    '.dialog:has-text("登入成功")',  # 實測成功
+                    
+                    # 🔄 備用選擇器
                     '.modal:has-text("登入成功")',
-                    '.dialog:has-text("登入成功")', 
                     '.popup:has-text("登入成功")',
                     '.alert:has-text("登入成功")',
                     '[role="dialog"]:has-text("登入成功")',
@@ -1208,10 +1211,13 @@ def make_reservation():
             # 等待登入成功浮動視窗
             print("等待登入成功訊息...")
             try:
-                # 專門針對浮動視窗的選擇器
+                # 專門針對浮動視窗的選擇器 - 按照成功率排序
                 modal_selectors = [
+                    # ✅ 已驗證有效的選擇器（優先使用）
+                    '.dialog:has-text("登入成功")',  # 實測成功
+                    
+                    # 🔄 備用選擇器
                     '.modal:has-text("登入成功")',
-                    '.dialog:has-text("登入成功")', 
                     '.popup:has-text("登入成功")',
                     '.alert:has-text("登入成功")',
                     '[role="dialog"]:has-text("登入成功")',
@@ -1261,10 +1267,14 @@ def make_reservation():
                     # 等待一下讓浮動視窗完全顯示
                     driver['page'].wait_for_timeout(1000)
                     
-                    # 尋找確定按鈕 - 專門針對浮動視窗內的按鈕
+                    # 尋找確定按鈕 - 專門針對浮動視窗內的按鈕（按照成功率排序）
                     confirm_selectors = [
-                        '.modal button:has-text("確定")',
+                        # ✅ 已驗證有效的選擇器（優先使用）
+                        'span.dialog-button',  # 實測成功
+                        
+                        # 🔄 備用選擇器
                         '.dialog button:has-text("確定")',
+                        '.modal button:has-text("確定")',
                         '.popup button:has-text("確定")',
                         '.alert button:has-text("確定")',
                         '[role="dialog"] button:has-text("確定")',
