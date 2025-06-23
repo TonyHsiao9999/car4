@@ -29,29 +29,59 @@ def setup_driver():
     """設置 Playwright WebDriver"""
     try:
         print("正在初始化 Playwright...")
+        
+        # 檢查並確保瀏覽器已安裝
+        try:
+            from playwright.sync_api import sync_playwright
+            print("Playwright 模組載入成功")
+        except ImportError as e:
+            print(f"Playwright 模組載入失敗: {e}")
+            return None
+        
+        # 嘗試安裝瀏覽器（如果需要）
+        try:
+            import subprocess
+            result = subprocess.run(['playwright', 'install', 'chromium'], 
+                                  capture_output=True, text=True, timeout=60)
+            print(f"瀏覽器安裝檢查: {result.returncode}")
+        except Exception as e:
+            print(f"瀏覽器安裝檢查失敗: {e}")
+        
         playwright = sync_playwright().start()
         
-        # 使用 Playwright 的 Chromium
-        browser = playwright.chromium.launch(
-            headless=True,
-            args=[
-                '--no-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-gpu',
-                '--disable-web-security',
-                '--disable-features=VizDisplayCompositor',
-                '--disable-extensions',
-                '--disable-plugins',
-                '--disable-images',
-                '--disable-javascript',
+        # 使用 Playwright 的 Chromium，添加更健壯的配置
+        browser_args = [
+            '--no-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+            '--disable-web-security',
+            '--disable-features=VizDisplayCompositor',
+            '--disable-extensions',
+            '--disable-plugins',
+            '--disable-images',
+            '--disable-background-timer-throttling',
+            '--disable-backgrounding-occluded-windows',
+            '--disable-renderer-backgrounding',
+            '--disable-features=TranslateUI',
+            '--disable-ipc-flooding-protection',
+            '--memory-pressure-off',
+            '--max_old_space_size=4096',
+            '--disable-blink-features=AutomationControlled',
+            '--disable-features=VizDisplayCompositor'
+        ]
+        
+        # 在容器環境中添加額外參數
+        if os.path.exists('/.dockerenv'):
+            browser_args.extend([
+                '--disable-software-rasterizer',
                 '--disable-background-timer-throttling',
                 '--disable-backgrounding-occluded-windows',
-                '--disable-renderer-backgrounding',
-                '--disable-features=TranslateUI',
-                '--disable-ipc-flooding-protection',
-                '--memory-pressure-off',
-                '--max_old_space_size=4096'
-            ]
+                '--disable-renderer-backgrounding'
+            ])
+        
+        browser = playwright.chromium.launch(
+            headless=True,
+            args=browser_args
         )
         
         context = browser.new_context(

@@ -1,12 +1,30 @@
-FROM mcr.microsoft.com/playwright/python:v1.41.0-jammy
+FROM ubuntu:22.04
+
+# 防止交互式安裝
+ENV DEBIAN_FRONTEND=noninteractive
+
+# 安裝基礎系統依賴
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-venv \
+    wget \
+    curl \
+    xvfb \
+    && rm -rf /var/lib/apt/lists/*
+
+# 設置 Python
+RUN ln -s /usr/bin/python3 /usr/bin/python
 
 WORKDIR /app
 
-# 複製Python依賴文件
+# 複製並安裝 Python 依賴
 COPY requirements.txt .
+RUN pip3 install --no-cache-dir -r requirements.txt
 
-# 安裝Python依賴
-RUN pip install --no-cache-dir -r requirements.txt
+# 安裝 Playwright 和瀏覽器
+RUN playwright install chromium
+RUN playwright install-deps chromium
 
 # 複製應用程式檔案
 COPY app.py .
@@ -17,13 +35,19 @@ COPY static/ ./static/
 
 # 設置環境變數
 ENV PYTHONUNBUFFERED=1
-ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+ENV DISPLAY=:99
 
 # 創建截圖目錄
 RUN mkdir -p /app/screenshots
 
+# 創建啟動腳本
+RUN echo '#!/bin/bash\n\
+# 啟動虛擬顯示器\n\
+Xvfb :99 -screen 0 1920x1080x24 -ac +extension GLX +render -noreset &\n\
+sleep 2\n\
+exec python3 app.py' > /app/start.sh && chmod +x /app/start.sh
+
 # 暴露端口
 EXPOSE $PORT
 
-# 直接啟動應用
-CMD ["python", "app.py"] 
+CMD ["/app/start.sh"] 
