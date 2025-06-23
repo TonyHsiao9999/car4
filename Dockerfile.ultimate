@@ -1,0 +1,62 @@
+FROM node:18-slim
+
+# 設置非互動模式
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Asia/Taipei
+ENV PYTHONUNBUFFERED=1
+
+# 設置工作目錄
+WORKDIR /app
+
+# 安裝系統依賴（最小化避免 debconf 問題）
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    python3-venv \
+    ca-certificates \
+    tzdata \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# 設置時區
+RUN ln -sf /usr/share/zoneinfo/Asia/Taipei /etc/localtime && \
+    echo "Asia/Taipei" > /etc/timezone
+
+# 升級 pip
+RUN python3 -m pip install --upgrade pip
+
+# 複製需求檔案並安裝 Python 依賴
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 安裝 Playwright（使用 Node.js 版本，更穩定）
+RUN npm install -g playwright@1.41.0
+
+# 安裝 Playwright 瀏覽器（Node.js 方式，避開 Python 相關問題）
+RUN npx playwright install chromium
+RUN npx playwright install-deps chromium
+
+# 設置 Playwright 環境變數
+ENV PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
+ENV PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true
+
+# 驗證安裝
+RUN echo "=== Node.js Playwright 安裝驗證 ===" && \
+    npx playwright --version && \
+    echo "=== 瀏覽器檔案檢查 ===" && \
+    find /root/.cache/ms-playwright -name "chrome*" -type f -executable | head -5
+
+# 複製應用程式碼
+COPY . .
+
+# 創建必要的目錄
+RUN mkdir -p screenshots logs static
+
+# 設置權限
+RUN chmod +x deploy.sh || true
+
+# 暴露端口
+EXPOSE 5000
+
+# 啟動命令
+CMD ["python3", "app.py"] 

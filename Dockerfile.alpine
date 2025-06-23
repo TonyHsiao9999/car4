@@ -1,0 +1,57 @@
+FROM python:3.11-alpine
+
+# 設置環境變數
+ENV TZ=Asia/Taipei
+ENV PYTHONUNBUFFERED=1
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
+# 設置工作目錄
+WORKDIR /app
+
+# 安裝系統依賴（Alpine 使用 apk，沒有 debconf 問題）
+RUN apk add --no-cache \
+    bash \
+    curl \
+    wget \
+    tzdata \
+    ca-certificates \
+    chromium \
+    chromium-chromedriver \
+    && ln -sf /usr/share/zoneinfo/Asia/Taipei /etc/localtime \
+    && echo "Asia/Taipei" > /etc/timezone
+
+# 複製需求檔案並安裝 Python 依賴
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 安裝 Playwright
+RUN pip install playwright==1.41.0
+
+# 設置 Playwright 使用系統 Chromium
+ENV PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true
+ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
+# 創建 Playwright 瀏覽器目錄並建立符號連結
+RUN mkdir -p /ms-playwright/chromium-1097/chrome-linux && \
+    ln -sf /usr/bin/chromium-browser /ms-playwright/chromium-1097/chrome-linux/chrome
+
+# 複製應用程式碼
+COPY . .
+
+# 創建必要的目錄
+RUN mkdir -p screenshots logs static
+
+# 設置權限
+RUN chmod +x deploy.sh || true
+
+# 驗證設置
+RUN echo "=== Alpine Chromium 驗證 ===" && \
+    /usr/bin/chromium-browser --version && \
+    echo "=== Playwright 路徑檢查 ===" && \
+    ls -la /ms-playwright/chromium-1097/chrome-linux/
+
+# 暴露端口
+EXPOSE 5000
+
+# 啟動命令
+CMD ["python3", "app.py"] 
