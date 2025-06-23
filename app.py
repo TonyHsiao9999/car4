@@ -222,157 +222,323 @@ def fetch_dispatch_results():
         
         time.sleep(2)
         
-        # 步驟2: 點擊「我知道了」
-        print("✋ 步驟2: 尋找並點擊「我知道了」...")
+        # 步驟2: 處理首頁浮動視窗 - 點擊「我知道了」
+        print("✋ 步驟2: 處理首頁浮動視窗...")
         try:
-            # 多種可能的「我知道了」選擇器
-            know_selectors = [
-                'button:has-text("我知道了")',
-                'text=我知道了',
-                ':text("我知道了")',
-                '.btn:has-text("我知道了")',
-                'input[value="我知道了"]',
-                '[onclick*="我知道了"]',
-                '.modal button:has-text("我知道了")',
-                '.dialog button:has-text("我知道了")'
-            ]
-            
-            know_clicked = False
-            for selector in know_selectors:
-                try:
-                    element = driver['page'].locator(selector).first
-                    if element.is_visible():
-                        element.click()
-                        print(f"✅ 「我知道了」點擊成功: {selector}")
-                        know_clicked = True
-                        break
-                except:
-                    continue
-            
-            if not know_clicked:
-                print("⚠️ 沒有找到「我知道了」按鈕，可能不需要點擊")
-            
-            time.sleep(2)
-            
+            # 等待浮動視窗出現
+            driver['page'].wait_for_selector('text=我知道了', timeout=10000)
+            print("找到浮動視窗，點擊「我知道了」按鈕")
+            driver['page'].click('text=我知道了')
+            print("「我知道了」按鈕點擊成功")
+            driver['page'].screenshot(path=f"step2_popup_closed_{current_time.strftime('%Y%m%d_%H%M%S')}.png")
         except Exception as e:
-            print(f"⚠️ 「我知道了」點擊過程發生錯誤: {e}")
+            print(f"沒有找到浮動視窗或點擊失敗: {e}")
+            driver['page'].screenshot(path=f"step2_no_popup_{current_time.strftime('%Y%m%d_%H%M%S')}.png")
         
-        # 步驟3: 輸入登入資訊並點擊「民眾登入」
-        print("🔐 步驟3: 填入登入資訊...")
+        # 步驟3: 登入流程
+        print("🔐 步驟3: 開始登入流程...")
         try:
-            # 拍攝登入前截圖
-            driver['page'].screenshot(path=f"step3_before_login_{current_time.strftime('%Y%m%d_%H%M%S')}.png")
+            # 等待登入表單載入
+            driver['page'].wait_for_selector('input[type="text"]', timeout=10000)
+            print("登入表單已載入")
+            driver['page'].screenshot(path=f"step3_login_form_{current_time.strftime('%Y%m%d_%H%M%S')}.png")
             
-            # 填入身分證字號
-            print("📝 填入身分證字號: A102574899")
-            driver['page'].fill('input[type="text"], input[name*="user"], input[id*="user"], input[placeholder*="身分證"], input[placeholder*="帳號"]', 'A102574899')
+            # 輸入身分證字號
+            print("輸入身分證字號: A102574899")
+            driver['page'].fill('input[type="text"]', 'A102574899')
             
-            # 填入密碼
-            print("🔑 填入密碼: visi319VISI")
-            driver['page'].fill('input[type="password"], input[name*="pass"], input[id*="pass"], input[placeholder*="密碼"]', 'visi319VISI')
+            # 輸入密碼
+            print("輸入密碼: visi319VISI")
+            driver['page'].fill('input[type="password"]', 'visi319VISI')
             
-            time.sleep(1)
+            # 點擊民眾登入按鈕 - 使用預約功能的完整邏輯
+            print("點擊民眾登入按鈕")
+            driver['page'].screenshot(path=f"step3_before_login_click_{current_time.strftime('%Y%m%d_%H%M%S')}.png")
             
-            # 點擊「民眾登入」
-            print("🎯 點擊「民眾登入」按鈕...")
+            # 嘗試多種不同類型的登入按鈕選擇器
             login_selectors = [
+                # 一般按鈕
                 'button:has-text("民眾登入")',
+                'button[value*="民眾登入"]',
+                'button[name*="login"]',
+                
+                # input 按鈕
+                'input[type="submit"]:has-value("民眾登入")',
+                'input[type="button"]:has-value("民眾登入")',
+                'input[value="民眾登入"]',
+                'input[value*="登入"]',
+                
+                # 連結
+                'a:has-text("民眾登入")',
+                'a[href*="login"]',
+                
+                # 表單提交
+                'form input[type="submit"]',
+                'form button[type="submit"]',
+                
+                # 通用文字匹配
                 'text=民眾登入',
                 ':text("民眾登入")',
-                'input[value="民眾登入"]',
-                'input[type="submit"][value*="民眾"]',
-                'button[value*="民眾登入"]',
-                '.btn:has-text("民眾登入")',
-                '[onclick*="login"]'
+                '*:has-text("民眾登入")',
+                
+                # CSS 類別
+                '.login-btn',
+                '.btn-login',
+                '.submit-btn',
+                '.btn[onclick*="login"]',
+                
+                # ID 選擇器
+                '#login-btn',
+                '#loginBtn',
+                '#submit',
+                '#login',
+                
+                # 更廣泛的匹配
+                '[onclick*="login"]',
+                '[onclick*="submit"]'
             ]
             
             login_clicked = False
+            
             for selector in login_selectors:
                 try:
+                    print(f"嘗試登入按鈕選擇器: {selector}")
+                    
+                    # 檢查元素是否存在
                     element = driver['page'].locator(selector).first
-                    if element.is_visible():
-                        element.click()
-                        print(f"✅ 「民眾登入」點擊成功: {selector}")
-                        login_clicked = True
-                        break
-                except:
+                    if element.count() > 0:
+                        print(f"找到元素: {selector}")
+                        
+                        # 檢查元素是否可見
+                        if element.is_visible():
+                            print(f"元素可見，嘗試點擊: {selector}")
+                            element.click()
+                            print(f"登入按鈕點擊成功: {selector}")
+                            login_clicked = True
+                            break
+                        else:
+                            print(f"元素存在但不可見: {selector}")
+                    else:
+                        print(f"元素不存在: {selector}")
+                        
+                except Exception as e:
+                    print(f"登入按鈕選擇器 {selector} 失敗: {e}")
                     continue
             
+            # 如果還是沒點擊成功，嘗試更激進的方法
             if not login_clicked:
-                print("❌ 未找到「民眾登入」按鈕")
-                # 拍攝失敗截圖
-                driver['page'].screenshot(path=f"step3_login_failed_{current_time.strftime('%Y%m%d_%H%M%S')}.png")
+                print("所有標準方法失敗，嘗試更激進的方法...")
+                
+                try:
+                    # 方法1: 檢查所有按鈕的文字內容
+                    print("檢查所有按鈕...")
+                    all_buttons = driver['page'].locator('button, input[type="button"], input[type="submit"]').all()
+                    for i, button in enumerate(all_buttons):
+                        try:
+                            if button.is_visible():
+                                button_text = button.text_content() or button.get_attribute('value') or ''
+                                print(f"按鈕 {i}: '{button_text}'")
+                                if '登入' in button_text or 'login' in button_text.lower():
+                                    print(f"找到疑似登入按鈕，點擊: {button_text}")
+                                    button.click()
+                                    login_clicked = True
+                                    break
+                        except Exception as e:
+                            print(f"檢查按鈕 {i} 失敗: {e}")
+                            continue
+                except Exception as e:
+                    print(f"檢查所有按鈕失敗: {e}")
+                
+                # 方法2: 嘗試提交表單
+                if not login_clicked:
+                    try:
+                        print("嘗試直接提交登入表單...")
+                        forms = driver['page'].locator('form').all()
+                        for i, form in enumerate(forms):
+                            try:
+                                print(f"提交表單 {i}")
+                                # 使用 JavaScript 提交表單
+                                driver['page'].evaluate(f'document.forms[{i}].submit()')
+                                login_clicked = True
+                                break
+                            except Exception as e:
+                                print(f"提交表單 {i} 失敗: {e}")
+                                continue
+                    except Exception as e:
+                        print(f"表單提交失敗: {e}")
+                
+                # 方法3: 使用 JavaScript 尋找並點擊
+                if not login_clicked:
+                    try:
+                        print("使用 JavaScript 尋找登入按鈕...")
+                        js_script = """
+                        // 尋找包含"登入"文字的元素
+                        const elements = Array.from(document.querySelectorAll('*'));
+                        for (let elem of elements) {
+                            const text = elem.textContent || elem.value || '';
+                            if (text.includes('登入') || text.includes('民眾')) {
+                                if (elem.tagName === 'BUTTON' || elem.tagName === 'INPUT' || elem.tagName === 'A') {
+                                    console.log('找到登入元素:', elem);
+                                    elem.click();
+                                    return true;
+                                }
+                            }
+                        }
+                        return false;
+                        """
+                        result = driver['page'].evaluate(js_script)
+                        if result:
+                            print("JavaScript 點擊成功")
+                            login_clicked = True
+                    except Exception as e:
+                        print(f"JavaScript 點擊失敗: {e}")
+            
+            if login_clicked:
+                print("登入按鈕點擊完成")
+                driver['page'].screenshot(path=f"step3_login_clicked_{current_time.strftime('%Y%m%d_%H%M%S')}.png")
+            else:
+                print("警告：無法找到或點擊登入按鈕")
+                driver['page'].screenshot(path=f"step3_login_click_failed_{current_time.strftime('%Y%m%d_%H%M%S')}.png")
                 return {'success': False, 'data': [], 'message': '無法找到登入按鈕'}
             
-            time.sleep(3)
-            
-        except Exception as login_error:
-            print(f"❌ 登入過程發生錯誤: {login_error}")
-            driver['page'].screenshot(path=f"step3_login_error_{current_time.strftime('%Y%m%d_%H%M%S')}.png")
-            return {'success': False, 'data': [], 'message': f'登入過程錯誤: {login_error}'}
-        
-        # 步驟4: 點擊「登入成功」的「確定」
-        print("✅ 步驟4: 等待並點擊「登入成功」的「確定」...")
-        try:
-            # 等待「登入成功」訊息出現
-            success_selectors = [
-                'text=登入成功',
-                ':text("登入成功")',
-                '.modal:has-text("登入成功")',
-                '.dialog:has-text("登入成功")',
-                '.alert:has-text("登入成功")',
-                '.swal-modal:has-text("登入成功")'
-            ]
-            
-            success_found = False
-            for selector in success_selectors:
-                try:
-                    driver['page'].wait_for_selector(selector, timeout=5000)
-                    print(f"🎉 找到「登入成功」訊息: {selector}")
-                    success_found = True
-                    break
-                except:
-                    continue
-            
-            if success_found:
-                # 拍攝登入成功截圖
-                driver['page'].screenshot(path=f"step4_login_success_{current_time.strftime('%Y%m%d_%H%M%S')}.png")
-                
-                # 點擊「確定」
-                confirm_selectors = [
-                    'button:has-text("確定")',
-                    'text=確定',
-                    ':text("確定")',
-                    '.btn:has-text("確定")',
-                    'input[value="確定"]',
-                    '.modal button:has-text("確定")',
-                    '.dialog button:has-text("確定")'
+            # 步驟4: 等待登入成功浮動視窗 - 使用預約功能的完整邏輯
+            print("✅ 步驟4: 等待登入成功訊息...")
+            try:
+                # 專門針對浮動視窗的選擇器
+                modal_selectors = [
+                    '.modal:has-text("登入成功")',
+                    '.dialog:has-text("登入成功")', 
+                    '.popup:has-text("登入成功")',
+                    '.alert:has-text("登入成功")',
+                    '[role="dialog"]:has-text("登入成功")',
+                    '.swal-modal:has-text("登入成功")',
+                    '.modal-content:has-text("登入成功")',
+                    '.ui-dialog:has-text("登入成功")'
                 ]
                 
-                for selector in confirm_selectors:
+                # 先嘗試找到浮動視窗
+                modal_found = False
+                modal_element = None
+                
+                for selector in modal_selectors:
                     try:
-                        element = driver['page'].locator(selector).first
-                        if element.is_visible():
-                            element.click()
-                            print(f"✅ 「確定」點擊成功: {selector}")
-                            break
-                    except:
+                        print(f"尋找浮動視窗: {selector}")
+                        modal_element = driver['page'].wait_for_selector(selector, timeout=5000)
+                        print(f"找到登入成功浮動視窗: {selector}")
+                        modal_found = True
+                        break
+                    except Exception as e:
+                        print(f"浮動視窗選擇器 {selector} 未找到: {e}")
                         continue
                 
-                time.sleep(2)
-            else:
-                print("⚠️ 沒有找到「登入成功」訊息，可能直接跳轉")
+                # 如果沒找到特定的浮動視窗，嘗試通用的登入成功訊息
+                if not modal_found:
+                    generic_selectors = [
+                        'text=登入成功',
+                        ':text("登入成功")',
+                        '*:has-text("登入成功")'
+                    ]
+                    
+                    for selector in generic_selectors:
+                        try:
+                            print(f"尋找通用登入成功訊息: {selector}")
+                            driver['page'].wait_for_selector(selector, timeout=3000)
+                            print(f"找到登入成功訊息: {selector}")
+                            modal_found = True
+                            break
+                        except Exception as e:
+                            print(f"通用選擇器 {selector} 未找到: {e}")
+                            continue
+                
+                if modal_found:
+                    # 截圖記錄找到登入成功訊息
+                    driver['page'].screenshot(path=f"step4_login_success_modal_{current_time.strftime('%Y%m%d_%H%M%S')}.png")
+                    
+                    # 等待一下讓浮動視窗完全顯示
+                    driver['page'].wait_for_timeout(1000)
+                    
+                    # 尋找確定按鈕 - 專門針對浮動視窗內的按鈕
+                    confirm_selectors = [
+                        '.modal button:has-text("確定")',
+                        '.dialog button:has-text("確定")',
+                        '.popup button:has-text("確定")',
+                        '.alert button:has-text("確定")',
+                        '[role="dialog"] button:has-text("確定")',
+                        '.swal-button:has-text("確定")',
+                        '.modal-footer button:has-text("確定")',
+                        '.ui-dialog-buttonset button:has-text("確定")',
+                        'button:has-text("確定")',
+                        'text=確定',
+                        '.btn:has-text("確定")',
+                        'input[value="確定"]'
+                    ]
+                    
+                    confirm_clicked = False
+                    for confirm_selector in confirm_selectors:
+                        try:
+                            print(f"嘗試點擊確定按鈕: {confirm_selector}")
+                            # 等待按鈕可見
+                            button = driver['page'].wait_for_selector(confirm_selector, timeout=3000)
+                            if button.is_visible():
+                                button.click()
+                                print(f"確定按鈕點擊成功: {confirm_selector}")
+                                confirm_clicked = True
+                                break
+                        except Exception as e:
+                            print(f"確定按鈕 {confirm_selector} 點擊失敗: {e}")
+                            continue
+                    
+                    if not confirm_clicked:
+                        print("未找到確定按鈕，嘗試點擊任何可見的按鈕")
+                        try:
+                            # 嘗試點擊浮動視窗中的任何按鈕
+                            buttons = driver['page'].locator('button').all()
+                            for button in buttons:
+                                if button.is_visible():
+                                    button_text = button.text_content()
+                                    print(f"發現按鈕: {button_text}")
+                                    if any(word in button_text for word in ['確定', 'OK', '好', '關閉']):
+                                        button.click()
+                                        print(f"點擊按鈕: {button_text}")
+                                        confirm_clicked = True
+                                        break
+                        except Exception as e:
+                            print(f"嘗試點擊其他按鈕失敗: {e}")
+                    
+                    if not confirm_clicked:
+                        print("所有按鈕點擊嘗試失敗，嘗試按 ESC 鍵關閉浮動視窗")
+                        driver['page'].keyboard.press('Escape')
+                    
+                    print("登入成功確認完成")
+                    driver['page'].screenshot(path=f"step4_login_success_confirmed_{current_time.strftime('%Y%m%d_%H%M%S')}.png")
+                else:
+                    print("沒有找到登入成功浮動視窗，可能已經登入成功或登入失敗")
+                    driver['page'].screenshot(path=f"step4_no_login_success_modal_{current_time.strftime('%Y%m%d_%H%M%S')}.png")
+                    
+            except Exception as e:
+                print(f"登入成功檢測過程發生錯誤: {e}")
+                driver['page'].screenshot(path=f"step4_login_success_detection_error_{current_time.strftime('%Y%m%d_%H%M%S')}.png")
+            
+            # 等待登入完成
+            print("等待登入完成...")
+            driver['page'].wait_for_load_state("networkidle")
+            print("登入流程完成")
+            driver['page'].screenshot(path=f"step4_login_complete_{current_time.strftime('%Y%m%d_%H%M%S')}.png")
             
         except Exception as e:
-            print(f"⚠️ 登入成功確認過程發生錯誤: {e}")
+            print(f"登入過程發生錯誤: {e}")
+            driver['page'].screenshot(path=f"step3_login_error_{current_time.strftime('%Y%m%d_%H%M%S')}.png")
+            return {'success': False, 'data': [], 'message': f'登入過程錯誤: {e}'}
         
-        # 步驟5: 點擊「訂單查詢」
+        # 步驟5: 點擊「訂單查詢」- 使用您提供的精確選擇器
         print("📋 步驟5: 點擊「訂單查詢」...")
         try:
             # 拍攝主頁面截圖
             driver['page'].screenshot(path=f"step5_main_page_{current_time.strftime('%Y%m%d_%H%M%S')}.png")
             
+            # 首先嘗試您提供的精確選擇器
             order_selectors = [
+                '.page:nth-child(2) .pc_header li:nth-child(2)',  # 您提供的精確選擇器
                 'a:has-text("訂單查詢")',
                 'text=訂單查詢',
                 ':text("訂單查詢")',
@@ -386,23 +552,31 @@ def fetch_dispatch_results():
             order_clicked = False
             for selector in order_selectors:
                 try:
+                    print(f"嘗試訂單查詢選擇器: {selector}")
                     element = driver['page'].locator(selector).first
-                    if element.is_visible():
+                    if element.count() > 0 and element.is_visible():
                         element.click()
                         print(f"✅ 「訂單查詢」點擊成功: {selector}")
                         order_clicked = True
                         break
-                except:
+                    else:
+                        print(f"選擇器 {selector} 未找到或不可見")
+                except Exception as e:
+                    print(f"訂單查詢選擇器 {selector} 失敗: {e}")
                     continue
             
             if not order_clicked:
                 print("⚠️ 未找到「訂單查詢」按鈕，嘗試直接導航...")
                 driver['get']("https://www.ntpc.ltc-car.org/ReservationOrder/")
             
-            time.sleep(3)
+            # 等待頁面載入
+            print("等待訂單查詢頁面載入...")
+            driver['page'].wait_for_load_state("networkidle")
+            driver['page'].screenshot(path=f"step5_order_query_clicked_{current_time.strftime('%Y%m%d_%H%M%S')}.png")
             
         except Exception as e:
             print(f"⚠️ 訂單查詢點擊過程發生錯誤: {e}")
+            driver['page'].screenshot(path=f"step5_order_query_error_{current_time.strftime('%Y%m%d_%H%M%S')}.png")
         
         # 步驟6: 準備開始尋找派車紀錄
         print("🔍 步驟6: 開始尋找派車紀錄...")
