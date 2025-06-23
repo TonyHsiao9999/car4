@@ -375,14 +375,8 @@ def fetch_dispatch_results():
             driver['page'].wait_for_timeout(5000)
             take_screenshot("order_list_loaded")
             
-            # 使用台北時區的當日日期
-            taipei_tz = pytz.timezone('Asia/Taipei')
-            today = datetime.now(taipei_tz)
-            target_date = today.strftime("%Y/%m/%d")
-            utc_time = datetime.utcnow()
-            print(f"🌏 UTC時間: {utc_time.strftime('%Y-%m-%d %H:%M:%S')}")
-            print(f"🇹🇼 台北時間: {today.strftime('%Y-%m-%d %H:%M:%S')}")
-            print(f"🔍 尋找預約日期為 {target_date} 的訂單 (台北時區)...")
+            # 不使用日期篩選，處理所有記錄
+            print("🎯 搜尋所有記錄，不限制日期範圍")
             
             # 分析訂單記錄
             print("開始分析訂單記錄...")
@@ -413,23 +407,125 @@ def fetch_dispatch_results():
             
             driver['page'].on('response', handle_response)
             
-            # 直接獲取所有記錄（移除分頁邏輯）
-            print("🎯 簡化處理：直接獲取所有記錄...")
+            # 改進的記錄載入邏輯：確保載入所有記錄
+            print("🎯 智能記錄載入：嘗試載入所有記錄...")
             
-            # 等待記錄載入並獲取所有 order_list 元素
+            # 等待記錄載入
             driver['page'].wait_for_selector('.order_list', timeout=10000)
+            
+            # 多次滾動和等待，確保載入所有記錄
+            print("📜 開始滾動載入所有記錄...")
+            
+            previous_count = 0
+            retry_count = 0
+            max_retries = 10
+            
+            while retry_count < max_retries:
+                # 獲取當前記錄數
+                current_elements = driver['page'].query_selector_all('.order_list')
+                current_count = len(current_elements)
+                
+                print(f"🔄 載入嘗試 {retry_count + 1}: 找到 {current_count} 筆記錄")
+                
+                # 如果記錄數沒有增加，可能已經載入完成
+                if current_count == previous_count and retry_count > 0:
+                    print("📊 記錄數量穩定，可能已載入完成")
+                    
+                    # 額外等待和重試，確保沒有更多記錄
+                    driver['page'].wait_for_timeout(2000)
+                    final_check_elements = driver['page'].query_selector_all('.order_list')
+                    final_count = len(final_check_elements)
+                    
+                    if final_count == current_count:
+                        print(f"✅ 最終確認：共載入 {final_count} 筆記錄")
+                        break
+                    else:
+                        print(f"🔄 發現新記錄，繼續載入... ({final_count} 筆)")
+                        current_count = final_count
+                
+                # 滾動到頁面底部，觸發懶載入
+                print("📜 滾動到頁面底部...")
+                driver['page'].evaluate('window.scrollTo(0, document.body.scrollHeight)')
+                driver['page'].wait_for_timeout(3000)
+                
+                # 嘗試尋找並點擊「載入更多」或「下一頁」按鈕
+                load_more_selectors = [
+                    'button:has-text("載入更多")',
+                    'button:has-text("更多")',
+                    'button:has-text("下一頁")',
+                    '.load-more',
+                    '.next-page',
+                    '.pagination .next',
+                    'a:has-text("下一頁")',
+                    'a:has-text("更多")'
+                ]
+                
+                load_more_clicked = False
+                for selector in load_more_selectors:
+                    try:
+                        element = driver['page'].locator(selector).first
+                        if element.count() > 0 and element.is_visible():
+                            print(f"🔗 找到載入更多按鈕: {selector}")
+                            element.click()
+                            driver['page'].wait_for_timeout(3000)
+                            load_more_clicked = True
+                            break
+                    except:
+                        continue
+                
+                if load_more_clicked:
+                    print("✅ 成功點擊載入更多按鈕")
+                else:
+                    print("🔍 未找到載入更多按鈕，嘗試其他方法...")
+                
+                # 嘗試觸發無限滾動
+                for scroll_attempt in range(3):
+                    print(f"📜 滾動嘗試 {scroll_attempt + 1}/3")
+                    driver['page'].evaluate('window.scrollTo(0, document.body.scrollHeight)')
+                    driver['page'].wait_for_timeout(1500)
+                    
+                    # 檢查是否有新記錄載入
+                    check_elements = driver['page'].query_selector_all('.order_list')
+                    if len(check_elements) > current_count:
+                        print(f"📈 發現新記錄: {len(check_elements)} > {current_count}")
+                        current_count = len(check_elements)
+                        break
+                
+                previous_count = current_count
+                retry_count += 1
+                
+                # 等待頁面穩定
+                driver['page'].wait_for_load_state("networkidle", timeout=5000)
+                driver['page'].wait_for_timeout(2000)
+            
+            # 最終獲取所有記錄
             all_order_elements = driver['page'].query_selector_all('.order_list')
             total_elements_on_page = len(all_order_elements)
-            print(f"📊 當前載入的記錄總數: {total_elements_on_page} 個")
+            print(f"🎯 載入完成！總共找到 {total_elements_on_page} 筆記錄")
             
-            # 改進的記錄檢測邏輯：直接使用元素而非索引
+            if total_elements_on_page == 0:
+                print("❌ 沒有找到任何記錄，可能頁面結構有變化")
+                take_screenshot("no_records_found")
+                return False
+            
+            # 強化的記錄檢測邏輯：全方位識別已派車記錄
+            print("🔍 開始分析所有記錄，尋找已派車狀態...")
             dispatch_records = []
+            
             for i, element in enumerate(all_order_elements, 1):
                 try:
                     is_visible = element.is_visible()
-                    class_list = element.get_attribute('class') or ''
+                    if not is_visible:
+                        print(f"⚠️ 記錄 {i}: 不可見，跳過")
+                        continue
                     
-                    # 檢查各種訂單狀態
+                    print(f"\n🔍 詳細分析記錄 {i}:")
+                    
+                    # 分析 CSS 類別
+                    class_list = element.get_attribute('class') or ''
+                    print(f"   📋 CSS類別: '{class_list}'")
+                    
+                    # 檢查各種訂單狀態標識
                     is_cancelled = 'cancel' in class_list.lower()
                     is_accept = 'accept' in class_list.lower()
                     is_established = 'established' in class_list.lower()
@@ -438,70 +534,107 @@ def fetch_dispatch_results():
                     is_finish = 'finish' in class_list.lower()
                     is_recently = 'recently' in class_list.lower()
                     
-                    print(f"🔍 檢查元素 {i}: 可見={is_visible}")
-                    print(f"   📋 狀態分析: class='{class_list}'")
-                    print(f"   🏷️ 狀態標籤: 取消={is_cancelled}, 接受={is_accept}, 確立={is_established}")
-                    print(f"   🎯 派車={is_dispatch}, 執行={is_implement}, 完成={is_finish}")
-                    print(f"   📅 最近={is_recently}")
+                    print(f"   🏷️ 狀態分析: 取消={is_cancelled}, 接受={is_accept}, 確立={is_established}")
+                    print(f"   🎯 派車狀態: 派車={is_dispatch}, 執行={is_implement}, 完成={is_finish}, 最近={is_recently}")
                     
-                    # 改進的記錄篩選邏輯
-                    if is_visible:
-                        if is_dispatch:
-                            dispatch_records.append({'index': i, 'element': element})
-                            total_dispatch_records_found += 1
-                            print(f"✅ 元素 {i} 是已派車記錄 - 這是我們要的！")
-                        elif is_recently and not is_cancelled:
-                            print(f"🔍 元素 {i} 是最近記錄，需要進一步檢查...")
-                            
-                            try:
-                                car_selectors = [
-                                    '.car_number',
-                                    '.driver_name', 
-                                    '.vehicle_info',
-                                    '.dispatch_info'
-                                ]
-                                
-                                has_dispatch_info = False
-                                for car_sel in car_selectors:
-                                    car_element = element.query_selector(car_sel)
-                                    if car_element and car_element.is_visible():
-                                        car_text = car_element.inner_text().strip()
-                                        if car_text and len(car_text) > 0:
-                                            print(f"   🚗 找到派車資訊: {car_text}")
-                                            has_dispatch_info = True
-                                            break
-                                
-                                if has_dispatch_info:
-                                    dispatch_records.append({'index': i, 'element': element})
-                                    total_dispatch_records_found += 1
-                                    print(f"✅ 元素 {i} 是最近記錄但包含派車資訊 - 加入處理！")
-                                else:
-                                    print(f"❌ 元素 {i} 是最近記錄但沒有派車資訊，跳過")
-                            except Exception as e:
-                                print(f"⚠️ 檢查元素 {i} 派車資訊時發生錯誤: {e}")
-                                dispatch_records.append({'index': i, 'element': element})
-                                total_dispatch_records_found += 1
-                                print(f"✅ 元素 {i} 檢查失敗，保守加入處理")
-                        elif is_cancelled:
-                            print(f"❌ 元素 {i} 是已取消記錄，跳過")
-                        elif is_accept:
-                            print(f"❌ 元素 {i} 是已接受記錄（尚未派車），跳過")
-                        elif is_established:
-                            print(f"❌ 元素 {i} 是已確立記錄（尚未派車），跳過")
-                        elif is_implement:
-                            print(f"❌ 元素 {i} 是執行中記錄（已過派車階段），跳過")
-                        elif is_finish:
-                            print(f"❌ 元素 {i} 是已完成記錄（已過派車階段），跳過")
+                    # 提取記錄內的所有文字進行進一步分析
+                    try:
+                        full_text = element.inner_text().strip()
+                        
+                        # 檢查文字中是否包含派車相關關鍵字
+                        dispatch_keywords = ['已派車', '派車', '車號', '司機', '駕駛', '聯絡電話']
+                        status_keywords_in_text = [kw for kw in dispatch_keywords if kw in full_text]
+                        
+                        if status_keywords_in_text:
+                            print(f"   📝 文字分析: 找到派車關鍵字 {status_keywords_in_text}")
                         else:
-                            print(f"❌ 元素 {i} 是其他狀態記錄，跳過")
+                            print(f"   📝 文字分析: 無明顯派車關鍵字")
+                        
+                        # 檢查是否有明確的車輛資訊
+                        has_vehicle_info = False
+                        vehicle_selectors = [
+                            '.car_number', '.vehicle_number', '.car_info', '.vehicle_info',
+                            '.driver_name', '.driver_info', '.contact_phone', '.phone',
+                            '[class*="car"]', '[class*="vehicle"]', '[class*="driver"]'
+                        ]
+                        
+                        vehicle_info_found = []
+                        for v_sel in vehicle_selectors:
+                            try:
+                                v_elements = element.query_selector_all(v_sel)
+                                for v_elem in v_elements:
+                                    if v_elem and v_elem.is_visible():
+                                        v_text = v_elem.inner_text().strip()
+                                        if v_text and len(v_text) > 0:
+                                            vehicle_info_found.append(f"{v_sel}: {v_text}")
+                                            has_vehicle_info = True
+                            except:
+                                continue
+                        
+                        if vehicle_info_found:
+                            print(f"   🚗 車輛資訊: {vehicle_info_found[:3]}")  # 只顯示前3個
+                        else:
+                            print(f"   🚗 車輛資訊: 未找到")
+                        
+                    except Exception as e:
+                        print(f"   ⚠️ 文字分析失敗: {e}")
+                        full_text = ""
+                        has_vehicle_info = False
+                    
+                    # 決策邏輯：判斷是否為已派車記錄
+                    is_dispatch_record = False
+                    reason = ""
+                    
+                    if is_cancelled:
+                        reason = "已取消記錄，跳過"
+                    elif is_dispatch:
+                        is_dispatch_record = True
+                        reason = "CSS類別明確顯示為已派車狀態"
+                    elif has_vehicle_info and not is_accept and not is_established:
+                        is_dispatch_record = True
+                        reason = "包含車輛資訊且非初期狀態，判定為已派車"
+                    elif '已派車' in full_text or '車號' in full_text:
+                        is_dispatch_record = True
+                        reason = "文字內容包含明確派車資訊"
+                    elif is_recently and has_vehicle_info:
+                        is_dispatch_record = True
+                        reason = "最近記錄且包含車輛資訊"
+                    elif is_accept:
+                        reason = "僅為已接受狀態（尚未派車）"
+                    elif is_established:
+                        reason = "僅為已確立狀態（尚未派車）"
+                    elif is_implement:
+                        reason = "執行中狀態（已過派車階段）"
+                    elif is_finish:
+                        reason = "已完成狀態（已過派車階段）"
                     else:
-                        print(f"❌ 元素 {i} 不可見，跳過")
+                        reason = "無法確定狀態，保守跳過"
+                    
+                    print(f"   📊 判定結果: {'✅ 已派車' if is_dispatch_record else '❌ 非已派車'} - {reason}")
+                    
+                    if is_dispatch_record:
+                        dispatch_records.append({'index': i, 'element': element, 'reason': reason})
+                        total_dispatch_records_found += 1
+                        print(f"   ➕ 加入處理清單 (總計: {total_dispatch_records_found})")
+                        
                 except Exception as e:
-                    print(f"⚠️ 檢查元素 {i} 時發生錯誤: {e}")
+                    print(f"   ⚠️ 分析記錄 {i} 時發生錯誤: {e}")
+                    # 發生錯誤時保守處理，加入清單
+                    dispatch_records.append({'index': i, 'element': element, 'reason': "分析錯誤，保守加入"})
+                    total_dispatch_records_found += 1
                     continue
             
-            print(f"🎯 找到已派車記錄: {[r['index'] for r in dispatch_records]}")
-            print(f"📊 累計已派車記錄總數: {total_dispatch_records_found}")
+            print(f"\n🎯 搜尋結果統計:")
+            print(f"   📊 總掃描記錄數: {total_elements_on_page}")
+            print(f"   ✅ 找到已派車記錄: {total_dispatch_records_found} 筆")
+            print(f"   📋 已派車記錄編號: {[r['index'] for r in dispatch_records]}")
+            
+            if dispatch_records:
+                print(f"\n📝 已派車記錄詳情:")
+                for record in dispatch_records:
+                    print(f"   • 記錄 {record['index']}: {record['reason']}")
+            else:
+                print(f"\n⚠️ 注意: 在 {total_elements_on_page} 筆記錄中沒有找到任何已派車狀態的記錄")
             
             # 直接使用元素處理已派車狀態的記錄（移除日期篩選）
             for record_info in dispatch_records:
@@ -510,36 +643,28 @@ def fetch_dispatch_results():
                 try:
                     print(f"🔍 處理第 {record_index} 筆已派車記錄...")
                     
-                    # 在該元素內找日期元素
+                    print(f"🚗 處理已派車記錄 {record_index}")
+                    
+                    # 嘗試取得日期文字（僅供顯示，不做篩選）
+                    date_text = "日期資訊未取得"
                     date_selectors = [
                         '.order_blocks.date .text',
                         '.date .text',
                         '.order_blocks .text'
                     ]
                     
-                    date_element = None
                     for date_sel in date_selectors:
                         try:
                             date_element = order_element.query_selector(date_sel)
                             if date_element and date_element.is_visible():
-                                print(f"✅ 使用選擇器 '{date_sel}' 找到日期元素")
+                                date_text = date_element.inner_text().strip()
+                                print(f"📅 第 {record_index} 筆記錄日期: {date_text}")
                                 break
                         except:
                             continue
                     
-                    if not date_element:
-                        print(f"❌ 在第 {record_index} 筆記錄中找不到日期元素")
-                        continue
-                    
-                    print(f"🚗 處理已派車記錄 {record_index}")
-                    
-                    # 取得日期文字
-                    date_text = date_element.inner_text().strip()
                     total_records_checked += 1
-                    print(f"📅 第 {record_index} 筆記錄日期: {date_text}")
-                    
-                    # 移除日期篩選，直接處理所有已派車記錄
-                    print(f"✅ 找到已派車記錄 {record_index}，直接處理（不檢查日期）")
+                    print(f"✅ 處理已派車記錄 {record_index}（不限制日期）")
                     
                     take_screenshot(f"record_{record_index}_found")
                     
@@ -685,7 +810,8 @@ def fetch_dispatch_results():
             taipei_tz = pytz.timezone('Asia/Taipei')
             query_time = datetime.now(taipei_tz)
             result_content = f"派車結果查詢時間: {query_time.strftime('%Y-%m-%d %H:%M:%S')} (台北時區)\n"
-            result_content += f"🎯 搜尋範圍: 所有「已派車」狀態的記錄 (不限制日期)\n"
+            result_content += f"🎯 搜尋範圍: 所有記錄 (智能載入 + 全方位分析)\n"
+            result_content += f"總掃描記錄數: {total_elements_on_page}\n"
             result_content += f"總共檢查記錄數: {total_records_checked}\n"
             result_content += f"累計找到已派車記錄數: {total_dispatch_records_found}\n"
             result_content += f"成功處理的已派車記錄數: {len(results)}\n"
@@ -2070,44 +2196,204 @@ def index():
     <head>
         <title>長照交通接送預約系統</title>
         <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            .container { max-width: 800px; margin: 0 auto; }
+            body { 
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                margin: 0; 
+                padding: 20px; 
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
+            }
+            .container { 
+                max-width: 1200px; 
+                margin: 0 auto; 
+                background: white; 
+                border-radius: 16px; 
+                padding: 30px; 
+                box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            }
+            .header {
+                text-align: center;
+                margin-bottom: 40px;
+                padding-bottom: 20px;
+                border-bottom: 3px solid #f0f0f0;
+            }
+            .header h1 {
+                color: #2c3e50;
+                margin: 0;
+                font-size: 2.5em;
+                font-weight: 300;
+            }
+            .header p {
+                color: #7f8c8d;
+                margin: 10px 0 0 0;
+                font-size: 1.1em;
+            }
+            .section {
+                margin-bottom: 40px;
+                padding: 25px;
+                border-radius: 12px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            }
+            .section-reservation {
+                background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+                border-left: 5px solid #2196f3;
+            }
+            .section-dispatch {
+                background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+                border-left: 5px solid #9c27b0;
+            }
+            .section-logs {
+                background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+                border-left: 5px solid #ff9800;
+            }
+            .section h2 {
+                margin: 0 0 20px 0;
+                font-size: 1.6em;
+                font-weight: 500;
+            }
+            .section-reservation h2 { color: #1976d2; }
+            .section-dispatch h2 { color: #7b1fa2; }
+            .section-logs h2 { color: #f57c00; }
+            .section p {
+                margin: 0 0 20px 0;
+                color: #5a6c7d;
+                line-height: 1.5;
+            }
+            .buttons {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+                gap: 15px;
+            }
             .button { 
-                background-color: #4CAF50; 
-                color: white; 
-                padding: 15px 32px; 
+                background: white;
+                color: #2c3e50;
+                padding: 18px 24px; 
                 text-align: center; 
                 text-decoration: none; 
-                display: inline-block; 
+                display: block; 
                 font-size: 16px; 
-                margin: 4px 2px; 
-                cursor: pointer; 
-                border: none; 
-                border-radius: 4px; 
+                font-weight: 500;
+                border: 2px solid transparent;
+                border-radius: 10px; 
+                transition: all 0.3s ease;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             }
-            .dispatch-button {
-                background-color: #2196F3;
+            .button:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 6px 20px rgba(0,0,0,0.15);
             }
-            .test-button {
-                background-color: #FF9800;
+            .section-reservation .button:hover {
+                border-color: #2196f3;
+                background: #e3f2fd;
             }
-            .view-button {
-                background-color: #9C27B0;
+            .section-dispatch .button:hover {
+                border-color: #9c27b0;
+                background: #f3e5f5;
+            }
+            .section-logs .button:hover {
+                border-color: #ff9800;
+                background: #fff3e0;
+            }
+            .icon {
+                font-size: 1.2em;
+                margin-right: 8px;
+            }
+            .status-bar {
+                background: #ecf0f1;
+                padding: 15px;
+                border-radius: 8px;
+                margin-bottom: 30px;
+                text-align: center;
+                color: #34495e;
+            }
+            @media (max-width: 768px) {
+                .container { 
+                    margin: 10px; 
+                    padding: 20px; 
+                }
+                .header h1 { 
+                    font-size: 2em; 
+                }
+                .buttons {
+                    grid-template-columns: 1fr;
+                }
+                .section {
+                    padding: 20px;
+                }
             }
         </style>
     </head>
     <body>
         <div class="container">
-            <h1>長照交通接送預約系統</h1>
-            <h2>主要功能</h2>
-            <a href="/reserve" class="button">🚗 開始預約</a>
-            <a href="/fetch-dispatch" class="button dispatch-button">📊 查詢派車結果</a>
-            <h2>測試功能</h2>
-            <a href="/test-address" class="button test-button">🏠 測試住家地址填入</a>
-            <h2>查看資料</h2>
-            <a href="/screenshots" class="button view-button">📸 查看截圖</a>
-            <a href="/page_source" class="button view-button">📄 查看頁面原始碼</a>
+            <div class="header">
+                <h1>🚗 長照交通接送預約系統</h1>
+                <p>新北市長期照護交通預約服務 - 智能自動化管理平台</p>
+            </div>
+            
+            <div class="status-bar">
+                <strong>🕒 排程狀態：</strong>
+                每週一、四 00:01（台灣時間）自動執行預約 |
+                每週一、四 00:10（台灣時間）自動查詢派車結果
+                <span style="color:#888;font-size:0.95em;">（伺服器為 UTC+0，台灣時間為 UTC+8）</span>
+            </div>
+            
+            <!-- 第一區：預約功能 -->
+            <div class="section section-reservation">
+                <h2><span class="icon">📋</span>預約功能</h2>
+                <p>執行長照交通預約作業，包含完整的預約流程和過程記錄</p>
+                <div class="buttons">
+                    <a href="/reserve" class="button">
+                        <span class="icon">🚗</span>開始預約
+                    </a>
+                    <a href="/screenshots" class="button">
+                        <span class="icon">📸</span>查看預約時截圖
+                    </a>
+                </div>
+            </div>
+            
+            <!-- 第二區：派車查詢 -->
+            <div class="section section-dispatch">
+                <h2><span class="icon">🔍</span>派車查詢</h2>
+                <p>查詢和管理派車結果，提供多種檢視和匯出功能</p>
+                <div class="buttons">
+                    <a href="/fetch-dispatch" class="button">
+                        <span class="icon">🔄</span>抓取派車結果
+                    </a>
+                    <a href="/latest-dispatch" class="button">
+                        <span class="icon">📋</span>看最新派車結果
+                    </a>
+                    <a href="/dispatch-screenshots" class="button">
+                        <span class="icon">🔍</span>查看尋找派車結果截圖
+                    </a>
+                    <a href="/dispatch-result-file" class="button">
+                        <span class="icon">📄</span>查看派車結果本地檔案
+                    </a>
+                </div>
+            </div>
+            
+            <!-- 第三區：日誌類 -->
+            <div class="section section-logs">
+                <h2><span class="icon">📊</span>系統日誌</h2>
+                <p>監控系統執行狀況，查看排程任務和操作記錄</p>
+                <div class="status-bar" style="margin-bottom:18px; background:#f8f9fa; color:#333; font-size:1em;">
+                    <strong>📅 目前系統排程：</strong>
+                    <ul style="margin:8px 0 0 20px; padding:0; list-style:disc inside; font-size:0.98em;">
+                        <li>每週一、四 00:01（台灣時間）自動執行預約</li>
+                        <li>每週一、四 00:10（台灣時間）自動查詢派車結果</li>
+                        <li>（Zeabur 伺服器為 UTC+0，台灣時間為 UTC+8）</li>
+                    </ul>
+                </div>
+                <div class="buttons">
+                    <a href="/cron-logs" class="button">
+                        <span class="icon">📊</span>查看預約日誌
+                    </a>
+                    <a href="/dispatch-cron-logs" class="button">
+                        <span class="icon">📈</span>查看派車查詢日誌
+                    </a>
+                </div>
+            </div>
         </div>
     </body>
     </html>
