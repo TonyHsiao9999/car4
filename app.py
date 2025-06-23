@@ -38,22 +38,9 @@ def setup_driver():
             print(f"Playwright 模組載入失敗: {e}")
             return None
         
-        # 嘗試確保瀏覽器已安裝
-        print("檢查 Playwright 瀏覽器可用性...")
-        try:
-            import subprocess
-            import sys
-            # 嘗試安裝瀏覽器
-            result = subprocess.run([sys.executable, '-m', 'playwright', 'install', 'chromium'], 
-                                  capture_output=True, text=True, timeout=120)
-            print(f"瀏覽器安裝結果: {result.returncode}")
-            if result.stdout:
-                print(f"安裝輸出: {result.stdout[:200]}")
-            if result.stderr:
-                print(f"安裝錯誤: {result.stderr[:200]}")
-        except Exception as e:
-            print(f"瀏覽器安裝嘗試失敗: {e}")
-            # 繼續嘗試，也許瀏覽器已經存在
+        # 簡化的瀏覽器檢查（跳過預檢，直接嘗試啟動）
+        print("⚡ 快速模式：直接嘗試啟動瀏覽器...")
+        browser_available = True  # 假設可用，失敗時再處理
         
         playwright = sync_playwright().start()
         
@@ -81,29 +68,42 @@ def setup_driver():
         
         print(f"瀏覽器啟動參數: {browser_args}")
         
-        # 嘗試啟動瀏覽器，加入重試機制
+        # 啟動瀏覽器（快速模式，失敗時自動安裝）
         browser = None
-        max_retries = 3
         
-        for attempt in range(max_retries):
+        try:
+            print("🚀 啟動瀏覽器...")
+            browser = playwright.chromium.launch(
+                headless=True,
+                args=browser_args,
+                timeout=20000  # 20秒超時，快速失敗
+            )
+            print("✅ 瀏覽器啟動成功")
+        except Exception as e:
+            print(f"❌ 瀏覽器啟動失敗: {e}")
+            print("🔄 自動安裝瀏覽器並重試...")
             try:
-                print(f"嘗試啟動瀏覽器 (第 {attempt + 1}/{max_retries} 次)...")
-                browser = playwright.chromium.launch(
-                    headless=True,
-                    args=browser_args,
-                    timeout=60000  # 60秒超時
-                )
-                print("瀏覽器啟動成功")
-                break
-            except Exception as e:
-                print(f"瀏覽器啟動失敗 (第 {attempt + 1} 次): {e}")
-                if attempt < max_retries - 1:
-                    print("等待 2 秒後重試...")
-                    time.sleep(2)
+                import subprocess
+                import sys
+                # 啟動失敗時才安裝
+                result = subprocess.run([sys.executable, '-m', 'playwright', 'install', 'chromium'], 
+                                      capture_output=True, text=True, timeout=60)
+                if result.returncode == 0:
+                    print("✅ 瀏覽器安裝完成，重新啟動...")
+                    browser = playwright.chromium.launch(
+                        headless=True,
+                        args=browser_args,
+                        timeout=20000
+                    )
+                    print("✅ 瀏覽器重新啟動成功")
                 else:
-                    print("所有重試都失敗，無法啟動瀏覽器")
+                    print(f"❌ 瀏覽器安裝失敗: {result.stderr[:100]}")
                     playwright.stop()
                     return None
+            except Exception as install_e:
+                print(f"❌ 瀏覽器安裝和重啟過程失敗: {install_e}")
+                playwright.stop()
+                return None
         
         context = browser.new_context(
             viewport={'width': 1920, 'height': 1080},
