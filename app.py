@@ -437,6 +437,238 @@ def fetch_dispatch_results():
             
             driver['page'].on('response', handle_response)
             
+            # 🎯 簡化處理：直接獲取所有記錄（移除分頁邏輯）
+            print("🎯 簡化處理：直接獲取所有記錄...")
+            
+            # 等待記錄載入並獲取所有 order_list 元素
+            driver['page'].wait_for_selector('.order_list', timeout=10000)
+            all_order_elements = driver['page'].query_selector_all('.order_list')
+            total_elements_on_page = len(all_order_elements)
+            print(f"📊 當前載入的記錄總數: {total_elements_on_page} 個")
+            
+            # 🔧 改進的記錄檢測邏輯：直接使用元素而非索引
+            dispatch_records = []
+            for i, element in enumerate(all_order_elements, 1):
+                try:
+                    is_visible = element.is_visible()
+                    class_list = element.get_attribute('class') or ''
+                    
+                    # 🎯 檢查各種訂單狀態
+                    is_cancelled = 'cancel' in class_list.lower()
+                    is_accept = 'accept' in class_list.lower()
+                    is_established = 'established' in class_list.lower()
+                    is_dispatch = 'dispatch' in class_list.lower()  # 🎯 這是我們要的狀態
+                    is_implement = 'implement' in class_list.lower()
+                    is_finish = 'finish' in class_list.lower()
+                    is_recently = 'recently' in class_list.lower()  # 新增：最近記錄
+                    
+                    print(f"🔍 檢查元素 {i}: 可見={is_visible}")
+                    print(f"   📋 狀態分析: class='{class_list}'")
+                    print(f"   🏷️ 狀態標籤: 取消={is_cancelled}, 接受={is_accept}, 確立={is_established}")
+                    print(f"   🎯 派車={is_dispatch}, 執行={is_implement}, 完成={is_finish}")
+                    print(f"   📅 最近={is_recently}")
+                    
+                    # 🎯 改進的記錄篩選邏輯
+                    if is_visible:
+                        if is_dispatch:
+                            # 明確的已派車狀態
+                            dispatch_records.append({'index': i, 'element': element})
+                            total_dispatch_records_found += 1
+                            print(f"✅ 元素 {i} 是已派車記錄 - 這是我們要的！")
+                        elif is_recently and not is_cancelled:
+                            # 最近記錄且未取消，可能是已派車但狀態未更新
+                            print(f"🔍 元素 {i} 是最近記錄，需要進一步檢查...")
+                            
+                            # 嘗試在該元素內尋找派車相關資訊
+                            try:
+                                # 檢查是否有車號或司機資訊
+                                car_selectors = [
+                                    '.car_number',
+                                    '.driver_name', 
+                                    '.vehicle_info',
+                                    '.dispatch_info'
+                                ]
+                                
+                                has_dispatch_info = False
+                                for car_sel in car_selectors:
+                                    car_element = element.query_selector(car_sel)
+                                    if car_element and car_element.is_visible():
+                                        car_text = car_element.inner_text().strip()
+                                        if car_text and len(car_text) > 0:
+                                            print(f"   🚗 找到派車資訊: {car_text}")
+                                            has_dispatch_info = True
+                                            break
+                                
+                                if has_dispatch_info:
+                                    dispatch_records.append({'index': i, 'element': element})
+                                    total_dispatch_records_found += 1
+                                    print(f"✅ 元素 {i} 是最近記錄但包含派車資訊 - 加入處理！")
+                                else:
+                                    print(f"❌ 元素 {i} 是最近記錄但沒有派車資訊，跳過")
+                            except Exception as e:
+                                print(f"⚠️ 檢查元素 {i} 派車資訊時發生錯誤: {e}")
+                                # 如果檢查失敗，保守起見還是加入處理
+                                dispatch_records.append({'index': i, 'element': element})
+                                total_dispatch_records_found += 1
+                                print(f"✅ 元素 {i} 檢查失敗，保守加入處理")
+                        elif is_cancelled:
+                            print(f"❌ 元素 {i} 是已取消記錄，跳過")
+                        elif is_accept:
+                            print(f"❌ 元素 {i} 是已接受記錄（尚未派車），跳過")
+                        elif is_established:
+                            print(f"❌ 元素 {i} 是已確立記錄（尚未派車），跳過")
+                        elif is_implement:
+                            print(f"❌ 元素 {i} 是執行中記錄（已過派車階段），跳過")
+                        elif is_finish:
+                            print(f"❌ 元素 {i} 是已完成記錄（已過派車階段），跳過")
+                        else:
+                            print(f"❌ 元素 {i} 是其他狀態記錄，跳過")
+                    else:
+                        print(f"❌ 元素 {i} 不可見，跳過")
+                except Exception as e:
+                    print(f"⚠️ 檢查元素 {i} 時發生錯誤: {e}")
+                    continue
+            
+            print(f"🎯 找到已派車記錄: {[r['index'] for r in dispatch_records]}")
+            print(f"📊 累計已派車記錄總數: {total_dispatch_records_found}")
+            
+            # 🎯 直接使用元素處理已派車狀態的記錄（移除日期篩選）
+            for record_info in dispatch_records:
+                record_index = record_info['index']
+                order_element = record_info['element']
+                try:
+                    # 🔧 直接從已派車元素中找日期元素
+                    print(f"🔍 處理第 {record_index} 筆已派車記錄...")
+                    
+                    # 在該元素內找日期元素
+                    date_selectors = [
+                        '.order_blocks.date .text',
+                        '.date .text',
+                        '.order_blocks .text'
+                    ]
+                    
+                    date_element = None
+                    for date_sel in date_selectors:
+                        try:
+                            date_element = order_element.query_selector(date_sel)
+                            if date_element and date_element.is_visible():
+                                print(f"✅ 使用選擇器 '{date_sel}' 找到日期元素")
+                                break
+                        except:
+                            continue
+                    
+                    if not date_element:
+                        print(f"❌ 在第 {record_index} 筆記錄中找不到日期元素")
+                        continue
+                    
+                    # 🎯 記錄已經在前面過濾為已派車狀態，這裡直接處理（不檢查日期）
+                    print(f"🚗 處理已派車記錄 {record_index}")
+                    
+                    # 取得日期文字
+                    date_text = date_element.inner_text().strip()
+                    total_records_checked += 1
+                    print(f"📅 第 {record_index} 筆記錄日期: {date_text}")
+                    
+                    # 🎯 移除日期篩選，直接處理所有已派車記錄
+                    print(f"✅ 找到已派車記錄 {record_index}，直接處理（不檢查日期）")
+                    
+                    # 捲動到記錄位置
+                    date_element.scroll_into_view_if_needed()
+                    driver['page'].wait_for_timeout(1000)
+                    take_screenshot(f"record_{record_index}_found")
+                    
+                    # 🔧 在該元素內找展開按鈕
+                    expand_selectors = [
+                        '.see_more span',
+                        '.see_more',
+                        '.see_more i'
+                    ]
+                    
+                    expand_button = None
+                    for expand_sel in expand_selectors:
+                        try:
+                            expand_button = order_element.query_selector(expand_sel)
+                            if expand_button and expand_button.is_visible():
+                                print(f"✅ 使用選擇器 '{expand_sel}' 找到展開按鈕")
+                                break
+                        except:
+                            continue
+                    
+                    if expand_button and expand_button.is_visible():
+                        print(f"✅ 找到展開按鈕，準備點擊...")
+                        expand_button.scroll_into_view_if_needed()
+                        driver['page'].wait_for_timeout(500)
+                        expand_button.click()
+                        print(f"✅ 展開按鈕點擊成功")
+                        
+                        # 等待展開內容載入
+                        driver['page'].wait_for_timeout(3000)
+                        take_screenshot(f"record_{record_index}_expanded")
+                        
+                        # 🔧 直接在該元素內提取資訊
+                        try:
+                            # 車號選擇器 - 在該元素內搜尋
+                            car_selectors = [
+                                '.order_blocks.style2 .blocks > div:nth-child(2)',
+                                '.style2 > .blocks > div:nth-child(2)',
+                                '.blocks > div:nth-child(2)'
+                            ]
+                            
+                            car_number = "未找到"
+                            for car_selector in car_selectors:
+                                try:
+                                    car_element = order_element.query_selector(car_selector)
+                                    if car_element and car_element.is_visible():
+                                        car_number = car_element.inner_text().strip()
+                                        print(f"🚗 車號選擇器成功: {car_selector}")
+                                        break
+                                except:
+                                    continue
+                            print(f"🚗 車號: {car_number}")
+                            
+                            # 指派司機選擇器 - 在該元素內搜尋
+                            driver_selectors = [
+                                '.order_blocks .blocks > div:nth-child(1)',
+                                '.blocks > div:nth-child(1)'
+                            ]
+                            
+                            driver_name = "未找到"
+                            for driver_selector in driver_selectors:
+                                try:
+                                    driver_element = order_element.query_selector(driver_selector)
+                                    if driver_element and driver_element.is_visible():
+                                        driver_name = driver_element.inner_text().strip()
+                                        print(f"👨‍✈️ 司機選擇器成功: {driver_selector}")
+                                        break
+                                except:
+                                    continue
+                            print(f"👨‍✈️ 指派司機: {driver_name}")
+                            
+                            # 負擔金額選擇器 - 使用精確的 CSS 選擇器（基於用戶提供的資訊）
+                            amount_selectors = [
+                                '.order_blocks:nth-child(6) > .blocks',  # 用戶提供的精確選擇器
+                                '.order_blocks:nth-child(6) .blocks',    # 備用（不限制直接子元素）
+                                '.order_blocks:nth-child(6) .text',      # 第6個區塊的文字內容
+                                '.order_blocks:nth-child(5) .blocks:nth-child(2)',  # 原始選擇器
+                                '*:contains("負擔金額")',  # 直接搜尋包含「負擔金額」的元素
+                                '.order_blocks .blocks:contains("負擔金額")',
+                                '.blocks .text:contains("負擔金額")',
+                                '.order_blocks:contains("負擔金額")',  # 搜尋更大範圍
+                                '.order_blocks .blocks:contains("元")',  # 備用方案
+                                '.blocks .text:contains("元")',
+                                '.text:contains("元")'
+                            ]
+                            
+                            self_pay_amount = "未找到"
+                            print(f"💰 開始搜尋負擔金額，共 {len(amount_selectors)} 個選擇器")
+                            
+                            for i, amount_selector in enumerate(amount_selectors, 1):
+                                try:
+                                    print(f"💰 嘗試選擇器 {i}/{len(amount_selectors)}: {amount_selector}")
+                                    if ':contains(' in amount_selector:
+                                        # 針對 :contains 選擇器的特殊處理
+                                        # 先找到所有可能的元素，然後檢查文字內容
+                                        base_selector = amount_selector.split(':contains(')[0]
             # 🔄 智慧資料收集迴圈（最多嘗試10次分頁）
             max_attempts = 10
             current_attempt = 1
@@ -466,7 +698,10 @@ def fetch_dispatch_results():
                 # 🎯 SPA 特化的記錄檢測邏輯
                 print("📋 SPA記錄檢測：等待並收集所有可見的已派車記錄...")
                 
-                # 🔍 等待記錄載入並獲取所有 order_list 元素
+                # 🎯 簡化處理：直接獲取所有記錄（移除分頁邏輯）
+                print("🎯 簡化處理：直接獲取所有記錄...")
+                
+                # 等待記錄載入並獲取所有 order_list 元素
                 driver['page'].wait_for_selector('.order_list', timeout=10000)
                 all_order_elements = driver['page'].query_selector_all('.order_list')
                 total_elements_on_page = len(all_order_elements)
@@ -555,7 +790,7 @@ def fetch_dispatch_results():
                         print(f"⚠️ 檢查元素 {i} 時發生錯誤: {e}")
                         continue
                 
-                print(f"🎯 本次找到已派車記錄: {[r['index'] for r in dispatch_records]}")
+                print(f"🎯 找到已派車記錄: {[r['index'] for r in dispatch_records]}")
                 print(f"📊 累計已派車記錄總數: {total_dispatch_records_found}")
                 
                 # 🎯 直接使用元素處理已派車狀態的記錄（移除日期篩選）
@@ -917,6 +1152,9 @@ def fetch_dispatch_results():
                     print(f"⚠️ 已達到最大嘗試次數 ({max_attempts})，停止搜尋")
                     break
             
+            print(f"✅ 處理完成，共檢查 {total_records_checked} 筆記錄")
+            print(f"📊 統計: 找到已派車記錄 {total_dispatch_records_found} 筆，成功處理 {len(results)} 筆")
+            
             # 🎯 寫入結果檔案
             print("將搜尋結果寫入 search_result.txt...")
             
@@ -924,7 +1162,6 @@ def fetch_dispatch_results():
             query_time = datetime.now(taipei_tz)
             result_content = f"派車結果查詢時間: {query_time.strftime('%Y-%m-%d %H:%M:%S')} (台北時區)\n"
             result_content += f"🎯 搜尋範圍: 所有「已派車」狀態的記錄 (不限制日期)\n"
-            result_content += f"總共嘗試次數: {current_attempt}\n"
             result_content += f"總共檢查記錄數: {total_records_checked}\n"
             result_content += f"累計找到已派車記錄數: {total_dispatch_records_found}\n"
             result_content += f"成功處理的已派車記錄數: {len(results)}\n"
@@ -932,7 +1169,7 @@ def fetch_dispatch_results():
             
             if results:
                 for i, result in enumerate(results, 1):
-                    result_content += f"🚗 已派車記錄 {i} (嘗試 {result.get('attempt', 'N/A')}):\n"
+                    result_content += f"🚗 已派車記錄 {i}:\n"
                     result_content += f"預約日期/時段: {result['date_time']}\n"
                     result_content += f"車號: {result['car_number']}\n"
                     result_content += f"指派司機: {result['driver']}\n"
@@ -951,7 +1188,6 @@ def fetch_dispatch_results():
                 f.write(result_content)
             
             print(f"✅ 搜尋結果已寫入 search_result.txt")
-            print(f"搜尋統計: 共嘗試 {current_attempt} 次，檢查 {total_records_checked} 筆記錄")
             print(f"📊 已派車記錄統計: 累計找到 {total_dispatch_records_found} 筆已派車記錄，成功處理 {len(results)} 筆")
             print(f"結果內容:\n{result_content}")
             
