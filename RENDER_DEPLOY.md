@@ -28,7 +28,7 @@
 - 配置：
   - **Name**: `car4-ltc`
   - **Environment**: `Docker`
-  - **Dockerfile Path**: `./Dockerfile`
+  - **Dockerfile Path**: `./Dockerfile.render`
   - **Plan**: `Starter` (免費)
 
 #### 2. 環境變數設置
@@ -36,7 +36,6 @@
 ```
 PORT=10000
 PYTHONUNBUFFERED=1
-DISPLAY=:99
 ```
 
 #### 3. 創建定時任務 (Cron Jobs)
@@ -62,10 +61,10 @@ DISPLAY=:99
 ## 🔧 技術特點
 
 ### Docker 優化
-- 使用 Python 3.9 slim 映像
-- 安裝 Playwright + Chromium 
-- 包含 Xvfb 虛擬顯示器
-- 優化 Docker 層快取
+- 使用 Microsoft 官方 Playwright Python 映像
+- 預裝 Playwright + Chromium 瀏覽器
+- 包含所有必需的系統依賴
+- 優化構建時間和可靠性
 
 ### Playwright 配置
 - Headless Chrome 瀏覽器
@@ -99,6 +98,7 @@ DISPLAY=:99
 
 2. **Playwright 資源**：
    - Chrome 瀏覽器需要較多記憶體
+   - 使用官方映像提升穩定性
    - 建議監控資源使用情況
 
 3. **定時任務**：

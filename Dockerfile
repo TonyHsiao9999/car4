@@ -7,6 +7,18 @@ RUN apt-get update && apt-get install -y \
     unzip \
     curl \
     xvfb \
+    libnss3 \
+    libatk-bridge2.0-0 \
+    libdrm2 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    libgbm1 \
+    libxss1 \
+    libasound2 \
+    libatspi2.0-0 \
+    libgtk-3-0 \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
@@ -35,15 +47,22 @@ COPY static/ ./static/
 ENV DISPLAY=:99
 ENV PYTHONUNBUFFERED=1
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
 # 創建截圖目錄
 RUN mkdir -p /app/screenshots
 
-# 測試 Playwright 安裝
-RUN python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); browser = p.chromium.launch(); browser.close(); p.stop(); print('Playwright 測試成功')"
-
 # 創建啟動腳本
-RUN echo '#!/bin/bash\nXvfb :99 -screen 0 1920x1080x24 &\nexec "$@"' > /app/start.sh && chmod +x /app/start.sh
+RUN echo '#!/bin/bash\n\
+# 啟動虛擬顯示器\n\
+Xvfb :99 -screen 0 1920x1080x24 -ac +extension GLX +render -noreset &\n\
+export DISPLAY=:99\n\
+\n\
+# 等待虛擬顯示器啟動\n\
+sleep 2\n\
+\n\
+# 執行程式\n\
+exec "$@"' > /app/start.sh && chmod +x /app/start.sh
 
 # 暴露端口
 EXPOSE $PORT
