@@ -7,13 +7,13 @@ import pytz
 import re
 from datetime import datetime
 import json
-# Playwright imports - 替代 Selenium
-from playwright.sync_api import sync_playwright
 
 app = Flask(__name__)
 
 # 全域變數
 driver = None
+
+
 
 def take_screenshot(driver, name):
     """截圖功能"""
@@ -33,26 +33,54 @@ def take_screenshot(driver, name):
     except Exception as e:
         print(f"截圖失敗: {e}")
 
+
+
 def setup_driver():
-    """設置 Playwright WebDriver"""
+    """設置 Playwright WebDriver - 完全依賴 Build 階段預安裝瀏覽器"""
     try:
-        print("正在初始化 Playwright...")
+        print("🚀 初始化 Playwright - Build階段預安裝瀏覽器模式")
         
-        # 檢查並確保瀏覽器已安裝
-        try:
-            from playwright.sync_api import sync_playwright
-            print("Playwright 模組載入成功")
-        except ImportError as e:
-            print(f"Playwright 模組載入失敗: {e}")
-            return None
-        
-        # 簡化的瀏覽器檢查（跳過預檢，直接嘗試啟動）
-        print("⚡ 快速模式：直接嘗試啟動瀏覽器...")
-        browser_available = True  # 假設可用，失敗時再處理
+        # 檢查瀏覽器路徑和環境
+        print("🔍 檢查瀏覽器環境...")
+        print(f"PLAYWRIGHT_BROWSERS_PATH: {os.environ.get('PLAYWRIGHT_BROWSERS_PATH', 'Not set')}")
         
         playwright = sync_playwright().start()
         
-        # 使用 Playwright 的 Chromium，添加更健壯的配置
+        # 檢查瀏覽器可執行檔路徑
+        try:
+            chromium_path = playwright.chromium.executable_path
+            print(f"✅ Chromium 路徑: {chromium_path}")
+            
+            # 檢查檔案是否存在
+            if os.path.exists(chromium_path):
+                print("✅ Chromium 可執行檔存在")
+            else:
+                print("❌ Chromium 可執行檔不存在")
+                raise Exception(f"Chromium 可執行檔不存在: {chromium_path}")
+                
+        except Exception as path_error:
+            print(f"❌ 無法取得 Chromium 路徑: {path_error}")
+            # 嘗試手動尋找瀏覽器
+            possible_paths = [
+                '/ms-playwright/chromium-*/chrome-linux/chrome',
+                '/root/.cache/ms-playwright/chromium-*/chrome-linux/chrome',
+                '/usr/bin/chromium',
+                '/usr/bin/chromium-browser'
+            ]
+            
+            import glob
+            found_path = None
+            for pattern in possible_paths:
+                matches = glob.glob(pattern)
+                if matches:
+                    found_path = matches[0]
+                    print(f"🔍 找到瀏覽器: {found_path}")
+                    break
+            
+            if not found_path:
+                raise Exception("找不到任何可用的 Chromium 瀏覽器")
+        
+        # 最佳化的瀏覽器參數
         browser_args = [
             '--no-sandbox',
             '--disable-dev-shm-usage',
@@ -74,51 +102,13 @@ def setup_driver():
             '--disable-setuid-sandbox'
         ]
         
-        print(f"瀏覽器啟動參數: {browser_args}")
-        
-        # 根據環境啟動瀏覽器
-        try:
-            # 檢查是否在 Render.com 原生環境
-            if 'RENDER' in os.environ:
-                print("🚀 Render.com 原生環境：啟動 Playwright Chromium...")
-                # 在 Render.com 環境中，先確保瀏覽器已下載
-                try:
-                    import subprocess
-                    print("📥 確保 Chromium 瀏覽器已下載...")
-                    result = subprocess.run([
-                        'python', '-m', 'playwright', 'install', 'chromium'
-                    ], capture_output=True, text=True, timeout=120)
-                    
-                    if result.returncode == 0:
-                        print("✅ Chromium 瀏覽器下載完成")
-                    else:
-                        print(f"⚠️ 瀏覽器下載警告: {result.stderr}")
-                except Exception as download_error:
-                    print(f"⚠️ 瀏覽器下載過程異常: {download_error}")
-                
-                browser = playwright.chromium.launch(
-                    headless=True,
-                    args=browser_args,
-                    timeout=30000  # Render.com 需要更長時間
-                )
-            else:
-                print("🚀 啟動系統預安裝的 Chromium 瀏覽器...")
-                browser = playwright.chromium.launch(
-                    headless=True,
-                    args=browser_args,
-                    timeout=15000  # 15秒超時
-                )
-            print("✅ 瀏覽器啟動成功")
-        except Exception as e:
-            print(f"❌ 瀏覽器啟動失敗: {e}")
-            
-            # 如果在 Render.com 環境仍然失敗
-            if 'RENDER' in os.environ:
-                print("❌ Render.com 環境：瀏覽器啟動失敗，請檢查構建日誌")
-            else:
-                print("💡 在容器環境中應該使用預安裝的系統 Chromium")
-            playwright.stop()
-            return None
+        print("⚡ 啟動 Build 階段預安裝的瀏覽器...")
+        browser = playwright.chromium.launch(
+            headless=True,
+            args=browser_args,
+            timeout=20000  # 增加超時時間
+        )
+        print("✅ 瀏覽器啟動成功")
         
         context = browser.new_context(
             viewport={'width': 1920, 'height': 1080},
@@ -139,11 +129,44 @@ def setup_driver():
             'get_window_size': lambda: {'width': 1920, 'height': 1080}
         }
         
-        print("Playwright 初始化成功")
+        print("✅ Playwright 初始化成功")
         return driver
         
     except Exception as e:
-        print(f"Playwright 初始化失敗: {e}")
+        print(f"❌ Playwright 初始化失敗: {e}")
+        print("💡 瀏覽器環境診斷資訊:")
+        
+        # 環境診斷
+        try:
+            import subprocess
+            print("🔍 檢查系統瀏覽器...")
+            
+            # 檢查系統 chromium
+            result = subprocess.run(['which', 'chromium'], capture_output=True, text=True)
+            if result.returncode == 0:
+                print(f"系統 chromium: {result.stdout.strip()}")
+            
+            result = subprocess.run(['which', 'chromium-browser'], capture_output=True, text=True)
+            if result.returncode == 0:
+                print(f"系統 chromium-browser: {result.stdout.strip()}")
+                
+            # 檢查 playwright 目錄
+            print("🔍 檢查 Playwright 目錄...")
+            playwright_dirs = ['/ms-playwright', '/root/.cache/ms-playwright', '~/.cache/ms-playwright']
+            for dir_path in playwright_dirs:
+                expanded_path = os.path.expanduser(dir_path)
+                if os.path.exists(expanded_path):
+                    print(f"找到目錄: {expanded_path}")
+                    # 列出內容
+                    try:
+                        contents = os.listdir(expanded_path)
+                        print(f"  內容: {contents[:5]}...")  # 只顯示前5個
+                    except:
+                        pass
+                        
+        except Exception as diag_error:
+            print(f"診斷失敗: {diag_error}")
+        
         return None
 
 def fetch_dispatch_results():
@@ -304,7 +327,6 @@ def fetch_dispatch_results():
                     if not date_elements:
                         print(f"  - 沒有找到時間元素，嘗試從記錄文字中提取: {record_text[:100]}...")
                         # 從記錄文字中搜尋時間格式
-                        import re
                         time_patterns = [
                             r'(\d{4}[-/]\d{1,2}[-/]\d{1,2}\s+\d{1,2}:\d{2})',  # 2024-01-01 12:00
                             r'(\d{4}[-/]\d{1,2}[-/]\d{1,2})',  # 2024-01-01
@@ -322,8 +344,6 @@ def fetch_dispatch_results():
                                 class FakeElement:
                                     def __init__(self, text):
                                         self._text = text
-                                    def text(self):
-                                        return self._text
                                     @property 
                                     def text(self):
                                         return self._text
@@ -342,10 +362,6 @@ def fetch_dispatch_results():
                         if date_text:
                             # 嘗試解析並轉換時區
                             try:
-                                import re
-                                from datetime import datetime
-                                import pytz
-                                
                                 # 檢查多種時間格式並進行轉換
                                 converted = False
                                 
@@ -361,7 +377,8 @@ def fetch_dispatch_results():
                                         record_info['time'] = taipei_time.strftime('%H:%M')
                                         print(f"  - 時間轉換(ISO): UTC {date_text} -> 台北 {taipei_time.strftime('%Y-%m-%d %H:%M')}")
                                         converted = True
-                                    except:
+                                    except Exception as iso_error:
+                                        print(f"  - ISO時間轉換失敗: {iso_error}")
                                         pass
                                 
                                 # 格式2: 一般日期時間格式 (2024/01/01 12:00)
@@ -379,7 +396,8 @@ def fetch_dispatch_results():
                                             record_info['time'] = taipei_time.strftime('%H:%M')
                                             print(f"  - 時間轉換(一般): UTC {date_text} -> 台北 {taipei_time.strftime('%Y-%m-%d %H:%M')}")
                                             converted = True
-                                        except:
+                                        except Exception as datetime_error:
+                                            print(f"  - 一般時間轉換失敗: {datetime_error}")
                                             pass
                                 
                                 # 格式3: 只有日期 (2024/01/01)
@@ -429,8 +447,7 @@ def fetch_dispatch_results():
                     # 車號
                     for pattern in ['車號', '車牌', '車輛']:
                         if pattern in record_text:
-                            import re
-                            match = re.search(f'{pattern}[：:]\s*([A-Z0-9\-]+)', record_text)
+                            match = re.search(f'{pattern}[：:]\\s*([A-Z0-9\\-]+)', record_text)
                             if match:
                                 record_info['vehicle'] = match.group(1)
                                 break
@@ -438,14 +455,12 @@ def fetch_dispatch_results():
                     # 司機姓名
                     for pattern in ['司機', '駕駛', '指派司機']:
                         if pattern in record_text:
-                            import re
-                            match = re.search(f'{pattern}[：:]\s*([^\s\n]+)', record_text)
+                            match = re.search(f'{pattern}[：:]\\s*([^\\s\\n]+)', record_text)
                             if match:
                                 record_info['driver'] = match.group(1)
                                 break
                     
                     # 聯絡電話
-                    import re
                     phone_match = re.search(r'(\d{2,4}-?\d{6,8}|\d{10})', record_text)
                     if phone_match:
                         record_info['contact'] = phone_match.group(1)
@@ -2421,7 +2436,7 @@ def fetch_dispatch():
         print("=== 開始執行派車結果查詢流程 ===")
         result = fetch_dispatch_results()
         print(f"=== 派車結果查詢執行結果: {result} ===")
-        return jsonify({"success": result, "message": "派車結果查詢執行完成"})
+        return jsonify(result)
     except Exception as e:
         import traceback
         error_msg = f"派車結果查詢執行失敗: {str(e)}"

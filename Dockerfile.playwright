@@ -32,15 +32,23 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN python -m playwright install chromium
 RUN python -m playwright install-deps chromium
 
+# 確保瀏覽器路徑正確設置
+RUN ls -la /ms-playwright/ || echo "檢查 /ms-playwright 目錄"
+RUN find /ms-playwright -name "chrome*" -type f 2>/dev/null || echo "尋找 chrome 可執行檔"
+
 # 驗證瀏覽器安裝
-RUN python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); browser = p.chromium.launch(); browser.close(); p.stop(); print('✅ Playwright 瀏覽器預安裝成功')"
+RUN python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); print(f'Chromium path: {p.chromium.executable_path}'); browser = p.chromium.launch(); browser.close(); p.stop(); print('✅ Playwright 瀏覽器預安裝成功')"
 
 # 複製應用程式檔案
 COPY app.py .
 COPY cron_dispatch.py .
 COPY cron_job.py .
+COPY test_browser.py .
 COPY src/ ./src/
 COPY static/ ./static/
+
+# 運行瀏覽器測試（確保 Build 階段一切正常）
+RUN python test_browser.py
 
 # 設置環境變數
 ENV PYTHONUNBUFFERED=1

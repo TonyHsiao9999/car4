@@ -9,8 +9,6 @@ services:
         value: 10000
       - key: PYTHONUNBUFFERED
         value: 1
-      - key: RENDER
-        value: 1
       - key: PLAYWRIGHT_BROWSERS_PATH
         value: /ms-playwright
       - key: PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS
