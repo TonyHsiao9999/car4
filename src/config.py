@@ -1,18 +1,16 @@
-from selenium.webdriver.common.by import By
-
 # 網站設定
 URL = "https://www.mvdis.gov.tw/m3-emv-trn/trn01qry/trn01qry"
 
-# 元素定位器
+# 元素定位器（CSS選擇器格式）
 LOCATORS = {
-    "id_input": (By.ID, "idno"),
-    "password_input": (By.ID, "birthday"),
-    "login_button": (By.XPATH, "//button[contains(text(), '登入')]"),
-    "i_know_button": (By.XPATH, "//button[contains(text(), '我知道了')]"),
-    "reservation_button": (By.XPATH, "//button[contains(text(), '預約')]"),
-    "date_input": (By.ID, "date"),
-    "time_select": (By.ID, "time"),
-    "confirm_button": (By.XPATH, "//button[contains(text(), '確認')]")
+    "id_input": "#idno",
+    "password_input": "#birthday", 
+    "login_button": "button:has-text('登入')",
+    "i_know_button": "button:has-text('我知道了')",
+    "reservation_button": "button:has-text('預約')",
+    "date_input": "#date",
+    "time_select": "#time",
+    "confirm_button": "button:has-text('確認')"
 }
 
 # 等待時間設定（秒）

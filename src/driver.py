@@ -1,38 +1,110 @@
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException
+from playwright.sync_api import sync_playwright
 from .config import USER_AGENT, WAIT_TIMES
 import os
 import time
 import logging
-import sys
-from io import StringIO
 
-# 設置 Selenium 的日誌級別
-logging.getLogger('selenium').setLevel(logging.ERROR)
-logging.getLogger('urllib3').setLevel(logging.ERROR)
+# 設置日誌級別
+logging.getLogger('playwright').setLevel(logging.ERROR)
 
 def setup_driver(test_mode=False):
-    """設置並返回 Chrome WebDriver"""
-    chrome_options = Options()
-    chrome_options.add_argument(f'user-agent={USER_AGENT}')
+    """設置並返回 Playwright 瀏覽器"""
+    try:
+        playwright = sync_playwright().start()
+        
+        # 啟動瀏覽器
+        browser = playwright.chromium.launch(
+            headless=not test_mode,  # 測試模式下顯示瀏覽器
+            args=[
+                '--no-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-extensions',
+                '--disable-gpu',
+                '--single-process'
+            ]
+        )
+        
+        context = browser.new_context(
+            viewport={'width': 1920, 'height': 1080},
+            user_agent=USER_AGENT
+        )
+        
+        page = context.new_page()
+        
+        # 返回包裝的對象
+        return PlaywrightWrapper(playwright, browser, context, page)
+        
+    except Exception as e:
+        print(f"Playwright 初始化失敗: {e}")
+        return None
+
+class PlaywrightWrapper:
+    """Playwright 包裝類，提供類似 Selenium 的介面"""
     
-    # 測試模式下不使用無頭模式
-    if not test_mode:
-        chrome_options.add_argument('--headless')
+    def __init__(self, playwright, browser, context, page):
+        self.playwright = playwright
+        self.browser = browser
+        self.context = context
+        self.page = page
     
-    chrome_options.add_argument('--no-sandbox')
-    chrome_options.add_argument('--disable-dev-shm-usage')
-    chrome_options.add_argument('--log-level=3')  # 只顯示致命錯誤
-    chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])
+    def get(self, url):
+        """導航到指定URL"""
+        return self.page.goto(url, wait_until='networkidle')
     
-    service = Service()
-    driver = webdriver.Chrome(service=service, options=chrome_options)
-    driver.set_window_size(1920, 1080)
-    return driver
+    @property
+    def title(self):
+        """獲取頁面標題"""
+        return self.page.title()
+    
+    @property
+    def current_url(self):
+        """獲取當前URL"""
+        return self.page.url
+    
+    def set_window_size(self, width, height):
+        """設置視窗大小"""
+        self.page.set_viewport_size({'width': width, 'height': height})
+    
+    def find_elements(self, locator_type, locator_value):
+        """查找元素（兼容Selenium介面）"""
+        if locator_type == "tag name":
+            return [PlaywrightElement(elem) for elem in self.page.query_selector_all(locator_value)]
+        else:
+            # 其他類型可以根據需要添加
+            return []
+    
+    def quit(self):
+        """關閉瀏覽器"""
+        try:
+            self.browser.close()
+            self.playwright.stop()
+        except:
+            pass
+
+class PlaywrightElement:
+    """Playwright 元素包裝類"""
+    
+    def __init__(self, element):
+        self.element = element
+    
+    @property
+    def text(self):
+        """獲取元素文字"""
+        try:
+            return self.element.inner_text()
+        except:
+            return ""
+    
+    def get_attribute(self, name):
+        """獲取元素屬性"""
+        try:
+            return self.element.get_attribute(name)
+        except:
+            return None
+    
+    def click(self):
+        """點擊元素"""
+        return self.element.click()
 
 def get_page_info(driver):
     """獲取頁面資訊"""
@@ -44,11 +116,15 @@ def get_page_info(driver):
         url = driver.current_url
         
         # 獲取所有按鈕的文字
-        buttons = driver.find_elements("tag name", "button")
-        button_texts = [btn.text for btn in buttons if btn.text]
+        buttons = driver.page.query_selector_all('button')
+        button_texts = []
+        for btn in buttons:
+            text = btn.inner_text()
+            if text:
+                button_texts.append(text)
         
         # 獲取所有輸入框的屬性
-        inputs = driver.find_elements("tag name", "input")
+        inputs = driver.page.query_selector_all('input')
         input_info = []
         for input_elem in inputs:
             input_type = input_elem.get_attribute("type")
@@ -97,32 +173,43 @@ def print_debug_info(driver, locator, error=None):
     
     print("\n================\n")
 
-def wait_for_element(driver, locator, timeout=WAIT_TIMES["element"]):
-    """等待元素出現並返回"""
+def wait_for_element(driver, selector, timeout=WAIT_TIMES["element"]):
+    """等待元素出現並返回（Playwright版本）"""
     try:
-        element = WebDriverWait(driver, timeout).until(
-            EC.presence_of_element_located(locator)
-        )
-        return element
+        # 將Selenium格式的locator轉換為CSS選擇器
+        if isinstance(selector, tuple):
+            by, value = selector
+            if by.lower() == 'id':
+                css_selector = f'#{value}'
+            elif by.lower() == 'class name':
+                css_selector = f'.{value}'
+            elif by.lower() == 'tag name':
+                css_selector = value
+            elif by.lower() == 'css selector':
+                css_selector = value
+            else:
+                css_selector = value
+        else:
+            css_selector = selector
+        
+        driver.page.wait_for_selector(css_selector, timeout=timeout*1000)
+        element = driver.page.query_selector(css_selector)
+        return PlaywrightElement(element) if element else None
+        
     except Exception as e:
-        # 只輸出錯誤訊息，不輸出頁面原始碼
         error_msg = str(e)
-        if "Message: " in error_msg:
-            error_msg = error_msg.split("Message: ")[1]
-        print_debug_info(driver, locator, f"等待元素超時: {error_msg}")
+        print_debug_info(driver, selector, f"等待元素超時: {error_msg}")
         return None
 
-def safe_click(driver, locator, timeout=WAIT_TIMES["element"]):
-    """安全地點擊元素"""
-    element = wait_for_element(driver, locator, timeout)
+def safe_click(driver, selector, timeout=WAIT_TIMES["element"]):
+    """安全地點擊元素（Playwright版本）"""
+    element = wait_for_element(driver, selector, timeout)
     if element:
         try:
-            print_debug_info(driver, locator, "找到元素")
+            print_debug_info(driver, selector, "找到元素")
             element.click()
             return True
         except Exception as e:
             error_msg = str(e)
-            if "Message: " in error_msg:
-                error_msg = error_msg.split("Message: ")[1]
-            print_debug_info(driver, locator, f"點擊元素時發生錯誤: {error_msg}")
+            print_debug_info(driver, selector, f"點擊元素時發生錯誤: {error_msg}")
     return False 

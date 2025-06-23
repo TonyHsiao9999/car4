@@ -7,9 +7,8 @@ import pytz
 import re
 from datetime import datetime
 import json
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.by import By
+# Playwright imports - 替代 Selenium
+from playwright.sync_api import sync_playwright
 
 app = Flask(__name__)
 
@@ -148,8 +147,11 @@ def fetch_dispatch_results():
     """取得派車結果頁面並分析已派車的記錄"""
     global driver
     try:
-        if not ensure_browser():
-            return {'success': False, 'error': '無法啟動瀏覽器'}
+        # 確保 driver 已初始化
+        if not driver:
+            driver = setup_driver()
+            if not driver:
+                return {'success': False, 'error': '無法啟動瀏覽器'}
         
         taipei_tz = pytz.timezone('Asia/Taipei')
         current_time = datetime.now(taipei_tz)
@@ -163,10 +165,17 @@ def fetch_dispatch_results():
         time.sleep(3)
         
         # 等待頁面載入
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, "ul.order_list, .order_list"))
-        )
-        print("頁面載入完成")
+        try:
+            driver['page'].wait_for_selector("ul.order_list, .order_list", timeout=10000)
+            print("頁面載入完成")
+        except Exception as e:
+            print(f"等待頁面載入失敗: {e}")
+            # 嘗試等待備選選擇器
+            try:
+                driver['page'].wait_for_load_state("networkidle", timeout=10000)
+                print("頁面網路載入完成")
+            except:
+                print("頁面載入超時，繼續執行")
         
         # 取得所有記錄元素 - 基於實際Vue.js結構
         # 從web-source-code/index-949f5202.js第314行可知：
@@ -182,7 +191,7 @@ def fetch_dispatch_results():
         all_records = []
         for selector in record_selectors:
             try:
-                elements = driver.find_elements(By.CSS_SELECTOR, selector)
+                elements = driver['page'].query_selector_all(selector)
                 all_records.extend(elements)
                 print(f"使用選擇器 '{selector}' 找到 {len(elements)} 個元素")
             except Exception as e:
@@ -209,7 +218,7 @@ def fetch_dispatch_results():
                 print(f"分析第 {i+1} 個記錄...")
                 
                 # 取得記錄的完整HTML內容
-                record_html = record.get_attribute('outerHTML')
+                record_html = record.inner_html()
                 record_classes = record.get_attribute('class') or ''
                 
                 # 基於Vue.js狀態定義的精確檢測
@@ -222,7 +231,7 @@ def fetch_dispatch_results():
                     print(f"  - 通過CSS類別檢測到派車狀態: {record_classes}")
                 
                 # 檢查文字內容中的狀態標示
-                record_text = record.text
+                record_text = record.inner_text()
                 if any(keyword in record_text for keyword in ['派車', '執行', '完成', '已派車']):
                     is_dispatch_status = True
                     print(f"  - 通過文字內容檢測到派車狀態")
@@ -283,7 +292,7 @@ def fetch_dispatch_results():
                     date_elements = []
                     for selector in time_selectors:
                         try:
-                            elements = record.find_elements(By.CSS_SELECTOR, selector)
+                            elements = record.query_selector_all(selector)
                             date_elements.extend(elements)
                         except:
                             continue
@@ -325,7 +334,7 @@ def fetch_dispatch_results():
                         if hasattr(element, '_text'):
                             date_text = element._text.strip()
                         else:
-                            date_text = element.text.strip()
+                            date_text = element.inner_text().strip()
                         print(f"  - 找到時間元素: {date_text}")
                         if date_text:
                             # 嘗試解析並轉換時區
@@ -399,12 +408,15 @@ def fetch_dispatch_results():
                 
                 # 嘗試提取路線資訊
                 try:
-                    route_elements = record.find_elements(By.CSS_SELECTOR, 
-                        '.route, .origin, .destination, [class*="route"]')
-                    for elem in route_elements:
-                        route_text = elem.text.strip()
-                        if route_text and len(route_text) > 2:
-                            record_info['route'] = route_text
+                    route_selectors = ['.route', '.origin', '.destination', '[class*="route"]']
+                    for selector in route_selectors:
+                        route_elements = record.query_selector_all(selector)
+                        for elem in route_elements:
+                            route_text = elem.inner_text().strip()
+                            if route_text and len(route_text) > 2:
+                                record_info['route'] = route_text
+                                break
+                        if record_info['route'] != 'N/A':
                             break
                 except:
                     pass
@@ -465,7 +477,7 @@ def fetch_dispatch_results():
         # 拍攝截圖
         try:
             screenshot_filename = f"dispatch_results_{current_time.strftime('%Y%m%d_%H%M%S')}.png"
-            driver.save_screenshot(screenshot_filename)
+            driver['page'].screenshot(path=screenshot_filename)
             print(f"截圖已保存: {screenshot_filename}")
         except Exception as e:
             print(f"截圖保存失敗: {str(e)}")
@@ -486,7 +498,7 @@ def fetch_dispatch_results():
         try:
             if driver:
                 error_screenshot = f"dispatch_error_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-                driver.save_screenshot(error_screenshot)
+                driver['page'].screenshot(path=error_screenshot)
                 print(f"錯誤截圖已保存: {error_screenshot}")
         except:
             pass
