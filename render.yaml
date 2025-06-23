@@ -2,7 +2,7 @@ services:
   - type: web
     name: car4-ltc
     env: docker
-    dockerfilePath: ./Dockerfile.minimal
+    dockerfilePath: ./Dockerfile.fixed
     envVars:
       - key: PORT
         value: 10000
@@ -18,7 +18,7 @@ services:
   - type: cron
     name: car4-reservation-cron
     env: docker
-    dockerfilePath: ./Dockerfile.minimal
+    dockerfilePath: ./Dockerfile.fixed
     schedule: "1 16 * * 0,3"  # 台灣週一和週四 00:01 (UTC 週日和週三 16:01)
     startCommand: python cron_job.py
     envVars:
@@ -28,7 +28,7 @@ services:
   - type: cron
     name: car4-dispatch-cron
     env: docker
-    dockerfilePath: ./Dockerfile.minimal
+    dockerfilePath: ./Dockerfile.fixed
     schedule: "10 16 * * 0,3"  # 台灣週一和週四 00:10 (UTC 週日和週三 16:10)
     startCommand: python cron_dispatch.py
     envVars:
