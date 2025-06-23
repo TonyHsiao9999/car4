@@ -474,8 +474,8 @@ def fetch_dispatch_results():
                 take_screenshot("no_records_found")
                 return False
             
-            # 基於JavaScript結構分析的記錄檢測邏輯
-            print("🔍 基於原始碼結構分析記錄狀態...")
+            # 基於實際網頁原始碼的精確狀態檢測
+            print("🔍 基於實際JavaScript結構分析記錄狀態...")
             dispatch_records = []
             
             for i, element in enumerate(all_order_elements, 1):
@@ -487,86 +487,78 @@ def fetch_dispatch_results():
                     
                     print(f"\n🔍 分析記錄 {i}:")
                     
-                    # 基於JavaScript代碼分析，狀態結構為：
-                    # Status: 0=媒合中(accept), 1=成立(established), 2=派車(dispatch), 3=執行(implement), 4=完成(finish), 5=取消(cancel)
+                    # 從原始碼發現，實際的狀態是通過 CSS class 來控制的：
+                    # - accept: Status == 0 (媒合中)
+                    # - established: Status == 1 (成立)  
+                    # - dispatch: Status == 2 (派車) ← 這是我們要找的
+                    # - implement: Status == 3 (執行中) ← 也算已派車
+                    # - finish: Status == 4 (完成) ← 也算已派車
+                    # - cancel: Status == 5 (取消)
                     
-                    # 檢查狀態類別（基於JavaScript中的class定義）
+                    # 1. 檢查實際的 CSS 類別
                     class_list = element.get_attribute('class') or ''
-                    print(f"   📋 CSS類別: '{class_list}'")
+                    print(f"   📋 完整CSS類別: '{class_list}'")
                     
-                    # 檢查各種狀態類別
-                    is_cancelled = 'cancel' in class_list.lower()  # Status == 5
-                    is_accept = 'accept' in class_list.lower()      # Status == 0  
-                    is_established = 'established' in class_list.lower()  # Status == 1
-                    is_dispatch = 'dispatch' in class_list.lower()  # Status == 2
-                    is_implement = 'implement' in class_list.lower()  # Status == 3
-                    is_finish = 'finish' in class_list.lower()      # Status == 4
+                    # 2. 檢查實際生效的狀態類別（不是所有類別都同時存在）
+                    full_text = element.inner_text().strip()
+                    print(f"   📝 記錄文字內容預覽: {full_text[:100]}...")
                     
-                    print(f"   🎯 狀態檢測: 取消={is_cancelled}, 媒合中={is_accept}, 成立={is_established}")
-                    print(f"   🚗 派車階段: 派車={is_dispatch}, 執行中={is_implement}, 完成={is_finish}")
+                    # 3. 尋找實際的狀態標示（基於原始碼中的狀態顯示邏輯）
+                    # 根據JS代碼：媒合中、成立、派車、執行中、完成、取消
+                    status_indicators = {
+                        'accept': ['媒合中', 'accept'],
+                        'established': ['成立', 'established'], 
+                        'dispatch': ['派車', 'dispatch'],
+                        'implement': ['執行中', 'implement'],
+                        'finish': ['完成', 'finish'],
+                        'cancel': ['取消', 'cancel']
+                    }
                     
-                    # 檢查司機資訊區塊（根據JavaScript結構）
-                    has_driver_info = False
-                    try:
-                        # 根據JavaScript模板，司機資訊包含在特定結構中
-                        full_text = element.inner_text().strip()
-                        
-                        # 尋找司機資訊的關鍵標識
-                        driver_indicators = [
-                            '指派司機:', 
-                            'DriverName',
-                            'DriverPhone', 
-                            'LicensePlateNumber',
-                            '車號:'
-                        ]
-                        
-                        found_indicators = [indicator for indicator in driver_indicators if indicator in full_text]
-                        if found_indicators:
-                            has_driver_info = True
-                            print(f"   👨‍✈️ 找到司機資訊標識: {found_indicators}")
-                        
-                        # 額外檢查：尋找電話號碼格式 (手機號碼格式 09xxxxxxxx)
-                        import re
-                        phone_pattern = r'09\d{8}'
-                        if re.search(phone_pattern, full_text):
-                            has_driver_info = True
-                            print(f"   📞 找到電話號碼格式")
-                        
-                    except Exception as e:
-                        print(f"   ⚠️ 司機資訊檢查失敗: {e}")
-                        full_text = ""
+                    detected_status = None
+                    for status_key, keywords in status_indicators.items():
+                        # 檢查CSS類別
+                        if any(keyword in class_list.lower() for keyword in keywords):
+                            detected_status = status_key
+                            print(f"   🎯 CSS檢測到狀態: {status_key}")
+                            break
+                        # 檢查文字內容
+                        if any(keyword in full_text for keyword in keywords):
+                            detected_status = status_key
+                            print(f"   📄 文字檢測到狀態: {status_key}")
+                            break
                     
-                    # 決策邏輯：根據JavaScript狀態定義判斷
+                    if not detected_status:
+                        print(f"   ❓ 未檢測到明確狀態標示")
+                    
+                    # 4. 檢查是否有司機指派資訊（更精確的判斷）
+                    has_driver_assignment = False
+                    driver_keywords = ['指派司機', '司機姓名', '車號', '聯絡電話']
+                    found_driver_keywords = [kw for kw in driver_keywords if kw in full_text]
+                    
+                    if found_driver_keywords:
+                        has_driver_assignment = True
+                        print(f"   👨‍✈️ 發現司機指派資訊: {found_driver_keywords}")
+                    
+                    # 5. 決策邏輯：只有明確的派車狀態才算已派車
                     is_dispatch_record = False
                     reason = ""
                     
-                    if is_cancelled:
-                        reason = "狀態=取消(Status==5)，跳過"
-                    elif is_dispatch:
+                    if detected_status == 'cancel':
+                        reason = "狀態=取消，跳過"
+                    elif detected_status == 'dispatch':
                         is_dispatch_record = True
-                        reason = "狀態=派車(Status==2)，已派車"
-                    elif is_implement:
+                        reason = "狀態=派車，已派車"
+                    elif detected_status == 'implement':
                         is_dispatch_record = True
-                        reason = "狀態=執行中(Status==3)，已派車且執行中"  
-                    elif is_finish:
+                        reason = "狀態=執行中，已派車且執行中"
+                    elif detected_status == 'finish':
                         is_dispatch_record = True
-                        reason = "狀態=完成(Status==4)，已派車且完成"
-                    elif has_driver_info and not is_accept and not is_established:
+                        reason = "狀態=完成，已派車且完成"
+                    elif has_driver_assignment and detected_status not in ['accept', 'established']:
                         is_dispatch_record = True
-                        reason = "包含司機資訊且已超過初期階段，判定為已派車"
-                    elif is_recently and has_vehicle_info:
-                        is_dispatch_record = True
-                        reason = "最近記錄且包含車輛資訊"
-                    elif is_accept:
-                        reason = "僅為已接受狀態（尚未派車）"
-                    elif is_established:
-                        reason = "僅為已確立狀態（尚未派車）"
-                    elif is_implement:
-                        reason = "執行中狀態（已過派車階段）"
-                    elif is_finish:
-                        reason = "已完成狀態（已過派車階段）"
+                        reason = "有司機指派資訊且非初期狀態，判定為已派車"
                     else:
-                        reason = "無法確定狀態，保守跳過"
+                        reason = f"狀態={detected_status or '未知'}，司機資訊={has_driver_assignment}，不符合已派車條件"
                     
                     print(f"   📊 判定結果: {'✅ 已派車' if is_dispatch_record else '❌ 非已派車'} - {reason}")
                     
