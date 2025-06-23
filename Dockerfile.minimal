@@ -56,8 +56,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 安裝 Playwright
 RUN pip install playwright==1.41.0
 
-# 安裝 Playwright 瀏覽器 (分步驟執行避免問題)
-RUN python3 -m playwright install-deps
+# 安裝 Playwright 瀏覽器依賴和瀏覽器
+RUN python3 -m playwright install-deps chromium
 RUN python3 -m playwright install chromium
 
 # 複製應用程式碼
