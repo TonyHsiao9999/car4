@@ -70,42 +70,20 @@ def setup_driver():
         
         print(f"瀏覽器啟動參數: {browser_args}")
         
-        # 啟動瀏覽器（快速模式，失敗時自動安裝）
-        browser = None
-        
+        # 啟動預安裝的瀏覽器
         try:
-            print("🚀 啟動瀏覽器...")
+            print("🚀 啟動預安裝的 Chromium 瀏覽器...")
             browser = playwright.chromium.launch(
                 headless=True,
                 args=browser_args,
-                timeout=20000  # 20秒超時，快速失敗
+                timeout=10000  # 10秒超時，因為瀏覽器已預安裝
             )
             print("✅ 瀏覽器啟動成功")
         except Exception as e:
             print(f"❌ 瀏覽器啟動失敗: {e}")
-            print("🔄 自動安裝瀏覽器並重試...")
-            try:
-                import subprocess
-                import sys
-                # 啟動失敗時才安裝
-                result = subprocess.run([sys.executable, '-m', 'playwright', 'install', 'chromium'], 
-                                      capture_output=True, text=True, timeout=60)
-                if result.returncode == 0:
-                    print("✅ 瀏覽器安裝完成，重新啟動...")
-                    browser = playwright.chromium.launch(
-                        headless=True,
-                        args=browser_args,
-                        timeout=20000
-                    )
-                    print("✅ 瀏覽器重新啟動成功")
-                else:
-                    print(f"❌ 瀏覽器安裝失敗: {result.stderr[:100]}")
-                    playwright.stop()
-                    return None
-            except Exception as install_e:
-                print(f"❌ 瀏覽器安裝和重啟過程失敗: {install_e}")
-                playwright.stop()
-                return None
+            print("💡 提示：瀏覽器應該在 Docker 構建時已預安裝")
+            playwright.stop()
+            return None
         
         context = browser.new_context(
             viewport={'width': 1920, 'height': 1080},
