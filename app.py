@@ -149,7 +149,11 @@ def setup_driver():
                 browser.close()
             except:
                 pass
-            raise page_error
+            try:
+                playwright.stop()
+            except:
+                pass
+            return None
         
         # 創建 driver 字典
         driver = {
@@ -221,12 +225,12 @@ def close_driver(driver_instance):
 
 def fetch_dispatch_results():
     """取得派車結果頁面並分析已派車的記錄"""
-    local_driver = None
+    driver = None
     try:
         # 每次都重新初始化 driver 確保乾淨狀態
         print("初始化瀏覽器...")
-        local_driver = setup_driver()
-        if not local_driver:
+        driver = setup_driver()
+        if not driver:
             return {'success': False, 'error': '無法啟動瀏覽器'}
         
         taipei_tz = pytz.timezone('Asia/Taipei')
@@ -1097,6 +1101,11 @@ def fetch_dispatch_results():
             pass
         
         return {'success': False, 'error': error_msg}
+    
+    finally:
+        # 清理瀏覽器資源
+        if driver:
+            close_driver(driver)
 
 def make_reservation():
     driver = None
