@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: car4-ltc-native
+    name: car4
     env: python
     plan: starter
     buildCommand: |
