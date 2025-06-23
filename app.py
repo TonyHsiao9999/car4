@@ -208,85 +208,210 @@ def fetch_dispatch_results():
         
         print(f"[{current_time.strftime('%Y-%m-%d %H:%M:%S')}] 開始取得派車結果")
         
-        # 進入預約訂單頁面
-        driver['get']("https://www.ntpc.ltc-car.org/ReservationOrder/")
-        print("已導航到預約訂單頁面")
+        # 步驟1: 連線到首頁
+        print("📱 步驟1: 連線到首頁...")
+        driver['get']("https://www.ntpc.ltc-car.org/")
         
-        # 拍攝頁面截圖用於診斷
+        # 拍攝首頁截圖
         try:
-            screenshot_filename = f"debug_page_{current_time.strftime('%Y%m%d_%H%M%S')}.png"
+            screenshot_filename = f"step1_homepage_{current_time.strftime('%Y%m%d_%H%M%S')}.png"
             driver['page'].screenshot(path=screenshot_filename)
-            print(f"🔍 診斷截圖已保存: {screenshot_filename}")
+            print(f"🔍 首頁截圖已保存: {screenshot_filename}")
         except:
-            print("截圖保存失敗")
+            print("首頁截圖保存失敗")
         
-        # 檢查頁面內容
-        print("🔍 檢查頁面基本資訊...")
-        page_title = driver['page'].title()
-        page_url = driver['page'].url
-        print(f"頁面標題: {page_title}")
-        print(f"當前網址: {page_url}")
+        time.sleep(2)
         
-        # 檢查是否需要登入
-        login_indicators = ['登入', 'login', '帳號', '密碼', 'username', 'password']
-        page_content = driver['page'].content()
-        
-        needs_login = any(indicator in page_content.lower() for indicator in login_indicators)
-        if needs_login:
-            print("⚠️ 檢測到登入頁面，開始登入流程...")
+        # 步驟2: 點擊「我知道了」
+        print("✋ 步驟2: 尋找並點擊「我知道了」...")
+        try:
+            # 多種可能的「我知道了」選擇器
+            know_selectors = [
+                'button:has-text("我知道了")',
+                'text=我知道了',
+                ':text("我知道了")',
+                '.btn:has-text("我知道了")',
+                'input[value="我知道了"]',
+                '[onclick*="我知道了"]',
+                '.modal button:has-text("我知道了")',
+                '.dialog button:has-text("我知道了")'
+            ]
             
-            try:
-                # 執行登入
-                print("🔐 填入登入資訊...")
-                driver['page'].fill('input[type="text"], input[name*="user"], input[id*="user"]', 'A102574899')
-                driver['page'].fill('input[type="password"], input[name*="pass"], input[id*="pass"]', 'visi319VISI')
+            know_clicked = False
+            for selector in know_selectors:
+                try:
+                    element = driver['page'].locator(selector).first
+                    if element.is_visible():
+                        element.click()
+                        print(f"✅ 「我知道了」點擊成功: {selector}")
+                        know_clicked = True
+                        break
+                except:
+                    continue
+            
+            if not know_clicked:
+                print("⚠️ 沒有找到「我知道了」按鈕，可能不需要點擊")
+            
+            time.sleep(2)
+            
+        except Exception as e:
+            print(f"⚠️ 「我知道了」點擊過程發生錯誤: {e}")
+        
+        # 步驟3: 輸入登入資訊並點擊「民眾登入」
+        print("🔐 步驟3: 填入登入資訊...")
+        try:
+            # 拍攝登入前截圖
+            driver['page'].screenshot(path=f"step3_before_login_{current_time.strftime('%Y%m%d_%H%M%S')}.png")
+            
+            # 填入身分證字號
+            print("📝 填入身分證字號: A102574899")
+            driver['page'].fill('input[type="text"], input[name*="user"], input[id*="user"], input[placeholder*="身分證"], input[placeholder*="帳號"]', 'A102574899')
+            
+            # 填入密碼
+            print("🔑 填入密碼: visi319VISI")
+            driver['page'].fill('input[type="password"], input[name*="pass"], input[id*="pass"], input[placeholder*="密碼"]', 'visi319VISI')
+            
+            time.sleep(1)
+            
+            # 點擊「民眾登入」
+            print("🎯 點擊「民眾登入」按鈕...")
+            login_selectors = [
+                'button:has-text("民眾登入")',
+                'text=民眾登入',
+                ':text("民眾登入")',
+                'input[value="民眾登入"]',
+                'input[type="submit"][value*="民眾"]',
+                'button[value*="民眾登入"]',
+                '.btn:has-text("民眾登入")',
+                '[onclick*="login"]'
+            ]
+            
+            login_clicked = False
+            for selector in login_selectors:
+                try:
+                    element = driver['page'].locator(selector).first
+                    if element.is_visible():
+                        element.click()
+                        print(f"✅ 「民眾登入」點擊成功: {selector}")
+                        login_clicked = True
+                        break
+                except:
+                    continue
+            
+            if not login_clicked:
+                print("❌ 未找到「民眾登入」按鈕")
+                # 拍攝失敗截圖
+                driver['page'].screenshot(path=f"step3_login_failed_{current_time.strftime('%Y%m%d_%H%M%S')}.png")
+                return {'success': False, 'data': [], 'message': '無法找到登入按鈕'}
+            
+            time.sleep(3)
+            
+        except Exception as login_error:
+            print(f"❌ 登入過程發生錯誤: {login_error}")
+            driver['page'].screenshot(path=f"step3_login_error_{current_time.strftime('%Y%m%d_%H%M%S')}.png")
+            return {'success': False, 'data': [], 'message': f'登入過程錯誤: {login_error}'}
+        
+        # 步驟4: 點擊「登入成功」的「確定」
+        print("✅ 步驟4: 等待並點擊「登入成功」的「確定」...")
+        try:
+            # 等待「登入成功」訊息出現
+            success_selectors = [
+                'text=登入成功',
+                ':text("登入成功")',
+                '.modal:has-text("登入成功")',
+                '.dialog:has-text("登入成功")',
+                '.alert:has-text("登入成功")',
+                '.swal-modal:has-text("登入成功")'
+            ]
+            
+            success_found = False
+            for selector in success_selectors:
+                try:
+                    driver['page'].wait_for_selector(selector, timeout=5000)
+                    print(f"🎉 找到「登入成功」訊息: {selector}")
+                    success_found = True
+                    break
+                except:
+                    continue
+            
+            if success_found:
+                # 拍攝登入成功截圖
+                driver['page'].screenshot(path=f"step4_login_success_{current_time.strftime('%Y%m%d_%H%M%S')}.png")
                 
-                # 點擊登入按鈕
-                login_selectors = [
-                    'button:has-text("民眾登入")',
-                    'button:has-text("登入")',
-                    'input[type="submit"]',
-                    'button[type="submit"]',
-                    'text=民眾登入',
-                    '.btn:has-text("登入")'
+                # 點擊「確定」
+                confirm_selectors = [
+                    'button:has-text("確定")',
+                    'text=確定',
+                    ':text("確定")',
+                    '.btn:has-text("確定")',
+                    'input[value="確定"]',
+                    '.modal button:has-text("確定")',
+                    '.dialog button:has-text("確定")'
                 ]
                 
-                login_success = False
-                for selector in login_selectors:
+                for selector in confirm_selectors:
                     try:
                         element = driver['page'].locator(selector).first
                         if element.is_visible():
                             element.click()
-                            print(f"✅ 登入按鈕點擊成功: {selector}")
-                            login_success = True
+                            print(f"✅ 「確定」點擊成功: {selector}")
                             break
                     except:
                         continue
                 
-                if login_success:
-                    # 等待登入完成
-                    time.sleep(3)
-                    
-                    # 檢查是否有登入成功訊息或直接跳轉
-                    try:
-                        driver['page'].wait_for_selector('text=登入成功', timeout=5000)
-                        print("✅ 登入成功訊息確認")
-                        driver['page'].click('button:has-text("確定"), .btn:has-text("確定")')
-                    except:
-                        print("⚠️ 沒有找到登入成功訊息，可能直接跳轉")
-                    
-                    # 重新導航到預約訂單頁面
-                    print("🔄 重新導航到預約訂單頁面...")
-                    driver['get']("https://www.ntpc.ltc-car.org/ReservationOrder/")
-                    time.sleep(3)
-                    
-                else:
-                    print("❌ 登入按鈕點擊失敗")
-                    
-            except Exception as login_error:
-                print(f"❌ 登入過程發生錯誤: {login_error}")
+                time.sleep(2)
+            else:
+                print("⚠️ 沒有找到「登入成功」訊息，可能直接跳轉")
+            
+        except Exception as e:
+            print(f"⚠️ 登入成功確認過程發生錯誤: {e}")
         
-        time.sleep(3)
+        # 步驟5: 點擊「訂單查詢」
+        print("📋 步驟5: 點擊「訂單查詢」...")
+        try:
+            # 拍攝主頁面截圖
+            driver['page'].screenshot(path=f"step5_main_page_{current_time.strftime('%Y%m%d_%H%M%S')}.png")
+            
+            order_selectors = [
+                'a:has-text("訂單查詢")',
+                'text=訂單查詢',
+                ':text("訂單查詢")',
+                'button:has-text("訂單查詢")',
+                '.btn:has-text("訂單查詢")',
+                '[href*="ReservationOrder"]',
+                '[onclick*="ReservationOrder"]',
+                'a[href*="Order"]'
+            ]
+            
+            order_clicked = False
+            for selector in order_selectors:
+                try:
+                    element = driver['page'].locator(selector).first
+                    if element.is_visible():
+                        element.click()
+                        print(f"✅ 「訂單查詢」點擊成功: {selector}")
+                        order_clicked = True
+                        break
+                except:
+                    continue
+            
+            if not order_clicked:
+                print("⚠️ 未找到「訂單查詢」按鈕，嘗試直接導航...")
+                driver['get']("https://www.ntpc.ltc-car.org/ReservationOrder/")
+            
+            time.sleep(3)
+            
+        except Exception as e:
+            print(f"⚠️ 訂單查詢點擊過程發生錯誤: {e}")
+        
+        # 步驟6: 準備開始尋找派車紀錄
+        print("🔍 步驟6: 開始尋找派車紀錄...")
+        
+        # 拍攝訂單頁面截圖
+        try:
+            driver['page'].screenshot(path=f"step6_order_page_{current_time.strftime('%Y%m%d_%H%M%S')}.png")
+        except:
+            pass
         
         # 等待頁面載入
         try:
