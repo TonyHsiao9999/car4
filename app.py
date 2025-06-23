@@ -212,6 +212,80 @@ def fetch_dispatch_results():
         driver['get']("https://www.ntpc.ltc-car.org/ReservationOrder/")
         print("已導航到預約訂單頁面")
         
+        # 拍攝頁面截圖用於診斷
+        try:
+            screenshot_filename = f"debug_page_{current_time.strftime('%Y%m%d_%H%M%S')}.png"
+            driver['page'].screenshot(path=screenshot_filename)
+            print(f"🔍 診斷截圖已保存: {screenshot_filename}")
+        except:
+            print("截圖保存失敗")
+        
+        # 檢查頁面內容
+        print("🔍 檢查頁面基本資訊...")
+        page_title = driver['page'].title()
+        page_url = driver['page'].url
+        print(f"頁面標題: {page_title}")
+        print(f"當前網址: {page_url}")
+        
+        # 檢查是否需要登入
+        login_indicators = ['登入', 'login', '帳號', '密碼', 'username', 'password']
+        page_content = driver['page'].content()
+        
+        needs_login = any(indicator in page_content.lower() for indicator in login_indicators)
+        if needs_login:
+            print("⚠️ 檢測到登入頁面，開始登入流程...")
+            
+            try:
+                # 執行登入
+                print("🔐 填入登入資訊...")
+                driver['page'].fill('input[type="text"], input[name*="user"], input[id*="user"]', 'A102574899')
+                driver['page'].fill('input[type="password"], input[name*="pass"], input[id*="pass"]', 'visi319VISI')
+                
+                # 點擊登入按鈕
+                login_selectors = [
+                    'button:has-text("民眾登入")',
+                    'button:has-text("登入")',
+                    'input[type="submit"]',
+                    'button[type="submit"]',
+                    'text=民眾登入',
+                    '.btn:has-text("登入")'
+                ]
+                
+                login_success = False
+                for selector in login_selectors:
+                    try:
+                        element = driver['page'].locator(selector).first
+                        if element.is_visible():
+                            element.click()
+                            print(f"✅ 登入按鈕點擊成功: {selector}")
+                            login_success = True
+                            break
+                    except:
+                        continue
+                
+                if login_success:
+                    # 等待登入完成
+                    time.sleep(3)
+                    
+                    # 檢查是否有登入成功訊息或直接跳轉
+                    try:
+                        driver['page'].wait_for_selector('text=登入成功', timeout=5000)
+                        print("✅ 登入成功訊息確認")
+                        driver['page'].click('button:has-text("確定"), .btn:has-text("確定")')
+                    except:
+                        print("⚠️ 沒有找到登入成功訊息，可能直接跳轉")
+                    
+                    # 重新導航到預約訂單頁面
+                    print("🔄 重新導航到預約訂單頁面...")
+                    driver['get']("https://www.ntpc.ltc-car.org/ReservationOrder/")
+                    time.sleep(3)
+                    
+                else:
+                    print("❌ 登入按鈕點擊失敗")
+                    
+            except Exception as login_error:
+                print(f"❌ 登入過程發生錯誤: {login_error}")
+        
         time.sleep(3)
         
         # 等待頁面載入
@@ -226,6 +300,22 @@ def fetch_dispatch_results():
                 print("頁面網路載入完成")
             except:
                 print("頁面載入超時，繼續執行")
+        
+        # 診斷：檢查頁面中所有可能的元素
+        print("🔍 診斷頁面元素...")
+        possible_selectors = [
+            'ul', 'li', '.order', '.list', '.record', '.reservation', 
+            '[class*="order"]', '[class*="list"]', '[class*="record"]',
+            'div', 'table', 'tbody', 'tr'
+        ]
+        
+        for selector in possible_selectors:
+            try:
+                elements = driver['page'].query_selector_all(selector)
+                if len(elements) > 0:
+                    print(f"  找到 {len(elements)} 個 '{selector}' 元素")
+            except:
+                pass
         
         # 取得所有記錄元素 - 基於實際Vue.js結構
         # 從web-source-code/index-949f5202.js第314行可知：
