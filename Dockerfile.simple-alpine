@@ -1,0 +1,39 @@
+FROM python:3.11-alpine
+
+# 設置環境變數
+ENV PYTHONUNBUFFERED=1
+ENV TZ=Asia/Taipei
+
+# 設置工作目錄
+WORKDIR /app
+
+# 安裝最小依賴（無互動，純 Alpine）
+RUN apk update && apk add --no-cache \
+    bash \
+    chromium \
+    && rm -rf /var/cache/apk/*
+
+# 設置時區
+RUN cp /usr/share/zoneinfo/Asia/Taipei /etc/localtime && \
+    echo "Asia/Taipei" > /etc/timezone
+
+# 複製並安裝 Python 依賴
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Playwright 設置
+RUN pip install playwright==1.41.0
+ENV PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true
+ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
+# 創建符號連結
+RUN mkdir -p /ms-playwright/chromium-1097/chrome-linux && \
+    ln -sf /usr/bin/chromium-browser /ms-playwright/chromium-1097/chrome-linux/chrome
+
+# 複製應用
+COPY . .
+RUN mkdir -p screenshots logs static
+
+# 啟動
+EXPOSE 5000
+CMD ["python3", "app.py"] 
