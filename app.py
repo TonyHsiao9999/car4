@@ -12,6 +12,9 @@ from playwright.sync_api import sync_playwright
 
 app = Flask(__name__)
 
+# 全域變數
+driver = None
+
 def take_screenshot(driver, name):
     """截圖功能"""
     try:
@@ -159,7 +162,7 @@ def fetch_dispatch_results():
         print(f"[{current_time.strftime('%Y-%m-%d %H:%M:%S')}] 開始取得派車結果")
         
         # 進入預約訂單頁面
-        driver.get("https://www.ntpc.ltc-car.org/ReservationOrder/")
+        driver['get']("https://www.ntpc.ltc-car.org/ReservationOrder/")
         print("已導航到預約訂單頁面")
         
         time.sleep(3)
