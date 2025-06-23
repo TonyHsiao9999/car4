@@ -46,23 +46,35 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 安裝 Playwright
 RUN pip install playwright==1.41.0
 
-# 關鍵修正：創建瀏覽器目錄並設置環境變數
-RUN mkdir -p /ms-playwright
+# 設置 Playwright 環境變數（在安裝前設置）
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+ENV PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true
+
+# 創建瀏覽器目錄
+RUN mkdir -p /ms-playwright
 
 # 安裝 Playwright 瀏覽器依賴
 RUN python3 -m playwright install-deps chromium
 
-# 安裝 Playwright 瀏覽器到指定路徑
-RUN python3 -m playwright install chromium
+# 強制安裝 Playwright 瀏覽器到指定路徑（增加詳細輸出）
+RUN PLAYWRIGHT_BROWSERS_PATH=/ms-playwright python3 -m playwright install chromium --force
 
-# 驗證瀏覽器安裝 - 列出安裝的檔案
+# 設置瀏覽器執行權限
+RUN find /ms-playwright -name "chrome*" -type f -exec chmod +x {} \;
+
+# 驗證瀏覽器安裝並建立符合預期路徑的符號連結
 RUN echo "=== 瀏覽器安裝驗證 ===" && \
     ls -la /ms-playwright/ && \
-    echo "=== Chromium 目錄內容 ===" && \
-    find /ms-playwright -name "*chromium*" -type d && \
-    echo "=== Chrome 執行檔位置 ===" && \
-    find /ms-playwright -name "chrome" -type f -executable
+    echo "=== 尋找 Chrome 執行檔 ===" && \
+    find /ms-playwright -name "chrome" -type f -executable && \
+    echo "=== 建立標準路徑符號連結 ===" && \
+    CHROME_PATH=$(find /ms-playwright -name "chrome" -type f -executable | head -1) && \
+    if [ -n "$CHROME_PATH" ]; then \
+        echo "Chrome 路徑: $CHROME_PATH" && \
+        mkdir -p /ms-playwright/chromium-1097/chrome-linux && \
+        ln -sf "$CHROME_PATH" /ms-playwright/chromium-1097/chrome-linux/chrome && \
+        echo "符號連結建立完成"; \
+    fi
 
 # 複製應用程式碼
 COPY . .

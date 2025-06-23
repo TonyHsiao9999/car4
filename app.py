@@ -608,6 +608,28 @@ def fetch_dispatch_results():
                     full_text = element.inner_text().strip()
                     print(f"   📝 記錄文字內容預覽: {full_text[:200]}...")
                     
+                    # 2.5. 詳細分析記錄結構（調試用）
+                    try:
+                        # 檢查是否有狀態相關的子元素
+                        dispatch_indicators = ['派車', '聯絡車隊', '取消預約']
+                        found_indicators = [ind for ind in dispatch_indicators if ind in full_text]
+                        if found_indicators:
+                            print(f"   🔎 找到派車指標: {found_indicators}")
+                        
+                        # 檢查是否有電話號碼（截圖顯示已派車記錄有車隊電話）
+                        import re
+                        phone_matches = re.findall(r'\(?\d{2,4}\)?\s*\d{7,8}', full_text)
+                        if phone_matches:
+                            print(f"   📞 找到電話號碼: {phone_matches}")
+                        
+                        # 檢查HTML結構
+                        html_content = element.inner_html()
+                        if 'dispatch' in html_content.lower():
+                            print(f"   🔍 HTML中發現dispatch關鍵字")
+                        
+                    except Exception as debug_error:
+                        print(f"   ⚠️ 調試分析失敗: {debug_error}")
+                    
                     # 3. 精確的狀態檢測（基於原始碼中的狀態類別）
                     detected_status = None
                     
@@ -631,8 +653,9 @@ def fetch_dispatch_results():
                         detected_status = 'cancel'
                         print(f"   🎯 CSS檢測到狀態: cancel (Status==5)")
                     
-                    # 如果CSS檢測不到，嘗試文字內容檢測
+                    # 如果CSS檢測不到，嘗試多層級文字內容檢測
                     if not detected_status:
+                        # 第一層：直接文字檢測
                         text_status_map = {
                             '媒合中': 'accept',
                             '成立': 'established',
@@ -648,6 +671,36 @@ def fetch_dispatch_results():
                             if text_indicator in full_text:
                                 detected_status = status
                                 print(f"   📄 文字檢測到狀態: {status} (關鍵字: {text_indicator})")
+                                break
+                    
+                    # 第二層：檢查子元素的狀態指示器
+                    if not detected_status:
+                        try:
+                            # 查找狀態進度條或狀態文字
+                            status_elements = element.query_selector_all('.status, .state, [class*="status"], [class*="state"]')
+                            for status_elem in status_elements:
+                                status_text = status_elem.inner_text().strip()
+                                if '派車' in status_text:
+                                    detected_status = 'dispatch'
+                                    print(f"   🔍 子元素檢測到狀態: dispatch (元素文字: {status_text})")
+                                    break
+                        except:
+                            pass
+                    
+                    # 第三層：檢查是否有車隊聯絡電話（從截圖看到這是已派車的強烈指標）
+                    if not detected_status:
+                        phone_patterns = [
+                            r'\(?\d{2,4}\)?\s*\d{7,8}',  # 台灣電話格式
+                            r'聯絡車隊',
+                            r'車隊.*電話',
+                            r'\d{10,11}'  # 手機號碼
+                        ]
+                        
+                        import re
+                        for pattern in phone_patterns:
+                            if re.search(pattern, full_text):
+                                detected_status = 'dispatch'
+                                print(f"   📞 電話號碼檢測到已派車狀態 (模式: {pattern})")
                                 break
                     
                     if not detected_status:
