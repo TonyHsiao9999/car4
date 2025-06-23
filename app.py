@@ -669,51 +669,73 @@ def fetch_dispatch_results():
                 # 基於Vue.js狀態定義的精確檢測
                 # dispatch: Status==2, implement: Status==3, finish: Status==4
                 is_dispatch_status = False
+                has_precise_dispatch_detection = False
                 
-                # 檢查CSS類別中的狀態
-                if any(cls in record_classes for cls in ['dispatch', 'implement', 'finish']):
-                    is_dispatch_status = True
-                    print(f"  - 通過CSS類別檢測到派車狀態: {record_classes}")
-                
-                # 檢查精確的派車狀態選擇器：.dispatch > .state_tag
+                # 🎯 第一優先：檢查精確的派車狀態選擇器 .dispatch > .state_tag
                 try:
                     dispatch_state_element = record.query_selector('.dispatch > .state_tag')
                     if dispatch_state_element:
                         state_text = dispatch_state_element.inner_text().strip()
+                        print(f"  - 精確選擇器找到狀態標籤: '{state_text}'")
                         if state_text == '派車':
                             is_dispatch_status = True
-                            print(f"  - 通過精確選擇器檢測到派車狀態: .dispatch > .state_tag = '{state_text}'")
+                            has_precise_dispatch_detection = True
+                            print(f"  - ✅ 通過精確選擇器檢測到派車狀態: .dispatch > .state_tag = '{state_text}'")
+                        else:
+                            print(f"  - ❌ 精確選擇器檢測到非派車狀態: '{state_text}'")
+                    else:
+                        print(f"  - 精確選擇器未找到 .dispatch > .state_tag 元素")
                 except Exception as e:
                     print(f"  - 精確選擇器檢測失敗: {e}")
                     pass
                 
-                # 檢查文字內容中的狀態標示
-                record_text = record.inner_text()
-                if any(keyword in record_text for keyword in ['派車', '執行', '完成', '已派車']):
-                    is_dispatch_status = True
-                    print(f"  - 通過文字內容檢測到派車狀態")
-                
-                # 檢查是否有司機指派資訊（更精確的判定）
-                has_driver_info = False
-                driver_info_keywords = ['指派司機', '司機姓名', '車號', '聯絡電話', '駕駛']
-                if any(keyword in record_text for keyword in driver_info_keywords):
-                    has_driver_info = True
-                    is_dispatch_status = True
-                    print(f"  - 檢測到司機指派資訊")
-                
-                # 跳過明確不是派車狀態的記錄
-                if any(status in record_classes for status in ['accept', 'established', 'cancel']):
-                    print(f"  - 跳過非派車狀態記錄: {record_classes}")
+                # 如果精確檢測確定不是派車狀態，直接跳過
+                if dispatch_state_element and not has_precise_dispatch_detection:
+                    print(f"  - 精確檢測確認非派車狀態，跳過此記錄")
                     continue
                 
-                if any(keyword in record_text for keyword in ['媒合中', '成立', '取消', '已取消']):
-                    print(f"  - 跳過非派車狀態記錄")
-                    continue
+                # 🔄 備用檢測方式（只在精確檢測無結果時使用）
+                if not has_precise_dispatch_detection:
+                    print(f"  - 使用備用檢測方式...")
+                    
+                    # 檢查CSS類別中的狀態
+                    if any(cls in record_classes for cls in ['dispatch', 'implement', 'finish']):
+                        is_dispatch_status = True
+                        print(f"  - 通過CSS類別檢測到派車狀態: {record_classes}")
+                    
+                    # 檢查文字內容中的狀態標示
+                    record_text = record.inner_text()
+                    if any(keyword in record_text for keyword in ['派車', '執行', '完成', '已派車']):
+                        is_dispatch_status = True
+                        print(f"  - 通過文字內容檢測到派車狀態")
+                    
+                    # 檢查是否有司機指派資訊（更精確的判定）
+                    has_driver_info = False
+                    driver_info_keywords = ['指派司機', '司機姓名', '車號', '聯絡電話', '駕駛']
+                    if any(keyword in record_text for keyword in driver_info_keywords):
+                        has_driver_info = True
+                        is_dispatch_status = True
+                        print(f"  - 檢測到司機指派資訊")
+                    
+                    # 跳過明確不是派車狀態的記錄（只在備用檢測時才檢查）
+                    if any(status in record_classes for status in ['accept', 'established', 'cancel']):
+                        print(f"  - 跳過非派車狀態記錄: {record_classes}")
+                        continue
+                    
+                    if any(keyword in record_text for keyword in ['媒合中', '成立', '取消', '已取消']):
+                        print(f"  - 跳過非派車狀態記錄")
+                        continue
                 
                 # 只處理確認為派車狀態的記錄
                 if not is_dispatch_status:
                     print(f"  - 非派車狀態，跳過")
                     continue
+                    
+                print(f"  - ✅ 確認為派車相關記錄，開始提取詳細資訊...")
+                
+                # 準備提取詳細資訊
+                record_text = record.inner_text()
+                has_driver_info = any(keyword in record_text for keyword in ['指派司機', '司機姓名', '車號', '聯絡電話', '駕駛'])
                 
                 # 提取記錄詳細資訊
                 record_info = {
@@ -729,29 +751,20 @@ def fetch_dispatch_results():
                     'css_classes': record_classes
                 }
                 
-                # 精確狀態判定
-                status_determined = False
-                
-                # 優先使用精確選擇器檢測
-                try:
-                    dispatch_state_element = record.query_selector('.dispatch > .state_tag')
-                    if dispatch_state_element:
-                        state_text = dispatch_state_element.inner_text().strip()
-                        if state_text == '派車':
-                            record_info['status'] = '已派車'
-                            status_determined = True
-                            print(f"  - 精確狀態判定: {state_text}")
-                except:
-                    pass
-                
-                # 備用檢測方式
-                if not status_determined:
+                # 🎯 精確狀態判定
+                if has_precise_dispatch_detection:
+                    # 使用精確檢測的結果
+                    record_info['status'] = '已派車'
+                    print(f"  - 精確狀態判定: 已派車")
+                else:
+                    # 備用檢測方式
                     if 'dispatch' in record_classes or '派車' in record_text:
                         record_info['status'] = '已派車'
                     elif 'implement' in record_classes or '執行' in record_text:
                         record_info['status'] = '執行中'
                     elif 'finish' in record_classes or '完成' in record_text:
                         record_info['status'] = '已完成'
+                    print(f"  - 備用狀態判定: {record_info['status']}")
                 
                 # 嘗試提取時間資訊並轉換為台北時間
                 try:
