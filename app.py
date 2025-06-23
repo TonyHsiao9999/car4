@@ -784,126 +784,122 @@ def fetch_dispatch_results():
                     
                     take_screenshot(f"record_{record_index}_found")
                     
-                    # 在該元素內找展開按鈕
+                    # 嘗試多種方式提取詳細資訊
+                    detail_extraction_success = False
+                    
+                    # 方法1：嘗試展開按鈕
                     expand_selectors = [
                         '.see_more span',
                         '.see_more',
-                        '.see_more i'
+                        '.see_more i',
+                        'span:has-text("查看更多")',
+                        'a:has-text("查看更多")'
                     ]
                     
-                    expand_button = None
                     for expand_sel in expand_selectors:
                         try:
                             expand_button = order_element.query_selector(expand_sel)
                             if expand_button and expand_button.is_visible():
-                                print(f"✅ 使用選擇器 '{expand_sel}' 找到展開按鈕")
-                                break
+                                print(f"🎯 嘗試展開按鈕: {expand_sel}")
+                                try:
+                                    # 使用更快速的點擊方式
+                                    expand_button.click(timeout=3000, force=True)
+                                    driver['page'].wait_for_timeout(1000)  # 縮短等待
+                                    print(f"✅ 展開成功: {expand_sel}")
+                                    detail_extraction_success = True
+                                    take_screenshot(f"record_{record_index}_expanded")
+                                    break
+                                except:
+                                    print(f"⚠️ 展開失敗: {expand_sel}")
+                                    continue
                         except:
                             continue
                     
-                    if expand_button and expand_button.is_visible():
-                        print(f"✅ 找到展開按鈕，準備點擊...")
-                        try:
-                            driver['page'].wait_for_timeout(500)
-                            # 設置較短的超時時間並使用 timeout 參數
-                            expand_button.click(timeout=5000)  # 5秒超時
-                            print(f"✅ 展開按鈕點擊成功")
-                            
-                            # 等待展開內容載入
-                            driver['page'].wait_for_timeout(2000)  # 縮短等待時間
-                            take_screenshot(f"record_{record_index}_expanded")
-                        except Exception as click_error:
-                            print(f"⚠️ 展開按鈕點擊失敗: {click_error}")
-                            take_screenshot(f"record_{record_index}_click_failed")
-                            # 即使點擊失敗，也嘗試提取現有的資訊
+                    # 方法2：如果展開失敗，嘗試從摺疊狀態提取已有資訊
+                    if not detail_extraction_success:
+                        print(f"💡 無法展開，嘗試從現有資訊提取...")
+                        take_screenshot(f"record_{record_index}_collapsed_extract")
                         
                         # 直接在該元素內提取資訊（無論展開是否成功）
                         try:
-                            # 車號選擇器
-                            car_selectors = [
-                                '.order_blocks.style2 .blocks > div:nth-child(2)',
-                                '.style2 > .blocks > div:nth-child(2)',
-                                '.blocks > div:nth-child(2)'
-                            ]
+                            # 先從完整文字內容中提取基本資訊
+                            full_text = order_element.inner_text()
+                            print(f"📝 記錄完整文字（前200字）: {full_text[:200]}...")
                             
+                            # 初始化變數
                             car_number = "未找到"
-                            for car_selector in car_selectors:
-                                try:
-                                    car_element = order_element.query_selector(car_selector)
-                                    if car_element and car_element.is_visible():
-                                        car_number = car_element.inner_text().strip()
-                                        print(f"🚗 車號選擇器成功: {car_selector}")
-                                        break
-                                except:
-                                    continue
-                            print(f"🚗 車號: {car_number}")
-                            
-                            # 指派司機選擇器
-                            driver_selectors = [
-                                '.order_blocks .blocks > div:nth-child(1)',
-                                '.blocks > div:nth-child(1)'
-                            ]
-                            
                             driver_name = "未找到"
-                            for driver_selector in driver_selectors:
-                                try:
-                                    driver_element = order_element.query_selector(driver_selector)
-                                    if driver_element and driver_element.is_visible():
-                                        driver_name = driver_element.inner_text().strip()
-                                        print(f"👨‍✈️ 司機選擇器成功: {driver_selector}")
-                                        break
-                                except:
-                                    continue
-                            print(f"👨‍✈️ 指派司機: {driver_name}")
-                            
-                            # 負擔金額選擇器
-                            amount_selectors = [
-                                '.order_blocks:nth-child(6) > .blocks',
-                                '.order_blocks:nth-child(6) .blocks',
-                                '.order_blocks:nth-child(6) .text',
-                                '.order_blocks:nth-child(5) .blocks:nth-child(2)',
-                            ]
-                            
                             self_pay_amount = "未找到"
-                            print(f"💰 開始搜尋負擔金額，共 {len(amount_selectors)} 個選擇器")
                             
-                            for i, amount_selector in enumerate(amount_selectors, 1):
-                                try:
-                                    print(f"💰 嘗試選擇器 {i}/{len(amount_selectors)}: {amount_selector}")
-                                    amount_element = order_element.query_selector(amount_selector)
-                                    if amount_element and amount_element.is_visible():
-                                        amount_text = amount_element.inner_text().strip()
-                                        print(f"💰 找到元素，文字內容: '{amount_text}'")
-                                        
-                                        def is_valid_amount(text):
-                                            if not text:
-                                                return False
-                                            has_digit = any(c.isdigit() for c in text)
-                                            if not has_digit:
-                                                return False
-                                            amount_indicators = ['元', '$', '＄', '負擔金額', '自付', '費用', '金額']
-                                            has_amount_indicator = any(indicator in text for indicator in amount_indicators)
-                                            return has_amount_indicator
-                                        
-                                        if is_valid_amount(amount_text):
-                                            self_pay_amount = amount_text
-                                            print(f"💰 金額選擇器成功: {amount_selector} -> '{amount_text}'")
-                                            break
-                                        else:
-                                            print(f"💰 文字內容不符合金額格式: '{amount_text}'")
-                                    else:
-                                        print(f"💰 元素不存在或不可見")
-                                except Exception as e:
-                                    print(f"⚠️ 金額選擇器 {amount_selector} 發生錯誤: {e}")
-                                    continue
-                            print(f"💰 負擔金額: {self_pay_amount}")
+                            # 如果成功展開，使用詳細選擇器
+                            if detail_extraction_success:
+                                print("🔍 使用展開後的詳細選擇器...")
+                                
+                                # 車號選擇器（展開狀態）
+                                car_selectors = [
+                                    '.order_blocks.style2 .blocks > div:nth-child(2)',
+                                    '.style2 > .blocks > div:nth-child(2)',
+                                    '.blocks > div:nth-child(2)',
+                                    '.order_blocks .blocks'
+                                ]
+                                
+                                for car_selector in car_selectors:
+                                    try:
+                                        car_element = order_element.query_selector(car_selector)
+                                        if car_element and car_element.is_visible():
+                                            car_text = car_element.inner_text().strip()
+                                            if '車號' in car_text or any(c.isdigit() for c in car_text):
+                                                car_number = car_text
+                                                print(f"🚗 車號選擇器成功: {car_selector} -> '{car_text}'")
+                                                break
+                                    except:
+                                        continue
+                                
+                                # 司機選擇器（展開狀態）
+                                driver_selectors = [
+                                    '.order_blocks .blocks > div:nth-child(1)',
+                                    '.blocks > div:nth-child(1)',
+                                    '.order_blocks .blocks'
+                                ]
+                                
+                                for driver_selector in driver_selectors:
+                                    try:
+                                        driver_element = order_element.query_selector(driver_selector)
+                                        if driver_element and driver_element.is_visible():
+                                            driver_text = driver_element.inner_text().strip()
+                                            if '司機' in driver_text or '駕駛' in driver_text:
+                                                driver_name = driver_text
+                                                print(f"👨‍✈️ 司機選擇器成功: {driver_selector} -> '{driver_text}'")
+                                                break
+                                    except:
+                                        continue
                             
-                            # 整理結果
+                            # 不論展開是否成功，都嘗試從文字內容提取
+                            print("🔍 從文字內容提取資訊...")
+                            
+                            # 提取電話號碼（之前已檢測到有電話號碼才被判定為已派車）
+                            import re
+                            phone_pattern = r'\(?\d{2,4}\)?\s*\d{7,8}'
+                            phone_matches = re.findall(phone_pattern, full_text)
+                            if phone_matches:
+                                print(f"📞 找到聯絡電話: {phone_matches}")
+                                # 有電話號碼代表已派車，可以建立基本記錄
+                            
+                            # 從文字中提取金額
+                            amount_pattern = r'負擔金額：?\$?(\d+)'
+                            amount_matches = re.findall(amount_pattern, full_text)
+                            if amount_matches:
+                                self_pay_amount = f"${amount_matches[0]}"
+                                print(f"💰 從文字提取金額: {self_pay_amount}")
+                            
+                            # 建立記錄（即使資訊不完整也記錄）
                             result_entry = {
                                 'date_time': date_text,
                                 'car_number': car_number,
                                 'driver': driver_name,
-                                'self_pay_amount': self_pay_amount
+                                'self_pay_amount': self_pay_amount,
+                                'phone_numbers': phone_matches if phone_matches else [],
+                                'extraction_method': '展開成功' if detail_extraction_success else '摺疊狀態'
                             }
                             
                             results.append(result_entry)
@@ -913,11 +909,20 @@ def fetch_dispatch_results():
                         except Exception as extract_error:
                             print(f"❌ 提取第 {record_index} 筆記錄資訊時發生錯誤: {extract_error}")
                             take_screenshot(f"record_{record_index}_extract_error")
+                            # 即使提取失敗也建立基本記錄
+                            basic_entry = {
+                                'date_time': date_text,
+                                'car_number': '提取失敗',
+                                'driver': '提取失敗',
+                                'self_pay_amount': '提取失敗',
+                                'error': str(extract_error)
+                            }
+                            results.append(basic_entry)
                             continue
                             
-                    else:
-                        print(f"❌ 未找到第 {record_index} 筆記錄的展開按鈕")
-                        take_screenshot(f"record_{record_index}_no_expand")
+                    # 如果沒有找到任何展開按鈕，仍然嘗試從摺疊狀態提取資訊
+                    print(f"💡 記錄 {record_index} 無展開按鈕，直接從摺疊狀態提取...")
+                    take_screenshot(f"record_{record_index}_no_expand")
                         
                 except Exception as record_error:
                     print(f"❌ 處理第 {record_index} 筆記錄時發生錯誤: {record_error}")
@@ -948,6 +953,19 @@ def fetch_dispatch_results():
                         result_content += f"車號: {result.get('car_number', '未找到')}\n"
                         result_content += f"指派司機: {result.get('driver', '未找到')}\n"
                         result_content += f"自付金額: {result.get('self_pay_amount', '未找到')}\n"
+                        
+                        # 顯示聯絡電話（如果有）
+                        phones = result.get('phone_numbers', [])
+                        if phones:
+                            result_content += f"聯絡電話: {', '.join(phones)}\n"
+                        
+                        # 顯示提取方式
+                        method = result.get('extraction_method', '未知')
+                        result_content += f"資料提取方式: {method}\n"
+                        
+                        # 如果有錯誤訊息
+                        if 'error' in result:
+                            result_content += f"錯誤訊息: {result['error']}\n"
                     else:
                         result_content += f"記錄資料: {result}\n"
                     result_content += f"狀態: 已派車 🚗\n"
