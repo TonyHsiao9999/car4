@@ -1,15 +1,19 @@
 FROM mcr.microsoft.com/playwright/python:v1.41.0-jammy
 
+# 設置非互動模式，避免 debconf 問題（必須在最前面）
+ENV DEBIAN_FRONTEND=noninteractive
+ENV DEBCONF_NONINTERACTIVE_SEEN=true
+
 # 設置工作目錄
 WORKDIR /app
 
-# 修正 Perl 相關問題
-RUN apt-get update && apt-get install -y \
+# 預配置 debconf 並修正 Perl 相關問題
+RUN echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections && \
+    apt-get update && apt-get install -y \
+    libterm-readline-gnu-perl \
     libterm-readline-perl-perl \
+    perl-modules-5.36 \
     && rm -rf /var/lib/apt/lists/*
-
-# 設置非互動模式，避免 debconf 問題
-ENV DEBIAN_FRONTEND=noninteractive
 
 # 設置台北時區
 RUN ln -sf /usr/share/zoneinfo/Asia/Taipei /etc/localtime && \
