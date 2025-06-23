@@ -647,6 +647,264 @@ def fetch_dispatch_results():
         except:
             print("無法取得頁面標題")
         
+        # 🚀 強制展開所有隱藏記錄的智能載入機制
+        print("🔄 開始強制展開所有隱藏記錄...")
+        
+        # 第一步：移除所有可能隱藏記錄的樣式限制
+        try:
+            driver['page'].evaluate('''
+                console.log("=== 開始強制展開隱藏記錄 ===");
+                
+                // 1. 移除所有 display:none 和 visibility:hidden 的樣式
+                const hiddenElements = document.querySelectorAll('*[style*="display: none"], *[style*="display:none"], *[style*="visibility: hidden"], *[style*="visibility:hidden"]');
+                hiddenElements.forEach(el => {
+                    el.style.display = 'block';
+                    el.style.visibility = 'visible';
+                    console.log('展開隱藏元素:', el);
+                });
+                
+                // 2. 展開所有摺疊的區塊
+                const collapsedSelectors = [
+                    '[data-collapsed="true"]',
+                    '.collapsed',
+                    '.fold',
+                    '.folded',
+                    '.hidden',
+                    '.hide',
+                    '[aria-expanded="false"]',
+                    '[data-toggle="collapse"]'
+                ];
+                
+                collapsedSelectors.forEach(selector => {
+                    document.querySelectorAll(selector).forEach(el => {
+                        el.style.display = 'block';
+                        el.style.visibility = 'visible';
+                        el.style.height = 'auto';
+                        el.style.maxHeight = 'none';
+                        el.style.overflow = 'visible';
+                        
+                        // 更改屬性
+                        if (el.dataset.collapsed) el.dataset.collapsed = 'false';
+                        if (el.getAttribute('aria-expanded')) el.setAttribute('aria-expanded', 'true');
+                        
+                        // 移除摺疊相關的CSS類別
+                        if (el.classList.contains('collapsed')) el.classList.remove('collapsed');
+                        if (el.classList.contains('hidden')) el.classList.remove('hidden');
+                        if (el.classList.contains('hide')) el.classList.remove('hide');
+                        
+                        console.log('展開摺疊元素:', el);
+                    });
+                });
+                
+                // 3. 強制展開任何可能的高度限制
+                const limitedHeightElements = document.querySelectorAll('*[style*="max-height"], *[style*="height"]');
+                limitedHeightElements.forEach(el => {
+                    const style = window.getComputedStyle(el);
+                    if (style.maxHeight !== 'none' && style.maxHeight !== 'auto') {
+                        el.style.maxHeight = 'none';
+                        el.style.height = 'auto';
+                        console.log('移除高度限制:', el);
+                    }
+                });
+                
+                console.log("=== 第一階段展開完成 ===");
+            ''')
+            driver['page'].wait_for_timeout(2000)
+            print("✅ 第一階段：移除樣式隱藏")
+        except Exception as e:
+            print(f"移除樣式隱藏失敗: {e}")
+        
+        # 第二步：點擊所有可能的展開按鈕
+        try:
+            driver['page'].evaluate('''
+                console.log("=== 開始點擊展開按鈕 ===");
+                
+                // 尋找所有可能的展開按鈕
+                const expandSelectors = [
+                    'button:contains("展開")',
+                    'button:contains("顯示更多")',
+                    'button:contains("更多")',
+                    'button:contains("載入更多")',
+                    'button:contains("查看更多")',
+                    'button:contains("Show More")',
+                    'button:contains("Load More")',
+                    'a:contains("更多")',
+                    'a:contains("展開")',
+                    '.expand-btn',
+                    '.show-more',
+                    '.load-more',
+                    '.btn-more',
+                    '[data-action="expand"]',
+                    '[data-action="show-more"]',
+                    '[data-action="load-more"]',
+                    '[onclick*="expand"]',
+                    '[onclick*="show"]',
+                    '[onclick*="more"]',
+                    '[onclick*="load"]'
+                ];
+                
+                let buttonClicked = false;
+                
+                expandSelectors.forEach(selector => {
+                    try {
+                        // 對於包含文字的選擇器，需要手動搜尋
+                        if (selector.includes(':contains')) {
+                            const text = selector.match(/:contains\\("([^"]+)"\\)/)[1];
+                            const elements = Array.from(document.querySelectorAll('button, a, span, div')).filter(el => 
+                                el.textContent && el.textContent.includes(text)
+                            );
+                            elements.forEach(el => {
+                                if (el.click) {
+                                    console.log('點擊展開按鈕:', el, '文字:', text);
+                                    el.click();
+                                    buttonClicked = true;
+                                }
+                            });
+                        } else {
+                            document.querySelectorAll(selector).forEach(el => {
+                                if (el.click) {
+                                    console.log('點擊展開按鈕:', el, '選擇器:', selector);
+                                    el.click();
+                                    buttonClicked = true;
+                                }
+                            });
+                        }
+                    } catch(e) {
+                        console.log('展開按鈕點擊失敗:', selector, e);
+                    }
+                });
+                
+                console.log("=== 展開按鈕點擊完成 ===", buttonClicked);
+                return buttonClicked;
+            ''')
+            driver['page'].wait_for_timeout(3000)
+            print("✅ 第二階段：點擊展開按鈕")
+        except Exception as e:
+            print(f"點擊展開按鈕失敗: {e}")
+        
+        # 第三步：強制觸發懶載入和無限滾動
+        load_attempts = 0
+        max_load_attempts = 10
+        previous_record_count = 0
+        
+        while load_attempts < max_load_attempts:
+            try:
+                # 檢查當前記錄數量
+                current_record_count = driver['page'].evaluate('''
+                    const selectors = ['div.log', '.order_list', '.record', '[class*="log"]', '[class*="order"]'];
+                    let maxCount = 0;
+                    selectors.forEach(selector => {
+                        const count = document.querySelectorAll(selector).length;
+                        if (count > maxCount) maxCount = count;
+                    });
+                    return maxCount;
+                ''')
+                
+                print(f"第 {load_attempts + 1} 次載入檢查，找到 {current_record_count} 筆記錄")
+                
+                if current_record_count > previous_record_count:
+                    previous_record_count = current_record_count
+                    load_attempts = 0  # 重置計數器，繼續載入
+                    print(f"  ✅ 記錄數量增加到 {current_record_count}，繼續載入")
+                else:
+                    load_attempts += 1
+                    print(f"  ⏳ 記錄數量沒有變化，嘗試次數: {load_attempts}")
+                
+                # 觸發多種載入方式
+                load_success = driver['page'].evaluate('''
+                    console.log("=== 觸發載入更多記錄 ===");
+                    let success = false;
+                    
+                    // 1. 滾動到頁面底部
+                    window.scrollTo(0, document.body.scrollHeight);
+                    document.documentElement.scrollTop = document.documentElement.scrollHeight;
+                    
+                    // 2. 觸發各種滾動事件
+                    ['scroll', 'scrollend', 'wheel', 'DOMContentLoaded'].forEach(eventType => {
+                        try {
+                            window.dispatchEvent(new Event(eventType));
+                            document.dispatchEvent(new Event(eventType));
+                        } catch(e) {}
+                    });
+                    
+                    // 3. 尋找並點擊載入更多按鈕
+                    const loadMoreSelectors = [
+                        'button:contains("載入更多")',
+                        'button:contains("更多")',
+                        'button:contains("下一頁")',
+                        'a[href*="page"]',
+                        '.pagination a',
+                        '.load-more',
+                        '.btn-load-more',
+                        '.next-page'
+                    ];
+                    
+                    loadMoreSelectors.forEach(selector => {
+                        try {
+                            if (selector.includes(':contains')) {
+                                const text = selector.match(/:contains\\("([^"]+)"\\)/)[1];
+                                const elements = Array.from(document.querySelectorAll('button, a')).filter(el => 
+                                    el.textContent && el.textContent.includes(text) && 
+                                    el.offsetParent !== null // 確保元素可見
+                                );
+                                elements.forEach(el => {
+                                    console.log('點擊載入更多按鈕:', el);
+                                    el.click();
+                                    success = true;
+                                });
+                            } else {
+                                document.querySelectorAll(selector).forEach(el => {
+                                    if (el.offsetParent !== null) { // 確保元素可見
+                                        console.log('點擊載入按鈕:', el);
+                                        el.click();
+                                        success = true;
+                                    }
+                                });
+                            }
+                        } catch(e) {
+                            console.log('載入按鈕點擊失敗:', selector, e);
+                        }
+                    });
+                    
+                    // 4. 觸發 IntersectionObserver 
+                    const observedElements = document.querySelectorAll('[data-lazy], .lazy, .lazy-load');
+                    observedElements.forEach(el => {
+                        try {
+                            // 觸發進入視窗事件
+                            el.getBoundingClientRect();
+                            el.dispatchEvent(new Event('load'));
+                            el.dispatchEvent(new Event('appear'));
+                            el.dispatchEvent(new Event('intersect'));
+                        } catch(e) {}
+                    });
+                    
+                    // 5. 模擬鼠標滾輪事件
+                    try {
+                        const wheelEvent = new WheelEvent('wheel', {
+                            deltaY: 100,
+                            bubbles: true
+                        });
+                        document.dispatchEvent(wheelEvent);
+                    } catch(e) {}
+                    
+                    console.log("=== 載入觸發完成 ===", success);
+                    return success;
+                ''')
+                
+                # 等待載入
+                driver['page'].wait_for_timeout(4000)
+                
+                # 如果連續多次沒有新記錄，停止嘗試  
+                if load_attempts >= 5:
+                    print("連續多次沒有新記錄載入，停止載入")
+                    break
+                    
+            except Exception as e:
+                print(f"載入記錄時發生錯誤: {e}")
+                load_attempts += 1
+        
+        print(f"✅ 隱藏記錄展開完成，最終找到 {previous_record_count} 筆記錄")
+        
         # 根據您提供的精確DOM結構進行記錄查詢
         # 整個頁面的CSS: .ReservationOrder .wrap2
         # 所有紀錄顯示在CSS: .ReservationOrder .main_content
