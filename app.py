@@ -46,39 +46,51 @@ def setup_driver():
         
         playwright = sync_playwright().start()
         
-        # 檢查瀏覽器可執行檔路徑
+        # 檢查並找到正確的瀏覽器路徑
+        chromium_path = None
+        
+        # 方法1: 使用 Playwright 預設路徑
         try:
             chromium_path = playwright.chromium.executable_path
-            print(f"✅ Chromium 路徑: {chromium_path}")
+            print(f"🔍 Playwright 預設路徑: {chromium_path}")
             
-            # 檢查檔案是否存在
             if os.path.exists(chromium_path):
-                print("✅ Chromium 可執行檔存在")
+                print("✅ 使用 Playwright 預設路徑")
             else:
-                print("❌ Chromium 可執行檔不存在")
-                raise Exception(f"Chromium 可執行檔不存在: {chromium_path}")
-                
-        except Exception as path_error:
-            print(f"❌ 無法取得 Chromium 路徑: {path_error}")
-            # 嘗試手動尋找瀏覽器
+                print("⚠️ Playwright 預設路徑不存在，尋找替代路徑...")
+                chromium_path = None
+        except Exception as e:
+            print(f"⚠️ 無法取得 Playwright 預設路徑: {e}")
+            chromium_path = None
+        
+        # 方法2: 如果預設路徑不可用，手動搜尋
+        if not chromium_path:
+            print("🔍 搜尋可用的瀏覽器路徑...")
             possible_paths = [
-                '/ms-playwright/chromium-*/chrome-linux/chrome',
                 '/root/.cache/ms-playwright/chromium-*/chrome-linux/chrome',
+                '/ms-playwright/chromium-*/chrome-linux/chrome', 
+                '~/.cache/ms-playwright/chromium-*/chrome-linux/chrome',
                 '/usr/bin/chromium',
                 '/usr/bin/chromium-browser'
             ]
             
             import glob
-            found_path = None
             for pattern in possible_paths:
-                matches = glob.glob(pattern)
+                expanded_pattern = os.path.expanduser(pattern)
+                matches = glob.glob(expanded_pattern)
                 if matches:
-                    found_path = matches[0]
-                    print(f"🔍 找到瀏覽器: {found_path}")
+                    chromium_path = matches[0]
+                    print(f"✅ 找到可用瀏覽器: {chromium_path}")
                     break
             
-            if not found_path:
+            if not chromium_path:
                 raise Exception("找不到任何可用的 Chromium 瀏覽器")
+        
+        # 驗證找到的路徑
+        if not os.path.exists(chromium_path):
+            raise Exception(f"瀏覽器路徑不存在: {chromium_path}")
+        
+        print(f"🎯 最終使用瀏覽器路徑: {chromium_path}")
         
         # 最佳化的瀏覽器參數
         browser_args = [
@@ -103,11 +115,23 @@ def setup_driver():
         ]
         
         print("⚡ 啟動 Build 階段預安裝的瀏覽器...")
-        browser = playwright.chromium.launch(
-            headless=True,
-            args=browser_args,
-            timeout=20000  # 增加超時時間
-        )
+        
+        # 使用找到的瀏覽器路徑啟動
+        if chromium_path and chromium_path not in ['/usr/bin/chromium', '/usr/bin/chromium-browser']:
+            # 使用自定義路徑
+            browser = playwright.chromium.launch(
+                executable_path=chromium_path,
+                headless=True,
+                args=browser_args,
+                timeout=20000
+            )
+        else:
+            # 使用系統瀏覽器或預設路徑
+            browser = playwright.chromium.launch(
+                headless=True,
+                args=browser_args,
+                timeout=20000
+            )
         print("✅ 瀏覽器啟動成功")
         
         context = browser.new_context(

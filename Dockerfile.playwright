@@ -52,7 +52,6 @@ RUN python test_browser.py
 
 # 設置環境變數
 ENV PYTHONUNBUFFERED=1
-ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 # 創建截圖目錄
 RUN mkdir -p /app/screenshots
