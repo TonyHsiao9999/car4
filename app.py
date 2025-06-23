@@ -462,6 +462,9 @@ def fetch_dispatch_results():
                     
                     # 尋找確定按鈕 - 專門針對浮動視窗內的按鈕
                     confirm_selectors = [
+                        # 精確的確定按鈕選擇器
+                        'span.dialog-button',  # 您提供的精確選擇器
+                        
                         '.modal button:has-text("確定")',
                         '.dialog button:has-text("確定")',
                         '.popup button:has-text("確定")',
