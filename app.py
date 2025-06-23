@@ -1162,8 +1162,8 @@ def fetch_dispatch_results():
                             else:
                                 print(f"  - 精確選擇器 '{selector}' 未找到狀態元素")
                         except Exception as e:
-                        print(f"  - 精確選擇器 '{selector}' 執行失敗: {e}")
-                        continue
+                            print(f"  - 精確選擇器 '{selector}' 執行失敗: {e}")
+                            continue
                 
                 # 如果精確檢測找到了狀態元素且確定不是派車狀態，直接跳過
                 if has_precise_dispatch_detection and not is_dispatch_status:
