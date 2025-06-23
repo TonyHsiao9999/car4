@@ -1,36 +1,36 @@
 services:
   - type: web
-    name: car4-ltc-slim
-    env: docker
-    dockerfilePath: ./Dockerfile.slim
+    name: car4-ltc-native
+    env: python
+    plan: starter
+    buildCommand: |
+      pip install --no-cache-dir -r requirements.txt
+      pip install --no-cache-dir playwright==1.41.0
+      python -m playwright install chromium --with-deps
+    startCommand: python app.py
     envVars:
       - key: PORT
         value: 10000
       - key: PYTHONUNBUFFERED
         value: 1
-    healthCheckPath: /
-    plan: starter
-    autoDeploy: true
-    buildCommand: ""
-    startCommand: python app.py
-
-  # 定時任務 (Cron Jobs)
-  - type: cron
-    name: car4-reservation-cron-slim
-    env: docker
-    dockerfilePath: ./Dockerfile.slim
-    schedule: "1 16 * * 0,3"  # 台灣週一和週四 00:01 (UTC 週日和週三 16:01)
-    startCommand: python cron_job.py
-    envVars:
-      - key: PYTHONUNBUFFERED
+      - key: RENDER
         value: 1
+      - key: PLAYWRIGHT_BROWSERS_PATH
+        value: /opt/render/.cache/ms-playwright
+      - key: PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS
+        value: 1
+    healthCheckPath: /
+    autoDeploy: true
 
-  - type: cron
-    name: car4-dispatch-cron-slim
-    env: docker
-    dockerfilePath: ./Dockerfile.slim
-    schedule: "10 16 * * 0,3"  # 台灣週一和週四 00:10 (UTC 週日和週三 16:10)
-    startCommand: python cron_dispatch.py
-    envVars:
-      - key: PYTHONUNBUFFERED
-        value: 1 
+  # 定時任務暫時移除，先測試主應用
+  # - type: cron
+  #   name: car4-reservation-cron-native
+  #   env: python
+  #   schedule: "1 16 * * 0,3"
+  #   buildCommand: |
+  #     pip install -r requirements.txt
+  #     playwright install chromium
+  #   startCommand: python cron_job.py
+  #   envVars:
+  #     - key: PYTHONUNBUFFERED
+  #       value: 1 

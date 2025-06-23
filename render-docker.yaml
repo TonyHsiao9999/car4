@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: car4-ltc-slim
+    env: docker
+    dockerfilePath: ./Dockerfile.slim
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: PYTHONUNBUFFERED
+        value: 1
+    healthCheckPath: /
+    plan: starter
+    autoDeploy: true
+    buildCommand: ""
+    startCommand: python app.py
+
+  # 定時任務 (Cron Jobs)
+  - type: cron
+    name: car4-reservation-cron-slim
+    env: docker
+    dockerfilePath: ./Dockerfile.slim
+    schedule: "1 16 * * 0,3"  # 台灣週一和週四 00:01 (UTC 週日和週三 16:01)
+    startCommand: python cron_job.py
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: 1
+
+  - type: cron
+    name: car4-dispatch-cron-slim
+    env: docker
+    dockerfilePath: ./Dockerfile.slim
+    schedule: "10 16 * * 0,3"  # 台灣週一和週四 00:10 (UTC 週日和週三 16:10)
+    startCommand: python cron_dispatch.py
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: 1 

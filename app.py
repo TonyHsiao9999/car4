@@ -70,20 +70,56 @@ def setup_driver():
         
         print(f"瀏覽器啟動參數: {browser_args}")
         
-        # 直接啟動系統預安裝的 Chromium
+        # 根據環境啟動瀏覽器
         try:
-            print("🚀 啟動系統預安裝的 Chromium 瀏覽器...")
-            browser = playwright.chromium.launch(
-                headless=True,
-                args=browser_args,
-                timeout=15000  # 15秒超時
-            )
+            # 檢查是否在 Render.com 原生環境
+            if 'RENDER' in os.environ:
+                print("🚀 Render.com 原生環境：啟動 Playwright Chromium...")
+                browser = playwright.chromium.launch(
+                    headless=True,
+                    args=browser_args,
+                    timeout=30000  # Render.com 需要更長時間
+                )
+            else:
+                print("🚀 啟動系統預安裝的 Chromium 瀏覽器...")
+                browser = playwright.chromium.launch(
+                    headless=True,
+                    args=browser_args,
+                    timeout=15000  # 15秒超時
+                )
             print("✅ 瀏覽器啟動成功")
         except Exception as e:
             print(f"❌ 瀏覽器啟動失敗: {e}")
-            print("💡 在 Alpine 容器中應該使用預安裝的系統 Chromium")
-            playwright.stop()
-            return None
+            
+            # 如果在 Render.com 環境失敗，嘗試安裝瀏覽器
+            if 'RENDER' in os.environ:
+                print("🔧 Render.com 環境：嘗試重新安裝瀏覽器...")
+                try:
+                    import subprocess
+                    result = subprocess.run([
+                        'python3', '-m', 'playwright', 'install', 'chromium'
+                    ], capture_output=True, text=True, timeout=120)
+                    
+                    if result.returncode == 0:
+                        print("✅ 瀏覽器重新安裝成功，重新啟動...")
+                        browser = playwright.chromium.launch(
+                            headless=True,
+                            args=browser_args,
+                            timeout=30000
+                        )
+                        print("✅ 瀏覽器重新啟動成功")
+                    else:
+                        print(f"❌ 瀏覽器安裝失敗: {result.stderr}")
+                        playwright.stop()
+                        return None
+                except Exception as install_error:
+                    print(f"❌ 瀏覽器安裝過程失敗: {install_error}")
+                    playwright.stop()
+                    return None
+            else:
+                print("💡 在容器環境中應該使用預安裝的系統 Chromium")
+                playwright.stop()
+                return None
         
         context = browser.new_context(
             viewport={'width': 1920, 'height': 1080},
@@ -3523,6 +3559,8 @@ def dispatch_result_file():
     return html
 
 if __name__ == '__main__':
-    # Zeabur 環境變數
-    port = int(os.environ.get('PORT', 8080))
+    # 支援多種平台的端口設置
+    port = int(os.environ.get('PORT', 8080))  # Render.com 使用 PORT
+    if port == 8080 and 'RENDER' in os.environ:
+        port = 10000  # Render.com 預設
     app.run(host='0.0.0.0', port=port) 
