@@ -1,0 +1,67 @@
+FROM python:3.11-slim
+
+# 完全禁用互動式安裝和 debconf
+ENV DEBIAN_FRONTEND=noninteractive
+ENV DEBCONF_NONINTERACTIVE_SEEN=true
+ENV PYTHONUNBUFFERED=1
+ENV TZ=Asia/Taipei
+
+# 設置工作目錄
+WORKDIR /app
+
+# 一次性安裝所有系統依賴，避免多次 apt 操作
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget \
+    gnupg \
+    ca-certificates \
+    fonts-liberation \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libdrm2 \
+    libgtk-3-0 \
+    libnspr4 \
+    libnss3 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    xvfb \
+    chromium \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# 設置時區
+RUN ln -sf /usr/share/zoneinfo/Asia/Taipei /etc/localtime && \
+    echo "Asia/Taipei" > /etc/timezone
+
+# 複製並安裝 Python 依賴
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 安裝 Playwright（但不下載瀏覽器）
+RUN pip install --no-cache-dir playwright==1.41.0
+
+# 設置 Playwright 使用系統 Chromium
+ENV PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true
+ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
+ENV PLAYWRIGHT_BROWSERS_PATH=/usr/bin
+
+# 創建虛擬顯示器腳本
+RUN echo '#!/bin/bash\nXvfb :99 -screen 0 1920x1080x24 &\nexport DISPLAY=:99\nexec "$@"' > /usr/local/bin/xvfb-run-custom && \
+    chmod +x /usr/local/bin/xvfb-run-custom
+
+# 複製應用程式
+COPY . .
+
+# 創建必要目錄
+RUN mkdir -p screenshots logs static
+
+# 驗證安裝（但不觸發任何互動式操作）
+RUN python3 --version && \
+    echo "Chromium path: $(which chromium)" && \
+    chromium --version --no-sandbox
+
+# 暴露端口
+EXPOSE 5000
+
+# 使用虛擬顯示器啟動
+CMD ["xvfb-run-custom", "python3", "app.py"] 
