@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: car4-simple-test
+    env: python
+    plan: starter
+    buildCommand: pip install flask
+    startCommand: python simple_app.py
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: PYTHONUNBUFFERED
+        value: 1
+    healthCheckPath: /health
+    autoDeploy: true 

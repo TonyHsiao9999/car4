@@ -446,7 +446,8 @@ def fetch_dispatch_results():
             with open(result_file, 'w', encoding='utf-8') as f:
                 f.write("")
             
-            results = []
+            # 儲存所有已派車記錄的結果
+            dispatch_result_records = []
             total_records_checked = 0
             total_dispatch_records_found = 0
             
@@ -476,7 +477,7 @@ def fetch_dispatch_results():
             print("🔍 執行全面的隱藏記錄檢測...")
             
             # 使用 JavaScript 進行全面的隱藏記錄檢測和顯示
-            results = driver['page'].evaluate("""
+            detection_results = driver['page'].evaluate("""
                 () => {
                     const results = {
                         initial_visible: 0,
@@ -561,7 +562,7 @@ def fetch_dispatch_results():
                 }
             """)
             
-            for log_msg in results['log']:
+            for log_msg in detection_results['log']:
                 print(f"   📝 {log_msg}")
             
             # 等待一下讓 DOM 更新
@@ -572,9 +573,9 @@ def fetch_dispatch_results():
             total_elements_on_page = len(all_order_elements)
             
             print(f"🎯 最終結果：")
-            print(f"   📊 初始可見: {results['initial_visible']} 筆")
-            print(f"   🔍 潛在記錄: {results['potential_hidden']} 個元素")
-            print(f"   👁️ 顯示隱藏: {results['displayed_hidden']} 筆")
+            print(f"   📊 初始可見: {detection_results['initial_visible']} 筆")
+            print(f"   🔍 潛在記錄: {detection_results['potential_hidden']} 個元素")
+            print(f"   👁️ 顯示隱藏: {detection_results['displayed_hidden']} 筆")
             print(f"   ✅ 最終總數: {total_elements_on_page} 筆記錄")
             
             if total_elements_on_page == 0:
@@ -597,132 +598,36 @@ def fetch_dispatch_results():
                     
                     # 基於web-source-code/index-949f5202.js第314行的精確狀態定義：
                     # {accept:T.Status==0,established:T.Status==1,dispatch:T.Status==2,implement:T.Status==3,finish:T.Status==4,cancel:T.Status==5}
-                    # 
-                    # 已派車狀態：
-                    # - dispatch: Status == 2 (已派車) ← 主要目標
-                    # - implement: Status == 3 (執行中) ← 已派車且執行中
-                    # - finish: Status == 4 (已完成) ← 已派車且完成
                     
-                    # 1. 檢查完整的CSS類別
+                    # 檢查CSS類別中的狀態標示（唯一判定依據）
                     class_list = element.get_attribute('class') or ''
-                    print(f"   📋 完整CSS類別: '{class_list}'")
+                    print(f"   📋 CSS類別: '{class_list}'")
                     
-                    # 2. 檢查記錄的文字內容
-                    full_text = element.inner_text().strip()
-                    print(f"   📝 記錄文字內容預覽: {full_text[:200]}...")
-                    
-                    # 2.5. 詳細分析記錄結構（調試用）
-                    try:
-                        # 檢查是否有狀態相關的子元素
-                        dispatch_indicators = ['派車', '聯絡車隊', '取消預約']
-                        found_indicators = [ind for ind in dispatch_indicators if ind in full_text]
-                        if found_indicators:
-                            print(f"   🔎 找到派車指標: {found_indicators}")
-                        
-                        # 檢查是否有電話號碼（截圖顯示已派車記錄有車隊電話）
-                        import re
-                        phone_matches = re.findall(r'\(?\d{2,4}\)?\s*\d{7,8}', full_text)
-                        if phone_matches:
-                            print(f"   📞 找到電話號碼: {phone_matches}")
-                        
-                        # 檢查HTML結構
-                        html_content = element.inner_html()
-                        if 'dispatch' in html_content.lower():
-                            print(f"   🔍 HTML中發現dispatch關鍵字")
-                        
-                    except Exception as debug_error:
-                        print(f"   ⚠️ 調試分析失敗: {debug_error}")
-                    
-                    # 3. 精確的狀態檢測（基於原始碼中的狀態類別）
+                    # 精確的狀態檢測（僅基於CSS類別）
                     detected_status = None
                     
-                    # 檢查CSS類別中的狀態標示（最精確）
-                    if ' dispatch' in class_list or class_list.endswith('dispatch'):
+                    if 'dispatch' in class_list.split():
                         detected_status = 'dispatch'
-                        print(f"   🎯 CSS檢測到狀態: dispatch (Status==2)")
-                    elif ' implement' in class_list or class_list.endswith('implement'):
+                        print(f"   🎯 檢測到狀態: dispatch (Status==2) - 已派車")
+                    elif 'implement' in class_list.split():
                         detected_status = 'implement' 
-                        print(f"   🎯 CSS檢測到狀態: implement (Status==3)")
-                    elif ' finish' in class_list or class_list.endswith('finish'):
+                        print(f"   🎯 檢測到狀態: implement (Status==3) - 執行中")
+                    elif 'finish' in class_list.split():
                         detected_status = 'finish'
-                        print(f"   🎯 CSS檢測到狀態: finish (Status==4)")
-                    elif ' accept' in class_list or class_list.endswith('accept'):
+                        print(f"   🎯 檢測到狀態: finish (Status==4) - 已完成")
+                    elif 'accept' in class_list.split():
                         detected_status = 'accept'
-                        print(f"   🎯 CSS檢測到狀態: accept (Status==0)")
-                    elif ' established' in class_list or class_list.endswith('established'):
+                        print(f"   🎯 檢測到狀態: accept (Status==0) - 媒合中")
+                    elif 'established' in class_list.split():
                         detected_status = 'established'
-                        print(f"   🎯 CSS檢測到狀態: established (Status==1)")
-                    elif ' cancel' in class_list or class_list.endswith('cancel'):
+                        print(f"   🎯 檢測到狀態: established (Status==1) - 成立")
+                    elif 'cancel' in class_list.split():
                         detected_status = 'cancel'
-                        print(f"   🎯 CSS檢測到狀態: cancel (Status==5)")
+                        print(f"   🎯 檢測到狀態: cancel (Status==5) - 已取消")
+                    else:
+                        print(f"   ❓ 未在CSS類別中檢測到狀態標示")
                     
-                    # 如果CSS檢測不到，嘗試多層級文字內容檢測
-                    if not detected_status:
-                        # 第一層：直接文字檢測
-                        text_status_map = {
-                            '媒合中': 'accept',
-                            '成立': 'established',
-                            '派車': 'dispatch', 
-                            '執行中': 'implement',
-                            '完成': 'finish',
-                            '已完成': 'finish',
-                            '取消': 'cancel',
-                            '已取消': 'cancel'
-                        }
-                        
-                        for text_indicator, status in text_status_map.items():
-                            if text_indicator in full_text:
-                                detected_status = status
-                                print(f"   📄 文字檢測到狀態: {status} (關鍵字: {text_indicator})")
-                                break
-                    
-                    # 第二層：檢查子元素的狀態指示器
-                    if not detected_status:
-                        try:
-                            # 查找狀態進度條或狀態文字
-                            status_elements = element.query_selector_all('.status, .state, [class*="status"], [class*="state"]')
-                            for status_elem in status_elements:
-                                status_text = status_elem.inner_text().strip()
-                                if '派車' in status_text:
-                                    detected_status = 'dispatch'
-                                    print(f"   🔍 子元素檢測到狀態: dispatch (元素文字: {status_text})")
-                                    break
-                        except:
-                            pass
-                    
-                    # 第三層：檢查是否有車隊聯絡電話（從截圖看到這是已派車的強烈指標）
-                    if not detected_status:
-                        phone_patterns = [
-                            r'\(?\d{2,4}\)?\s*\d{7,8}',  # 台灣電話格式
-                            r'聯絡車隊',
-                            r'車隊.*電話',
-                            r'\d{10,11}'  # 手機號碼
-                        ]
-                        
-                        import re
-                        for pattern in phone_patterns:
-                            if re.search(pattern, full_text):
-                                detected_status = 'dispatch'
-                                print(f"   📞 電話號碼檢測到已派車狀態 (模式: {pattern})")
-                                break
-                    
-                    if not detected_status:
-                        print(f"   ❓ 未檢測到明確狀態標示")
-                    
-                    # 4. 檢查司機指派資訊（作為補充判斷）
-                    has_driver_assignment = False
-                    driver_keywords = ['車號', '司機', '指派', '聯絡電話', '車牌']
-                    found_driver_keywords = []
-                    
-                    for keyword in driver_keywords:
-                        if keyword in full_text:
-                            found_driver_keywords.append(keyword)
-                    
-                    if found_driver_keywords:
-                        has_driver_assignment = True
-                        print(f"   👨‍✈️ 發現司機指派資訊: {found_driver_keywords}")
-                    
-                    # 5. 嚴格的已派車判定邏輯（基於JavaScript狀態定義）
+                    # 已派車判定邏輯（基於JavaScript狀態定義）
                     is_dispatch_record = False
                     reason = ""
                     
@@ -739,21 +644,13 @@ def fetch_dispatch_results():
                         is_dispatch_record = True
                         reason = "狀態=finish (Status==4)，已派車且完成"
                     elif detected_status == 'cancel':
-                        # Status == 5: 已取消
                         reason = "狀態=cancel (Status==5)，已取消，跳過"
                     elif detected_status == 'accept':
-                        # Status == 0: 媒合中
                         reason = "狀態=accept (Status==0)，媒合中，跳過"
                     elif detected_status == 'established':
-                        # Status == 1: 成立
                         reason = "狀態=established (Status==1)，成立，跳過"
-                    elif has_driver_assignment and not detected_status:
-                        # 特殊情況：有司機資訊但狀態不明確
-                        is_dispatch_record = True
-                        reason = "狀態不明確但有司機指派資訊，可能為已派車"
                     else:
-                        # 其他情況
-                        reason = f"狀態={detected_status or '未知'}，司機資訊={has_driver_assignment}，不符合已派車條件"
+                        reason = "未檢測到明確狀態，跳過"
                     
                     print(f"   📊 判定結果: {'✅ 已派車' if is_dispatch_record else '❌ 非已派車'} - {reason}")
                     
@@ -764,9 +661,6 @@ def fetch_dispatch_results():
                         
                 except Exception as e:
                     print(f"   ⚠️ 分析記錄 {i} 時發生錯誤: {e}")
-                    # 發生錯誤時保守處理，加入清單
-                    dispatch_records.append({'index': i, 'element': element, 'reason': "分析錯誤，保守加入"})
-                    total_dispatch_records_found += 1
                     continue
             
             print(f"\n🎯 搜尋結果統計:")
@@ -931,7 +825,7 @@ def fetch_dispatch_results():
                                 'extraction_method': '展開成功' if detail_extraction_success else '摺疊狀態'
                             }
                             
-                            results.append(result_entry)
+                            dispatch_result_records.append(result_entry)
                             print(f"✅ 第 {record_index} 筆記錄提取結果: {result_entry}")
                             take_screenshot(f"record_{record_index}_extracted")
                             
@@ -946,7 +840,7 @@ def fetch_dispatch_results():
                                 'self_pay_amount': '提取失敗',
                                 'error': str(extract_error)
                             }
-                            results.append(basic_entry)
+                            dispatch_result_records.append(basic_entry)
                             continue
                             
                     # 如果沒有找到任何展開按鈕，仍然嘗試從摺疊狀態提取資訊
@@ -958,7 +852,7 @@ def fetch_dispatch_results():
                     continue
             
             print(f"✅ 處理完成，共檢查 {total_records_checked} 筆記錄")
-            print(f"📊 統計: 找到已派車記錄 {total_dispatch_records_found} 筆，成功處理 {len(results)} 筆")
+            print(f"📊 統計: 找到已派車記錄 {total_dispatch_records_found} 筆，成功處理 {len(dispatch_result_records)} 筆")
             
             # 寫入結果檔案
             print("將搜尋結果寫入 search_result.txt...")
@@ -970,11 +864,11 @@ def fetch_dispatch_results():
             result_content += f"總掃描記錄數: {total_elements_on_page}\n"
             result_content += f"總共檢查記錄數: {total_records_checked}\n"
             result_content += f"累計找到已派車記錄數: {total_dispatch_records_found}\n"
-            result_content += f"成功處理的已派車記錄數: {len(results)}\n"
+            result_content += f"成功處理的已派車記錄數: {len(dispatch_result_records)}\n"
             result_content += f"{'='*60}\n\n"
             
-            if results:
-                for i, result in enumerate(results, 1):
+            if dispatch_result_records:
+                for i, result in enumerate(dispatch_result_records, 1):
                     result_content += f"🚗 已派車記錄 {i}:\n"
                     # 防止 string indices must be integers 錯誤
                     if isinstance(result, dict):
@@ -1000,7 +894,7 @@ def fetch_dispatch_results():
                     result_content += f"狀態: 已派車 🚗\n"
                     result_content += f"{'='*50}\n\n"
                 
-                print(f"✅ 找到 {len(results)} 筆已派車記錄")
+                print(f"✅ 找到 {len(dispatch_result_records)} 筆已派車記錄")
             else:
                 result_content += "❌ 未找到符合條件的已派車記錄\n\n"
                 result_content += "💡 提示: 只搜尋「已派車」狀態的記錄，其他狀態(已接受、已確立、執行中、已完成、已取消)都會被跳過\n\n"
@@ -1011,11 +905,11 @@ def fetch_dispatch_results():
                 f.write(result_content)
             
             print(f"✅ 搜尋結果已寫入 search_result.txt")
-            print(f"📊 已派車記錄統計: 累計找到 {total_dispatch_records_found} 筆已派車記錄，成功處理 {len(results)} 筆")
+            print(f"📊 已派車記錄統計: 累計找到 {total_dispatch_records_found} 筆已派車記錄，成功處理 {len(dispatch_result_records)} 筆")
             print(f"結果內容:\n{result_content}")
             
             take_screenshot("final_result_saved")
-            return len(results) > 0
+            return len(dispatch_result_records) > 0
             
         except Exception as e:
             print(f"訂單查詢過程發生錯誤: {e}")
