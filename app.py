@@ -625,13 +625,15 @@ def fetch_dispatch_results():
             except:
                 pass
         
-        # 取得所有記錄元素 - 基於實際Vue.js結構
-        # 從web-source-code/index-949f5202.js第314行可知：
-        # Status==2 是 dispatch (派車)
-        # Status==3 是 implement (執行)  
-        # Status==4 是 finish (完成)
+        # 取得所有記錄元素 - 基於您提供的精確DOM結構
+        # 每一筆訂單的CSS: div.log:nth-child(1)
+        # 訂單狀態的CSS: .order_list:nth-child(1) > .state_tag > span:nth-child(1)
         record_selectors = [
-            '.order_list.log',  # 主要記錄容器
+            # ✅ 您提供的精確選擇器（優先使用）
+            'div.log',  # 每一筆訂單的精確容器
+            
+            # 🔄 備用選擇器（保留相容性）
+            '.order_list.log',  # 原有的記錄容器
             'li.order_list',    # 列表項目
             '[class*="order_list"]'  # 包含order_list的元素
         ]
@@ -669,31 +671,48 @@ def fetch_dispatch_results():
                 record_html = record.inner_html()
                 record_classes = record.get_attribute('class') or ''
                 
-                # 基於Vue.js狀態定義的精確檢測
-                # dispatch: Status==2, implement: Status==3, finish: Status==4
+                # 基於您提供的精確DOM結構的檢測
                 is_dispatch_status = False
                 has_precise_dispatch_detection = False
+                precise_state_element = None
+                backup_state_element = None
                 
-                # 🎯 第一優先：檢查精確的派車狀態選擇器 .dispatch > .state_tag
+                # 🎯 第一優先：檢查精確的派車狀態選擇器
+                # 使用您提供的精確DOM結構: .order_list:nth-child(1) > .state_tag > span:nth-child(1)
                 try:
-                    dispatch_state_element = record.query_selector('.dispatch > .state_tag')
-                    if dispatch_state_element:
-                        state_text = dispatch_state_element.inner_text().strip()
+                    # 嘗試您提供的精確選擇器
+                    precise_state_element = record.query_selector('.order_list:nth-child(1) > .state_tag > span:nth-child(1)')
+                    if precise_state_element:
+                        state_text = precise_state_element.inner_text().strip()
                         print(f"  - 精確選擇器找到狀態標籤: '{state_text}'")
                         if state_text == '派車':
                             is_dispatch_status = True
                             has_precise_dispatch_detection = True
-                            print(f"  - ✅ 通過精確選擇器檢測到派車狀態: .dispatch > .state_tag = '{state_text}'")
+                            print(f"  - ✅ 通過精確選擇器檢測到派車狀態: .order_list:nth-child(1) > .state_tag > span:nth-child(1) = '{state_text}'")
                         else:
                             print(f"  - ❌ 精確選擇器檢測到非派車狀態: '{state_text}'")
                     else:
-                        print(f"  - 精確選擇器未找到 .dispatch > .state_tag 元素")
+                        print(f"  - 精確選擇器未找到狀態元素，嘗試備用選擇器...")
+                        
+                        # 備用精確選擇器
+                        backup_state_element = record.query_selector('.dispatch > .state_tag')
+                        if backup_state_element:
+                            state_text = backup_state_element.inner_text().strip()
+                            print(f"  - 備用選擇器找到狀態標籤: '{state_text}'")
+                            if state_text == '派車':
+                                is_dispatch_status = True
+                                has_precise_dispatch_detection = True
+                                print(f"  - ✅ 通過備用選擇器檢測到派車狀態: .dispatch > .state_tag = '{state_text}'")
+                            else:
+                                print(f"  - ❌ 備用選擇器檢測到非派車狀態: '{state_text}'")
+                        else:
+                            print(f"  - 所有精確選擇器都未找到狀態元素")
                 except Exception as e:
                     print(f"  - 精確選擇器檢測失敗: {e}")
                     pass
                 
                 # 如果精確檢測確定不是派車狀態，直接跳過
-                if dispatch_state_element and not has_precise_dispatch_detection:
+                if (precise_state_element or backup_state_element) and not has_precise_dispatch_detection:
                     print(f"  - 精確檢測確認非派車狀態，跳過此記錄")
                     continue
                 
