@@ -257,6 +257,9 @@ def fetch_dispatch_results():
             
             # 嘗試多種不同類型的登入按鈕選擇器
             login_selectors = [
+                # 精確的民眾登入按鈕選擇器
+                'a.button-fill:nth-child(2)',  # 您提供的精確選擇器
+                
                 # 一般按鈕
                 'button:has-text("民眾登入")',
                 'button[value*="民眾登入"]',
