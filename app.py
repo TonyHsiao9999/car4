@@ -933,16 +933,37 @@ def fetch_dispatch_results():
         except Exception as e:
             print(f"查詢頁面容器時發生錯誤: {e}")
         
+        # Vue.js 動態內容需要更長的等待時間
+        print("⏳ 等待 Vue.js 應用完全載入...")
+        driver['page'].wait_for_timeout(8000)  # 增加等待時間
+        
+        # 檢查是否有訂單資料載入
+        has_data = driver['page'].evaluate('''
+            // 檢查是否有訂單資料
+            const orderElements = document.querySelectorAll('.order_list, .log, [class*="order"]');
+            console.log('找到訂單元素數量:', orderElements.length);
+            return orderElements.length > 0;
+        ''')
+        
+        if not has_data:
+            print("⚠️ 未檢測到訂單資料，可能需要更長等待時間")
+            driver['page'].wait_for_timeout(5000)
+
         # 在容器中尋找記錄元素
+        # 根據分析，Vue.js 會動態生成 .order_list 元素
         record_selectors = [
-            # ✅ 您提供的精確選擇器（第一優先）
-            'div.log',  # 每一筆訂單
+            # ✅ 根據網頁分析的實際 Vue.js 結構
+            '.order_list',  # 主要訂單元素類別（從 CSS 分析得出）
+            'div.order_list',  # 確保是 div 元素
             
-            # 🔄 備用選擇器（如果精確選擇器找不到記錄）
-            '.order_list.log',
-            'li.order_list',
+            # 🔄 您原先提供的選擇器作為備用
+            'div.log',  # 每一筆訂單
+            '.log',
+            
+            # 🔄 其他備用選擇器
+            '[class*="order_list"]',
             '[class*="log"]',
-            '[class*="order"]'
+            '.order'
         ]
         
         all_records = []
@@ -999,108 +1020,148 @@ def fetch_dispatch_results():
                 found_state_element = None
                 state_text = ""
                 
-                # 🎯 使用您提供的精確狀態選擇器進行檢測
-                # 訂單狀態是CSS: .order_list:nth-child(1) > .state_tag
+                # 🎯 根據 Vue.js 分析的狀態檢測邏輯
+                # Vue.js 中狀態是數字：Status==2 表示派車
+                # 先檢查 Vue.js 資料狀態
+                vue_status = None
+                try:
+                    # 嘗試從 Vue.js 資料中獲取狀態
+                    vue_status = driver['page'].evaluate(f'''
+                        // 嘗試從元素中查找 Vue.js 資料狀態
+                        const recordElement = arguments[0];
+                        
+                        // 方法1：檢查元素的 Vue.js 實例
+                        if (recordElement.__vue__ && recordElement.__vue__.Status !== undefined) {{
+                            return recordElement.__vue__.Status;
+                        }}
+                        
+                        // 方法2：檢查父元素的 Vue.js 實例 
+                        let parent = recordElement.parentElement;
+                        while (parent && parent !== document.body) {{
+                            if (parent.__vue__ && parent.__vue__.orderList) {{
+                                // 查找對應的訂單資料
+                                const orders = parent.__vue__.orderList;
+                                // 根據位置或其他標識符找到對應的訂單
+                                return null; // 暫時返回 null，使用備用檢測
+                            }}
+                            parent = parent.parentElement;
+                        }}
+                        
+                        return null;
+                    ''', record)
+                    
+                    if vue_status is not None:
+                        print(f"  - Vue.js 狀態檢測: Status = {vue_status}")
+                        if vue_status == 2:  # Status==2 表示派車
+                            is_dispatch_status = True
+                            has_precise_dispatch_detection = True
+                            print(f"  - ✅ Vue.js 狀態檢測確認為派車狀態 (Status=2)")
+                        else:
+                            print(f"  - ❌ Vue.js 狀態檢測為非派車狀態 (Status={vue_status})")
+                            has_precise_dispatch_detection = True
+                            
+                except Exception as e:
+                    print(f"  - Vue.js 狀態檢測失敗: {e}")
+
+                # 🔄 DOM 狀態選擇器檢測（備用方案）
                 precise_state_selectors = [
-                    # 主要精確選擇器
-                    '.order_list:nth-child(1) > .state_tag',
-                    
-                    # 備用精確選擇器（可能有span包裝）
-                    '.order_list:nth-child(1) > .state_tag > span:nth-child(1)',
-                    '.order_list:nth-child(1) > .state_tag span',
-                    
-                    # 第二層備用選擇器
-                    '.order_list > .state_tag',
+                    # 狀態相關的可能選擇器
                     '.state_tag',
+                    '[class*="state"]',
+                    '[class*="status"]', 
+                    '.status',
                     
-                    # 第三層備用選擇器
-                    '.dispatch > .state_tag'
+                    # 根據您原先提供的結構
+                    '.order_list > .state_tag',
+                    '.order_list .state_tag',
                 ]
                 
-                print(f"  - 開始精確狀態檢測...")
-                
-                for selector in precise_state_selectors:
-                    try:
-                        state_element = record.query_selector(selector)
-                        if state_element:
-                            state_text = state_element.inner_text().strip()
-                            print(f"  - 精確選擇器 '{selector}' 找到狀態: '{state_text}'")
-                            
-                            # 檢查是否為派車狀態（狀態文字可能包含多行）
-                            if '派車' in state_text:
-                                # 進一步檢查是否為當前激活狀態
-                                try:
-                                    # 檢查是否有激活的狀態樣式
-                                    active_state = None
-                                    
-                                    # 方法1: 查找帶有active/current類別的子元素
-                                    active_elements = state_element.query_selector_all('.active, .current, .selected, .highlight')
-                                    if active_elements:
-                                        for elem in active_elements:
-                                            elem_text = elem.inner_text().strip()
-                                            if elem_text in ['媒合中', '成立', '派車', '執行', '完成', '取消']:
-                                                active_state = elem_text
-                                                break
-                                    
-                                    # 方法2: 如果沒有明確的active樣式，檢查子元素
-                                    if not active_state:
-                                        child_elements = state_element.query_selector_all('*')
-                                        for child in child_elements:
-                                            child_text = child.inner_text().strip()
-                                            if child_text == '派車':
-                                                # 檢查此子元素是否有特殊樣式標示為當前狀態
-                                                child_class = child.get_attribute('class') or ''
-                                                child_style = child.get_attribute('style') or ''
-                                                if any(indicator in child_class.lower() for indicator in ['active', 'current', 'selected']) or \
-                                                   any(indicator in child_style.lower() for indicator in ['color', 'background', 'font-weight']):
-                                                    active_state = '派車'
+                # 只在 Vue.js 檢測失敗時使用 DOM 檢測
+                if not has_precise_dispatch_detection:
+                    print(f"  - 開始 DOM 狀態檢測...")
+                    
+                    for selector in precise_state_selectors:
+                        try:
+                            state_element = record.query_selector(selector)
+                            if state_element:
+                                state_text = state_element.inner_text().strip()
+                                print(f"  - 精確選擇器 '{selector}' 找到狀態: '{state_text}'")
+                                
+                                # 檢查是否為派車狀態（狀態文字可能包含多行）
+                                if '派車' in state_text:
+                                    # 進一步檢查是否為當前激活狀態
+                                    try:
+                                        # 檢查是否有激活的狀態樣式
+                                        active_state = None
+                                        
+                                        # 方法1: 查找帶有active/current類別的子元素
+                                        active_elements = state_element.query_selector_all('.active, .current, .selected, .highlight')
+                                        if active_elements:
+                                            for elem in active_elements:
+                                                elem_text = elem.inner_text().strip()
+                                                if elem_text in ['媒合中', '成立', '派車', '執行', '完成', '取消']:
+                                                    active_state = elem_text
                                                     break
-                                    
-                                    # 方法3: 如果找不到明確的激活標示，使用保守策略
-                                    if not active_state:
-                                        # 如果文字中包含派車，但無法確定是否為當前狀態，需要更多檢查
-                                        print(f"  - ⚠️ 狀態文字包含'派車'但無法確定是否為當前激活狀態")
-                                        print(f"  - 狀態元素完整文字: {repr(state_text)}")
                                         
-                                        # 檢查記錄的其他部分是否有派車相關資訊
-                                        record_text = record.inner_text()
-                                        if any(keyword in record_text for keyword in ['指派司機', '司機姓名', '車號', '聯絡電話']):
-                                            active_state = '派車'
-                                            print(f"  - ✅ 根據司機資訊判定為派車狀態")
+                                        # 方法2: 如果沒有明確的active樣式，檢查子元素
+                                        if not active_state:
+                                            child_elements = state_element.query_selector_all('*')
+                                            for child in child_elements:
+                                                child_text = child.inner_text().strip()
+                                                if child_text == '派車':
+                                                    # 檢查此子元素是否有特殊樣式標示為當前狀態
+                                                    child_class = child.get_attribute('class') or ''
+                                                    child_style = child.get_attribute('style') or ''
+                                                    if any(indicator in child_class.lower() for indicator in ['active', 'current', 'selected']) or \
+                                                       any(indicator in child_style.lower() for indicator in ['color', 'background', 'font-weight']):
+                                                        active_state = '派車'
+                                                        break
+                                        
+                                        # 方法3: 如果找不到明確的激活標示，使用保守策略
+                                        if not active_state:
+                                            # 如果文字中包含派車，但無法確定是否為當前狀態，需要更多檢查
+                                            print(f"  - ⚠️ 狀態文字包含'派車'但無法確定是否為當前激活狀態")
+                                            print(f"  - 狀態元素完整文字: {repr(state_text)}")
+                                            
+                                            # 檢查記錄的其他部分是否有派車相關資訊
+                                            record_text = record.inner_text()
+                                            if any(keyword in record_text for keyword in ['指派司機', '司機姓名', '車號', '聯絡電話']):
+                                                active_state = '派車'
+                                                print(f"  - ✅ 根據司機資訊判定為派車狀態")
+                                            else:
+                                                print(f"  - ❌ 無司機資訊，可能不是當前派車狀態")
+                                        
+                                        if active_state == '派車':
+                                            is_dispatch_status = True
+                                            has_precise_dispatch_detection = True
+                                            found_state_element = state_element
+                                            print(f"  - ✅ 通過精確選擇器檢測到派車狀態: '{selector}' = '{active_state}'")
+                                            break
                                         else:
-                                            print(f"  - ❌ 無司機資訊，可能不是當前派車狀態")
-                                    
-                                    if active_state == '派車':
-                                        is_dispatch_status = True
-                                        has_precise_dispatch_detection = True
-                                        found_state_element = state_element
-                                        print(f"  - ✅ 通過精確選擇器檢測到派車狀態: '{selector}' = '{active_state}'")
-                                        break
-                                    else:
-                                        print(f"  - ❌ 當前激活狀態為: '{active_state}'，非派車狀態")
-                                        has_precise_dispatch_detection = True
-                                        found_state_element = state_element
-                                        break
-                                        
-                                except Exception as e:
-                                    print(f"  - ⚠️ 狀態檢測過程中發生錯誤: {e}")
-                                    # 發生錯誤時，檢查是否有司機資訊作為備用判定
-                                    record_text = record.inner_text()
-                                    if any(keyword in record_text for keyword in ['指派司機', '司機姓名', '車號']):
-                                        is_dispatch_status = True
-                                        has_precise_dispatch_detection = True
-                                        found_state_element = state_element
-                                        print(f"  - ✅ 錯誤備用判定：根據司機資訊確認為派車狀態")
-                                        break
+                                            print(f"  - ❌ 當前激活狀態為: '{active_state}'，非派車狀態")
+                                            has_precise_dispatch_detection = True
+                                            found_state_element = state_element
+                                            break
+                                            
+                                    except Exception as e:
+                                        print(f"  - ⚠️ 狀態檢測過程中發生錯誤: {e}")
+                                        # 發生錯誤時，檢查是否有司機資訊作為備用判定
+                                        record_text = record.inner_text()
+                                        if any(keyword in record_text for keyword in ['指派司機', '司機姓名', '車號']):
+                                            is_dispatch_status = True
+                                            has_precise_dispatch_detection = True
+                                            found_state_element = state_element
+                                            print(f"  - ✅ 錯誤備用判定：根據司機資訊確認為派車狀態")
+                                            break
+                                else:
+                                    # 狀態文字中沒有派車
+                                    print(f"  - ❌ 精確選擇器檢測到非派車狀態: '{state_text[:50]}...'")
+                                    has_precise_dispatch_detection = True
+                                    found_state_element = state_element
+                                    break
                             else:
-                                # 狀態文字中沒有派車
-                                print(f"  - ❌ 精確選擇器檢測到非派車狀態: '{state_text[:50]}...'")
-                                has_precise_dispatch_detection = True
-                                found_state_element = state_element
-                                break
-                        else:
-                            print(f"  - 精確選擇器 '{selector}' 未找到狀態元素")
-                    except Exception as e:
+                                print(f"  - 精確選擇器 '{selector}' 未找到狀態元素")
+                        except Exception as e:
                         print(f"  - 精確選擇器 '{selector}' 執行失敗: {e}")
                         continue
                 
