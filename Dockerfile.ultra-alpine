@@ -1,0 +1,62 @@
+FROM alpine:3.18
+
+# 明確設置 Alpine 環境
+ENV PYTHONUNBUFFERED=1
+ENV TZ=Asia/Taipei
+ENV LANG=C.UTF-8
+
+# 安裝 Python 和基本工具
+RUN apk add --no-cache \
+    python3 \
+    python3-dev \
+    py3-pip \
+    bash \
+    chromium \
+    chromium-chromedriver \
+    tzdata \
+    ca-certificates \
+    && ln -sf python3 /usr/bin/python \
+    && ln -sf pip3 /usr/bin/pip
+
+# 設置時區
+RUN cp /usr/share/zoneinfo/Asia/Taipei /etc/localtime && \
+    echo "Asia/Taipei" > /etc/timezone
+
+# 設置工作目錄
+WORKDIR /app
+
+# 複製並安裝 Python 依賴
+COPY requirements.txt .
+RUN pip install --no-cache-dir --break-system-packages -r requirements.txt
+
+# 安裝 Playwright（不觸發系統包管理）
+RUN pip install --no-cache-dir --break-system-packages playwright==1.41.0
+
+# 設置 Playwright 環境變數，強制使用系統 Chromium
+ENV PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true
+ENV PLAYWRIGHT_BROWSERS_PATH=/usr/bin
+ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
+# 確保 Chromium 可執行
+RUN chmod +x /usr/bin/chromium-browser
+
+# 創建必要的目錄結構，但不依賴符號連結
+RUN mkdir -p /ms-playwright/chromium-1097/chrome-linux && \
+    echo '#!/bin/bash\nexec /usr/bin/chromium-browser "$@"' > /ms-playwright/chromium-1097/chrome-linux/chrome && \
+    chmod +x /ms-playwright/chromium-1097/chrome-linux/chrome
+
+# 複製應用程式
+COPY . .
+
+# 創建必要目錄
+RUN mkdir -p screenshots logs static
+
+# 測試 Python 和 Chromium
+RUN python3 --version && \
+    /usr/bin/chromium-browser --version
+
+# 暴露端口
+EXPOSE 5000
+
+# 啟動命令
+CMD ["python3", "app.py"] 
