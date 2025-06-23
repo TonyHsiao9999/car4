@@ -75,6 +75,21 @@ def setup_driver():
             # 檢查是否在 Render.com 原生環境
             if 'RENDER' in os.environ:
                 print("🚀 Render.com 原生環境：啟動 Playwright Chromium...")
+                # 在 Render.com 環境中，先確保瀏覽器已下載
+                try:
+                    import subprocess
+                    print("📥 確保 Chromium 瀏覽器已下載...")
+                    result = subprocess.run([
+                        'python', '-m', 'playwright', 'install', 'chromium'
+                    ], capture_output=True, text=True, timeout=120)
+                    
+                    if result.returncode == 0:
+                        print("✅ Chromium 瀏覽器下載完成")
+                    else:
+                        print(f"⚠️ 瀏覽器下載警告: {result.stderr}")
+                except Exception as download_error:
+                    print(f"⚠️ 瀏覽器下載過程異常: {download_error}")
+                
                 browser = playwright.chromium.launch(
                     headless=True,
                     args=browser_args,
@@ -91,35 +106,13 @@ def setup_driver():
         except Exception as e:
             print(f"❌ 瀏覽器啟動失敗: {e}")
             
-            # 如果在 Render.com 環境失敗，嘗試安裝瀏覽器
+            # 如果在 Render.com 環境仍然失敗
             if 'RENDER' in os.environ:
-                print("🔧 Render.com 環境：嘗試重新安裝瀏覽器...")
-                try:
-                    import subprocess
-                    result = subprocess.run([
-                        'python3', '-m', 'playwright', 'install', 'chromium'
-                    ], capture_output=True, text=True, timeout=120)
-                    
-                    if result.returncode == 0:
-                        print("✅ 瀏覽器重新安裝成功，重新啟動...")
-                        browser = playwright.chromium.launch(
-                            headless=True,
-                            args=browser_args,
-                            timeout=30000
-                        )
-                        print("✅ 瀏覽器重新啟動成功")
-                    else:
-                        print(f"❌ 瀏覽器安裝失敗: {result.stderr}")
-                        playwright.stop()
-                        return None
-                except Exception as install_error:
-                    print(f"❌ 瀏覽器安裝過程失敗: {install_error}")
-                    playwright.stop()
-                    return None
+                print("❌ Render.com 環境：瀏覽器啟動失敗，請檢查構建日誌")
             else:
                 print("💡 在容器環境中應該使用預安裝的系統 Chromium")
-                playwright.stop()
-                return None
+            playwright.stop()
+            return None
         
         context = browser.new_context(
             viewport={'width': 1920, 'height': 1080},
