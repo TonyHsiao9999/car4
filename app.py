@@ -12,7 +12,9 @@ app = Flask(__name__)
 def take_screenshot(driver, name):
     """截圖功能"""
     try:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # 使用台北時區
+        taipei_tz = pytz.timezone('Asia/Taipei')
+        timestamp = datetime.now(taipei_tz).strftime("%Y%m%d_%H%M%S")
         filename = f"step_{name}_{timestamp}.png"
         driver['page'].screenshot(path=filename)
         print(f"截圖已保存: {filename}")
@@ -458,16 +460,111 @@ def fetch_dispatch_results():
             
             driver['page'].on('response', handle_response)
             
-            # 直接分析頁面已有記錄，不進行滾動載入
-            print("📊 分析頁面現有記錄（不進行滾動）")
+            # 分析頁面記錄並嘗試載入更多
+            print("📊 分析頁面記錄結構並嘗試載入所有資料")
             
             # 等待記錄載入
             driver['page'].wait_for_selector('.order_list', timeout=10000)
             
-            # 獲取所有可見記錄
-            all_order_elements = driver['page'].query_selector_all('.order_list')
+            # 第一次檢查：獲取初始記錄
+            initial_elements = driver['page'].query_selector_all('.order_list')
+            initial_count = len(initial_elements)
+            print(f"🎯 初始載入：找到 {initial_count} 筆記錄")
+            
+            # 檢查是否有更多記錄需要載入（Vue.js SPA 特性）
+            print("🔄 檢查是否有更多記錄可載入...")
+            
+            # 檢查分頁或載入更多按鈕
+            load_more_selectors = [
+                '.load-more',
+                '.btn-load-more', 
+                '.pagination .next',
+                '.pagination .page-next',
+                '.load_more',
+                'button:has-text("載入更多")',
+                'button:has-text("下一頁")',
+                'a:has-text("載入更多")',
+                'a:has-text("下一頁")'
+            ]
+            
+            load_attempts = 0
+            max_load_attempts = 5
+            
+            while load_attempts < max_load_attempts:
+                load_attempts += 1
+                print(f"🔍 嘗試載入更多記錄 (第 {load_attempts}/{max_load_attempts} 次)")
+                
+                # 嘗試點擊載入更多按鈕
+                load_more_clicked = False
+                for selector in load_more_selectors:
+                    try:
+                        element = driver['page'].query_selector(selector)
+                        if element and element.is_visible():
+                            print(f"✅ 找到載入更多按鈕: {selector}")
+                            element.click()
+                            load_more_clicked = True
+                            driver['page'].wait_for_timeout(2000)  # 等待載入
+                            break
+                    except Exception as e:
+                        continue
+                
+                # 如果沒有載入更多按鈕，嘗試滾動到底部觸發懶載入
+                if not load_more_clicked:
+                    print("📜 嘗試滾動到底部觸發懶載入...")
+                    try:
+                        driver['page'].evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                        driver['page'].wait_for_timeout(3000)  # 等待載入
+                    except Exception as e:
+                        print(f"滾動失敗: {e}")
+                
+                # 檢查是否有新的記錄載入
+                current_elements = driver['page'].query_selector_all('.order_list')
+                current_count = len(current_elements)
+                
+                if current_count > initial_count:
+                    print(f"✅ 成功載入更多記錄！從 {initial_count} 增加到 {current_count} 筆")
+                    initial_count = current_count
+                    initial_elements = current_elements
+                else:
+                    print(f"⚠️ 沒有新記錄載入，維持 {current_count} 筆")
+                    if not load_more_clicked:
+                        print("🔚 沒有更多載入按鈕且滾動無效，停止嘗試")
+                        break
+            
+            # 檢查隱藏的記錄元素（可能被 display:none 或 visibility:hidden）
+            print("🔍 檢查可能被隱藏的記錄...")
+            all_potential_records = driver['page'].query_selector_all('[class*="order"], [id*="order"], [data-order], .list-item, .record-item')
+            hidden_count = len(all_potential_records) - len(initial_elements)
+            if hidden_count > 0:
+                print(f"🔍 發現 {hidden_count} 個可能的隱藏記錄元素")
+                
+                # 嘗試顯示隱藏的記錄
+                try:
+                    driver['page'].evaluate("""
+                        // 嘗試顯示所有隱藏的記錄
+                        const hiddenElements = document.querySelectorAll('[style*="display: none"], [style*="visibility: hidden"]');
+                        hiddenElements.forEach(el => {
+                            if (el.classList.contains('order') || el.innerHTML.includes('預約') || el.innerHTML.includes('派車')) {
+                                el.style.display = 'block';
+                                el.style.visibility = 'visible';
+                            }
+                        });
+                    """)
+                    driver['page'].wait_for_timeout(1000)
+                    
+                    # 重新檢查記錄數量
+                    final_elements = driver['page'].query_selector_all('.order_list')
+                    final_count = len(final_elements)
+                    if final_count > initial_count:
+                        print(f"✅ 成功顯示隱藏記錄！最終記錄數: {final_count}")
+                        initial_elements = final_elements
+                    
+                except Exception as e:
+                    print(f"嘗試顯示隱藏記錄失敗: {e}")
+            
+            all_order_elements = initial_elements
             total_elements_on_page = len(all_order_elements)
-            print(f"🎯 載入完成！總共找到 {total_elements_on_page} 筆記錄")
+            print(f"🎯 最終結果：總共找到 {total_elements_on_page} 筆記錄")
             
             if total_elements_on_page == 0:
                 print("❌ 沒有找到任何記錄，可能頁面結構有變化")

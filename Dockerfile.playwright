@@ -3,6 +3,18 @@ FROM mcr.microsoft.com/playwright/python:v1.41.0-jammy
 # 設置工作目錄
 WORKDIR /app
 
+# 修正 Perl 相關問題
+RUN apt-get update && apt-get install -y \
+    libterm-readline-perl-perl \
+    && rm -rf /var/lib/apt/lists/*
+
+# 設置非互動模式，避免 debconf 問題
+ENV DEBIAN_FRONTEND=noninteractive
+
+# 設置台北時區
+RUN ln -sf /usr/share/zoneinfo/Asia/Taipei /etc/localtime && \
+    echo "Asia/Taipei" > /etc/timezone
+
 # 複製 requirements.txt
 COPY requirements.txt .
 
