@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: car4-booking-system
+    name: car4
     env: docker
     plan: starter
     dockerfilePath: ./Dockerfile.playwright
