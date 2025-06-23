@@ -70,46 +70,20 @@ def setup_driver():
         
         print(f"瀏覽器啟動參數: {browser_args}")
         
-        # 啟動瀏覽器，失敗時嘗試安裝
+        # 直接啟動系統預安裝的 Chromium
         try:
-            print("🚀 啟動預安裝的 Chromium 瀏覽器...")
+            print("🚀 啟動系統預安裝的 Chromium 瀏覽器...")
             browser = playwright.chromium.launch(
                 headless=True,
                 args=browser_args,
-                timeout=10000  # 10秒超時
+                timeout=15000  # 15秒超時
             )
             print("✅ 瀏覽器啟動成功")
         except Exception as e:
             print(f"❌ 瀏覽器啟動失敗: {e}")
-            print("🔧 嘗試自動安裝瀏覽器...")
-            
-            try:
-                import subprocess
-                import os
-                
-                # 嘗試安裝瀏覽器
-                print("正在安裝 Playwright 瀏覽器...")
-                result = subprocess.run([
-                    'python3', '-m', 'playwright', 'install', 'chromium'
-                ], capture_output=True, text=True, timeout=120)
-                
-                if result.returncode == 0:
-                    print("✅ 瀏覽器安裝成功，重新嘗試啟動...")
-                    browser = playwright.chromium.launch(
-                        headless=True,
-                        args=browser_args,
-                        timeout=20000  # 20秒超時
-                    )
-                    print("✅ 瀏覽器重新啟動成功")
-                else:
-                    print(f"❌ 瀏覽器安裝失敗: {result.stderr}")
-                    playwright.stop()
-                    return None
-                    
-            except Exception as install_error:
-                print(f"❌ 瀏覽器安裝過程失敗: {install_error}")
-                playwright.stop()
-                return None
+            print("💡 在 Alpine 容器中應該使用預安裝的系統 Chromium")
+            playwright.stop()
+            return None
         
         context = browser.new_context(
             viewport={'width': 1920, 'height': 1080},
@@ -829,15 +803,21 @@ def fetch_dispatch_results():
                     
                     if expand_button and expand_button.is_visible():
                         print(f"✅ 找到展開按鈕，準備點擊...")
-                        driver['page'].wait_for_timeout(500)
-                        expand_button.click()
-                        print(f"✅ 展開按鈕點擊成功")
+                        try:
+                            driver['page'].wait_for_timeout(500)
+                            # 設置較短的超時時間並使用 timeout 參數
+                            expand_button.click(timeout=5000)  # 5秒超時
+                            print(f"✅ 展開按鈕點擊成功")
+                            
+                            # 等待展開內容載入
+                            driver['page'].wait_for_timeout(2000)  # 縮短等待時間
+                            take_screenshot(f"record_{record_index}_expanded")
+                        except Exception as click_error:
+                            print(f"⚠️ 展開按鈕點擊失敗: {click_error}")
+                            take_screenshot(f"record_{record_index}_click_failed")
+                            # 即使點擊失敗，也嘗試提取現有的資訊
                         
-                        # 等待展開內容載入
-                        driver['page'].wait_for_timeout(3000)
-                        take_screenshot(f"record_{record_index}_expanded")
-                        
-                        # 直接在該元素內提取資訊
+                        # 直接在該元素內提取資訊（無論展開是否成功）
                         try:
                             # 車號選擇器
                             car_selectors = [
@@ -962,10 +942,14 @@ def fetch_dispatch_results():
             if results:
                 for i, result in enumerate(results, 1):
                     result_content += f"🚗 已派車記錄 {i}:\n"
-                    result_content += f"預約日期/時段: {result['date_time']}\n"
-                    result_content += f"車號: {result['car_number']}\n"
-                    result_content += f"指派司機: {result['driver']}\n"
-                    result_content += f"自付金額: {result['self_pay_amount']}\n"
+                    # 防止 string indices must be integers 錯誤
+                    if isinstance(result, dict):
+                        result_content += f"預約日期/時段: {result.get('date_time', '未知')}\n"
+                        result_content += f"車號: {result.get('car_number', '未找到')}\n"
+                        result_content += f"指派司機: {result.get('driver', '未找到')}\n"
+                        result_content += f"自付金額: {result.get('self_pay_amount', '未找到')}\n"
+                    else:
+                        result_content += f"記錄資料: {result}\n"
                     result_content += f"狀態: 已派車 🚗\n"
                     result_content += f"{'='*50}\n\n"
                 

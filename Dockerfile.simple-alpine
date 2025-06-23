@@ -23,12 +23,16 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Playwright 設置
 RUN pip install playwright==1.41.0
+
+# 強制使用系統 Chromium，跳過所有 Playwright 瀏覽器管理
 ENV PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true
+ENV PLAYWRIGHT_BROWSERS_PATH=/usr/bin
 ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
-# 創建符號連結
+# 創建完整的符號連結結構，模擬 Playwright 預期的目錄結構
 RUN mkdir -p /ms-playwright/chromium-1097/chrome-linux && \
-    ln -sf /usr/bin/chromium-browser /ms-playwright/chromium-1097/chrome-linux/chrome
+    ln -sf /usr/bin/chromium-browser /ms-playwright/chromium-1097/chrome-linux/chrome && \
+    chmod +x /usr/bin/chromium-browser
 
 # 複製應用
 COPY . .
