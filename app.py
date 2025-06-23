@@ -2986,8 +2986,18 @@ def dispatch_screenshots():
     import os
     import glob
     
-    # 獲取所有派車截圖檔案（以 dispatch_ 開頭）
-    screenshot_files = glob.glob('dispatch_*.png')
+    # 獲取所有派車截圖檔案（包含新的6步驟流程截圖）
+    screenshot_patterns = [
+        'dispatch_*.png',       # 舊格式：dispatch_results_*, dispatch_error_*
+        'step*_*.png',          # 新格式：step1_homepage_*, step3_before_login_* 等
+        'debug_*.png'           # 除錯截圖
+    ]
+    
+    screenshot_files = []
+    for pattern in screenshot_patterns:
+        screenshot_files.extend(glob.glob(pattern))
+    
+    # 按檔案名稱排序，讓步驟順序更清楚
     screenshot_files.sort()
     
     html = '''
@@ -3035,10 +3045,33 @@ def dispatch_screenshots():
         
         for file_path in screenshot_files:
             filename = os.path.basename(file_path)
-            description = filename.replace('.png', '').replace('dispatch_', '').replace('_', ' ')
             
-            # 美化描述文字
+            # 根據檔名格式進行不同的處理
+            if filename.startswith('step'):
+                # 新格式: step1_homepage_20250623_181234.png
+                description = filename.replace('.png', '').replace('step', 'step').replace('_', ' ')
+                # 移除時間戳記部分 (最後的日期時間)
+                import re
+                description = re.sub(r'\s\d{8}\s\d{6}$', '', description)
+            elif filename.startswith('dispatch_'):
+                # 舊格式: dispatch_results_20250623_181234.png
+                description = filename.replace('.png', '').replace('dispatch_', '').replace('_', ' ')
+                # 移除時間戳記部分
+                import re
+                description = re.sub(r'\s\d{8}\s\d{6}$', '', description)
+            elif filename.startswith('debug_'):
+                # 除錯格式: debug_page_20250623_181234.png
+                description = filename.replace('.png', '').replace('debug_', 'debug ').replace('_', ' ')
+                # 移除時間戳記部分
+                import re
+                description = re.sub(r'\s\d{8}\s\d{6}$', '', description)
+            else:
+                # 其他格式
+                description = filename.replace('.png', '').replace('_', ' ')
+            
+            # 美化描述文字 - 支援新舊兩種截圖格式
             description_map = {
+                # 舊格式預約流程截圖
                 '001 page loaded': '步驟 1: 頁面載入完成',
                 '002 page complete': '步驟 2: 頁面完全載入', 
                 '003 popup closed': '步驟 3: 關閉彈窗',
@@ -3051,7 +3084,23 @@ def dispatch_screenshots():
                 'records found': '🔍 找到訂單記錄',
                 'matching record found': '🎯 找到匹配的預約記錄',
                 'result saved': '💾 結果已儲存',
-                'no matching record': '❌ 未找到匹配記錄'
+                'no matching record': '❌ 未找到匹配記錄',
+                
+                # 新格式6步驟派車查詢流程截圖
+                'step1 homepage': '📱 步驟1: 連線到首頁',
+                'step3 before login': '🔐 步驟3: 登入前頁面狀態',
+                'step3 login failed': '❌ 步驟3: 登入按鈕尋找失敗',
+                'step3 login error': '💥 步驟3: 登入過程發生錯誤',
+                'step4 login success': '✅ 步驟4: 登入成功確認',
+                'step5 main page': '🏠 步驟5: 登入後主頁面',
+                'step6 order page': '📋 步驟6: 訂單查詢頁面',
+                
+                # 派車結果截圖
+                'results': '🎯 派車結果最終截圖',
+                'error': '💥 派車查詢錯誤截圖',
+                
+                # 除錯截圖
+                'debug page': '🔍 除錯: 頁面狀態檢查'
             }
             
             display_description = description_map.get(description, description.title())
