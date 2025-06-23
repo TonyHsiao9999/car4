@@ -271,16 +271,130 @@ def fetch_dispatch_results():
                 elif 'finish' in record_classes or '完成' in record_text:
                     record_info['status'] = '已完成'
                 
-                # 嘗試提取時間資訊
+                # 嘗試提取時間資訊並轉換為台北時間
                 try:
-                    date_elements = record.find_elements(By.CSS_SELECTOR, 
-                        '.order_date, .booking-date, [class*="date"], [class*="time"]')
+                    # 尋找所有可能包含時間資訊的元素
+                    time_selectors = [
+                        '.order_date', '.booking-date', '.appointment-time',
+                        '[class*="date"]', '[class*="time"]', '[class*="appointment"]',
+                        '.ride-time', '.reservation-time', '.schedule-time'
+                    ]
+                    
+                    date_elements = []
+                    for selector in time_selectors:
+                        try:
+                            elements = record.find_elements(By.CSS_SELECTOR, selector)
+                            date_elements.extend(elements)
+                        except:
+                            continue
+                    
+                    # 如果沒有特定的時間元素，嘗試從記錄文字中提取
+                    if not date_elements:
+                        print(f"  - 沒有找到時間元素，嘗試從記錄文字中提取: {record_text[:100]}...")
+                        # 從記錄文字中搜尋時間格式
+                        import re
+                        time_patterns = [
+                            r'(\d{4}[-/]\d{1,2}[-/]\d{1,2}\s+\d{1,2}:\d{2})',  # 2024-01-01 12:00
+                            r'(\d{4}[-/]\d{1,2}[-/]\d{1,2})',  # 2024-01-01
+                            r'(\d{1,2}:\d{2})',  # 12:00
+                            r'預約時間[：:]\s*([^\n\r]+)',  # 預約時間: xxx
+                            r'時段[：:]\s*([^\n\r]+)',  # 時段: xxx
+                        ]
+                        
+                        for pattern in time_patterns:
+                            match = re.search(pattern, record_text)
+                            if match:
+                                date_text = match.group(1).strip()
+                                print(f"  - 從文字中提取到時間: {date_text}")
+                                # 創建虛擬元素處理
+                                class FakeElement:
+                                    def __init__(self, text):
+                                        self._text = text
+                                    def text(self):
+                                        return self._text
+                                    @property 
+                                    def text(self):
+                                        return self._text
+                                        
+                                date_elements = [FakeElement(date_text)]
+                                break
+                    
                     if date_elements:
-                        date_text = date_elements[0].text.strip()
+                        # 處理真實元素或虛擬元素
+                        element = date_elements[0]
+                        if hasattr(element, '_text'):
+                            date_text = element._text.strip()
+                        else:
+                            date_text = element.text.strip()
+                        print(f"  - 找到時間元素: {date_text}")
                         if date_text:
-                            record_info['date'] = date_text
-                            record_info['time'] = date_text
-                except:
+                            # 嘗試解析並轉換時區
+                            try:
+                                import re
+                                from datetime import datetime
+                                import pytz
+                                
+                                # 檢查多種時間格式並進行轉換
+                                converted = False
+                                
+                                # 格式1: ISO格式 (2024-01-01T12:00:00Z 或 2024-01-01T12:00:00)
+                                iso_match = re.search(r'(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})Z?', date_text)
+                                if iso_match:
+                                    try:
+                                        utc_time_str = iso_match.group(1)
+                                        utc_time = datetime.fromisoformat(utc_time_str)
+                                        utc_time = pytz.utc.localize(utc_time)
+                                        taipei_time = utc_time.astimezone(taipei_tz)
+                                        record_info['date'] = taipei_time.strftime('%Y-%m-%d')
+                                        record_info['time'] = taipei_time.strftime('%H:%M')
+                                        print(f"  - 時間轉換(ISO): UTC {date_text} -> 台北 {taipei_time.strftime('%Y-%m-%d %H:%M')}")
+                                        converted = True
+                                    except:
+                                        pass
+                                
+                                # 格式2: 一般日期時間格式 (2024/01/01 12:00)
+                                if not converted:
+                                    datetime_match = re.search(r'(\d{4}[/-]\d{1,2}[/-]\d{1,2})\s+(\d{1,2}:\d{2})', date_text)
+                                    if datetime_match:
+                                        try:
+                                            date_part = datetime_match.group(1).replace('/', '-')
+                                            time_part = datetime_match.group(2)
+                                            # 假設網頁顯示的是UTC時間，轉換為台北時間
+                                            utc_datetime = datetime.strptime(f"{date_part} {time_part}", '%Y-%m-%d %H:%M')
+                                            utc_datetime = pytz.utc.localize(utc_datetime)
+                                            taipei_time = utc_datetime.astimezone(taipei_tz)
+                                            record_info['date'] = taipei_time.strftime('%Y-%m-%d')
+                                            record_info['time'] = taipei_time.strftime('%H:%M')
+                                            print(f"  - 時間轉換(一般): UTC {date_text} -> 台北 {taipei_time.strftime('%Y-%m-%d %H:%M')}")
+                                            converted = True
+                                        except:
+                                            pass
+                                
+                                # 格式3: 只有日期 (2024/01/01)
+                                if not converted:
+                                    date_match = re.search(r'(\d{4}[/-]\d{1,2}[/-]\d{1,2})', date_text)
+                                    if date_match:
+                                        try:
+                                            date_part = date_match.group(1).replace('/', '-')
+                                            record_info['date'] = date_part
+                                            record_info['time'] = 'N/A'
+                                            print(f"  - 日期處理: {date_part}")
+                                            converted = True
+                                        except:
+                                            pass
+                                
+                                # 如果都無法轉換，直接使用原始文字
+                                if not converted:
+                                    record_info['date'] = date_text
+                                    record_info['time'] = date_text
+                                    print(f"  - 使用原始時間: {date_text}")
+                                    
+                            except Exception as tz_error:
+                                print(f"  - 時區轉換失敗: {str(tz_error)}")
+                                record_info['date'] = date_text
+                                record_info['time'] = date_text
+                except Exception as date_error:
+                    print(f"  - 提取時間資訊失敗: {str(date_error)}")
                     pass
                 
                 # 嘗試提取路線資訊
