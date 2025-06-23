@@ -675,6 +675,18 @@ def fetch_dispatch_results():
                     is_dispatch_status = True
                     print(f"  - 通過CSS類別檢測到派車狀態: {record_classes}")
                 
+                # 檢查精確的派車狀態選擇器：.dispatch > .state_tag
+                try:
+                    dispatch_state_element = record.query_selector('.dispatch > .state_tag')
+                    if dispatch_state_element:
+                        state_text = dispatch_state_element.inner_text().strip()
+                        if state_text == '派車':
+                            is_dispatch_status = True
+                            print(f"  - 通過精確選擇器檢測到派車狀態: .dispatch > .state_tag = '{state_text}'")
+                except Exception as e:
+                    print(f"  - 精確選擇器檢測失敗: {e}")
+                    pass
+                
                 # 檢查文字內容中的狀態標示
                 record_text = record.inner_text()
                 if any(keyword in record_text for keyword in ['派車', '執行', '完成', '已派車']):
@@ -718,12 +730,28 @@ def fetch_dispatch_results():
                 }
                 
                 # 精確狀態判定
-                if 'dispatch' in record_classes or '派車' in record_text:
-                    record_info['status'] = '已派車'
-                elif 'implement' in record_classes or '執行' in record_text:
-                    record_info['status'] = '執行中'
-                elif 'finish' in record_classes or '完成' in record_text:
-                    record_info['status'] = '已完成'
+                status_determined = False
+                
+                # 優先使用精確選擇器檢測
+                try:
+                    dispatch_state_element = record.query_selector('.dispatch > .state_tag')
+                    if dispatch_state_element:
+                        state_text = dispatch_state_element.inner_text().strip()
+                        if state_text == '派車':
+                            record_info['status'] = '已派車'
+                            status_determined = True
+                            print(f"  - 精確狀態判定: {state_text}")
+                except:
+                    pass
+                
+                # 備用檢測方式
+                if not status_determined:
+                    if 'dispatch' in record_classes or '派車' in record_text:
+                        record_info['status'] = '已派車'
+                    elif 'implement' in record_classes or '執行' in record_text:
+                        record_info['status'] = '執行中'
+                    elif 'finish' in record_classes or '完成' in record_text:
+                        record_info['status'] = '已完成'
                 
                 # 嘗試提取時間資訊並轉換為台北時間
                 try:
