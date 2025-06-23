@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: car4-ltc
+    name: car4-ltc-alpine
     env: docker
     dockerfilePath: ./Dockerfile.ultra-alpine
     envVars:
@@ -16,7 +16,7 @@ services:
 
   # 定時任務 (Cron Jobs)
   - type: cron
-    name: car4-reservation-cron
+    name: car4-reservation-cron-alpine
     env: docker
     dockerfilePath: ./Dockerfile.ultra-alpine
     schedule: "1 16 * * 0,3"  # 台灣週一和週四 00:01 (UTC 週日和週三 16:01)
@@ -26,7 +26,7 @@ services:
         value: 1
 
   - type: cron
-    name: car4-dispatch-cron
+    name: car4-dispatch-cron-alpine
     env: docker
     dockerfilePath: ./Dockerfile.ultra-alpine
     schedule: "10 16 * * 0,3"  # 台灣週一和週四 00:10 (UTC 週日和週三 16:10)
