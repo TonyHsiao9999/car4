@@ -11,41 +11,64 @@ RUN apt-get update && apt-get install -y \
     wget \
     curl \
     xvfb \
+    dbus-x11 \
     && rm -rf /var/lib/apt/lists/*
 
 # 設置 Python
 RUN ln -s /usr/bin/python3 /usr/bin/python
 
-WORKDIR /app
+# 創建應用用戶（避免 root 權限問題）
+RUN useradd -m -u 1000 appuser
+USER appuser
+
+WORKDIR /home/appuser/app
 
 # 複製並安裝 Python 依賴
-COPY requirements.txt .
-RUN pip3 install --no-cache-dir -r requirements.txt
+COPY --chown=appuser:appuser requirements.txt .
+RUN pip3 install --user --no-cache-dir -r requirements.txt
+
+# 將用戶 bin 目錄添加到 PATH
+ENV PATH="/home/appuser/.local/bin:$PATH"
 
 # 安裝 Playwright 和瀏覽器
 RUN playwright install chromium
 RUN playwright install-deps chromium
 
 # 複製應用程式檔案
-COPY app.py .
-COPY cron_dispatch.py .
-COPY cron_job.py .
-COPY src/ ./src/
-COPY static/ ./static/
+COPY --chown=appuser:appuser app.py .
+COPY --chown=appuser:appuser cron_dispatch.py .
+COPY --chown=appuser:appuser cron_job.py .
+COPY --chown=appuser:appuser src/ ./src/
+COPY --chown=appuser:appuser static/ ./static/
 
 # 設置環境變數
 ENV PYTHONUNBUFFERED=1
 ENV DISPLAY=:99
+ENV TMPDIR=/tmp
+ENV XDG_RUNTIME_DIR=/tmp/runtime-appuser
 
-# 創建截圖目錄
-RUN mkdir -p /app/screenshots
+# 創建必要目錄
+RUN mkdir -p /home/appuser/app/screenshots /tmp/runtime-appuser
+RUN chmod 700 /tmp/runtime-appuser
+
+# 切換回 root 來創建啟動腳本
+USER root
 
 # 創建啟動腳本
 RUN echo '#!/bin/bash\n\
+# 設置權限和目錄\n\
+chown -R appuser:appuser /home/appuser/app\n\
+mkdir -p /tmp/runtime-appuser\n\
+chown appuser:appuser /tmp/runtime-appuser\n\
+chmod 700 /tmp/runtime-appuser\n\
+\n\
 # 啟動虛擬顯示器\n\
 Xvfb :99 -screen 0 1920x1080x24 -ac +extension GLX +render -noreset &\n\
-sleep 2\n\
-exec python3 app.py' > /app/start.sh && chmod +x /app/start.sh
+sleep 3\n\
+\n\
+# 切換到應用用戶並啟動應用\n\
+cd /home/appuser/app\n\
+exec su -s /bin/bash appuser -c "python3 app.py"' > /app/start.sh && chmod +x /app/start.sh
 
 # 暴露端口
 EXPOSE $PORT

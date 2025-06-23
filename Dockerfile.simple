@@ -1,0 +1,43 @@
+FROM ghcr.io/puppeteer/puppeteer:21.6.1
+
+# 切換到 root 用戶
+USER root
+
+# 安裝 Python 和 pip
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-venv \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# 複製並安裝 Python 依賴
+COPY requirements.txt .
+RUN pip3 install --no-cache-dir -r requirements.txt
+
+# 安裝 Playwright（使用系統已有的 Chromium）
+RUN pip3 install playwright==1.41.2
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+ENV PLAYWRIGHT_BROWSERS_PATH=/usr/bin
+
+# 複製應用程式檔案
+COPY app.py .
+COPY cron_dispatch.py .
+COPY cron_job.py .
+COPY src/ ./src/
+COPY static/ ./static/
+
+# 設置環境變數
+ENV PYTHONUNBUFFERED=1
+
+# 創建截圖目錄
+RUN mkdir -p /app/screenshots
+
+# 暴露端口
+EXPOSE $PORT
+
+# 切換到非特權用戶
+USER pptruser
+
+CMD ["python3", "app.py"] 

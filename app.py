@@ -38,14 +38,8 @@ def setup_driver():
             print(f"Playwright 模組載入失敗: {e}")
             return None
         
-        # 嘗試安裝瀏覽器（如果需要）
-        try:
-            import subprocess
-            result = subprocess.run(['playwright', 'install', 'chromium'], 
-                                  capture_output=True, text=True, timeout=60)
-            print(f"瀏覽器安裝檢查: {result.returncode}")
-        except Exception as e:
-            print(f"瀏覽器安裝檢查失敗: {e}")
+        # 檢查瀏覽器是否可用（不嘗試安裝）
+        print("檢查 Playwright 瀏覽器可用性...")
         
         playwright = sync_playwright().start()
         
@@ -79,10 +73,29 @@ def setup_driver():
                 '--disable-renderer-backgrounding'
             ])
         
-        browser = playwright.chromium.launch(
-            headless=True,
-            args=browser_args
-        )
+        # 嘗試啟動瀏覽器，加入重試機制
+        browser = None
+        max_retries = 3
+        
+        for attempt in range(max_retries):
+            try:
+                print(f"嘗試啟動瀏覽器 (第 {attempt + 1}/{max_retries} 次)...")
+                browser = playwright.chromium.launch(
+                    headless=True,
+                    args=browser_args,
+                    timeout=30000  # 30秒超時
+                )
+                print("瀏覽器啟動成功")
+                break
+            except Exception as e:
+                print(f"瀏覽器啟動失敗 (第 {attempt + 1} 次): {e}")
+                if attempt < max_retries - 1:
+                    print("等待 2 秒後重試...")
+                    time.sleep(2)
+                else:
+                    print("所有重試都失敗，無法啟動瀏覽器")
+                    playwright.stop()
+                    return None
         
         context = browser.new_context(
             viewport={'width': 1920, 'height': 1080},
