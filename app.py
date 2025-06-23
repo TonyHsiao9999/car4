@@ -134,12 +134,22 @@ def setup_driver():
             )
         print("✅ 瀏覽器啟動成功")
         
-        context = browser.new_context(
-            viewport={'width': 1920, 'height': 1080},
-            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        )
-        
-        page = context.new_page()
+        try:
+            context = browser.new_context(
+                viewport={'width': 1920, 'height': 1080},
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            )
+            print("✅ 瀏覽器上下文創建成功")
+            
+            page = context.new_page()
+            print("✅ 新頁面創建成功")
+        except Exception as page_error:
+            print(f"❌ 創建頁面失敗: {page_error}")
+            try:
+                browser.close()
+            except:
+                pass
+            raise page_error
         
         # 創建 driver 字典
         driver = {
@@ -193,15 +203,31 @@ def setup_driver():
         
         return None
 
+def close_driver(driver_instance):
+    """安全關閉 driver"""
+    if driver_instance:
+        try:
+            if 'page' in driver_instance:
+                driver_instance['page'].close()
+            if 'context' in driver_instance:
+                driver_instance['context'].close()
+            if 'browser' in driver_instance:
+                driver_instance['browser'].close()
+            if 'playwright' in driver_instance:
+                driver_instance['playwright'].stop()
+            print("✅ 瀏覽器已安全關閉")
+        except Exception as e:
+            print(f"關閉瀏覽器時發生錯誤: {e}")
+
 def fetch_dispatch_results():
     """取得派車結果頁面並分析已派車的記錄"""
-    global driver
+    local_driver = None
     try:
-        # 確保 driver 已初始化
-        if not driver:
-            driver = setup_driver()
-            if not driver:
-                return {'success': False, 'error': '無法啟動瀏覽器'}
+        # 每次都重新初始化 driver 確保乾淨狀態
+        print("初始化瀏覽器...")
+        local_driver = setup_driver()
+        if not local_driver:
+            return {'success': False, 'error': '無法啟動瀏覽器'}
         
         taipei_tz = pytz.timezone('Asia/Taipei')
         current_time = datetime.now(taipei_tz)
@@ -609,51 +635,87 @@ def fetch_dispatch_results():
             except:
                 print("頁面載入超時，繼續執行")
         
-        # 診斷：檢查頁面中所有可能的元素
-        print("🔍 診斷頁面元素...")
-        possible_selectors = [
-            'ul', 'li', '.order', '.list', '.record', '.reservation', 
-            '[class*="order"]', '[class*="list"]', '[class*="record"]',
-            'div', 'table', 'tbody', 'tr'
-        ]
+        # 簡要檢查頁面載入狀態
+        print("檢查頁面載入狀態...")
+        try:
+            page_title = driver['page'].title()
+            print(f"頁面標題: {page_title}")
+        except:
+            print("無法取得頁面標題")
         
-        for selector in possible_selectors:
-            try:
-                elements = driver['page'].query_selector_all(selector)
-                if len(elements) > 0:
-                    print(f"  找到 {len(elements)} 個 '{selector}' 元素")
-            except:
-                pass
+        # 根據您提供的精確DOM結構進行記錄查詢
+        # 整個頁面的CSS: .ReservationOrder .wrap2
+        # 所有紀錄顯示在CSS: .ReservationOrder .main_content
+        # 第一筆紀錄CSS: div.log:nth-child(1)
+        # 訂單狀態是CSS: .order_list:nth-child(1) > .state_tag
         
-        # 取得所有記錄元素 - 基於您提供的精確DOM結構
-        # 每一筆訂單的CSS: div.log:nth-child(1)
-        # 訂單狀態的CSS: .order_list:nth-child(1) > .state_tag > span:nth-child(1)
+        print("根據您提供的精確DOM結構查詢記錄...")
+        
+        # 首先確保在正確的頁面容器中
+        page_container = None
+        try:
+            page_container = driver['page'].query_selector('.ReservationOrder .main_content')
+            if page_container:
+                print("✅ 找到頁面主要內容容器: .ReservationOrder .main_content")
+            else:
+                print("❌ 未找到主要內容容器，嘗試其他方式...")
+                # 備用容器查詢
+                backup_containers = ['.main_content', '.ReservationOrder', '.wrap2', 'main', 'body']
+                for container_selector in backup_containers:
+                    try:
+                        container = driver['page'].query_selector(container_selector)
+                        if container:
+                            page_container = container
+                            print(f"✅ 找到備用容器: {container_selector}")
+                            break
+                    except:
+                        continue
+        except Exception as e:
+            print(f"查詢頁面容器時發生錯誤: {e}")
+        
+        # 在容器中尋找記錄元素
         record_selectors = [
-            # ✅ 您提供的精確選擇器（優先使用）
-            'div.log',  # 每一筆訂單的精確容器
+            # ✅ 您提供的精確選擇器（第一優先）
+            'div.log',  # 每一筆訂單
             
-            # 🔄 備用選擇器（保留相容性）
-            '.order_list.log',  # 原有的記錄容器
-            'li.order_list',    # 列表項目
-            '[class*="order_list"]'  # 包含order_list的元素
+            # 🔄 備用選擇器（如果精確選擇器找不到記錄）
+            '.order_list.log',
+            'li.order_list',
+            '[class*="log"]',
+            '[class*="order"]'
         ]
         
         all_records = []
         for selector in record_selectors:
             try:
-                elements = driver['page'].query_selector_all(selector)
-                all_records.extend(elements)
-                print(f"使用選擇器 '{selector}' 找到 {len(elements)} 個元素")
+                if page_container:
+                    # 在主要容器中查詢
+                    elements = page_container.query_selector_all(selector)
+                else:
+                    # 在整個頁面中查詢
+                    elements = driver['page'].query_selector_all(selector)
+                
+                if elements:
+                    all_records.extend(elements)
+                    print(f"使用選擇器 '{selector}' 找到 {len(elements)} 個記錄")
+                    # 如果用精確選擇器找到了記錄，優先使用，不再嘗試其他選擇器
+                    if selector == 'div.log' and len(elements) > 0:
+                        print(f"✅ 精確選擇器 'div.log' 成功找到記錄，停止嘗試其他選擇器")
+                        break
+                else:
+                    print(f"選擇器 '{selector}' 未找到任何元素")
+                    
             except Exception as e:
                 print(f"選擇器 '{selector}' 執行失敗: {str(e)}")
         
-        # 去重複
+        # 去重複（避免重複元素）
         unique_records = []
         seen_elements = set()
         for record in all_records:
-            if record not in seen_elements:
+            element_id = id(record)  # 使用元素的記憶體地址作為唯一標識
+            if element_id not in seen_elements:
                 unique_records.append(record)
-                seen_elements.add(record)
+                seen_elements.add(element_id)
         
         print(f"總共找到 {len(unique_records)} 個唯一記錄元素")
         
@@ -671,82 +733,108 @@ def fetch_dispatch_results():
                 record_html = record.inner_html()
                 record_classes = record.get_attribute('class') or ''
                 
-                # 基於您提供的精確DOM結構的檢測
+                # 根據您提供的精確DOM結構進行派車狀態檢測
                 is_dispatch_status = False
                 has_precise_dispatch_detection = False
-                precise_state_element = None
-                backup_state_element = None
+                found_state_element = None
+                state_text = ""
                 
-                # 🎯 第一優先：檢查精確的派車狀態選擇器
-                # 使用您提供的精確DOM結構: .order_list:nth-child(1) > .state_tag > span:nth-child(1)
-                try:
-                    # 嘗試您提供的精確選擇器
-                    precise_state_element = record.query_selector('.order_list:nth-child(1) > .state_tag > span:nth-child(1)')
-                    if precise_state_element:
-                        state_text = precise_state_element.inner_text().strip()
-                        print(f"  - 精確選擇器找到狀態標籤: '{state_text}'")
-                        if state_text == '派車':
-                            is_dispatch_status = True
-                            has_precise_dispatch_detection = True
-                            print(f"  - ✅ 通過精確選擇器檢測到派車狀態: .order_list:nth-child(1) > .state_tag > span:nth-child(1) = '{state_text}'")
-                        else:
-                            print(f"  - ❌ 精確選擇器檢測到非派車狀態: '{state_text}'")
-                    else:
-                        print(f"  - 精確選擇器未找到狀態元素，嘗試備用選擇器...")
-                        
-                        # 備用精確選擇器
-                        backup_state_element = record.query_selector('.dispatch > .state_tag')
-                        if backup_state_element:
-                            state_text = backup_state_element.inner_text().strip()
-                            print(f"  - 備用選擇器找到狀態標籤: '{state_text}'")
+                # 🎯 使用您提供的精確狀態選擇器進行檢測
+                # 訂單狀態是CSS: .order_list:nth-child(1) > .state_tag
+                precise_state_selectors = [
+                    # 主要精確選擇器
+                    '.order_list:nth-child(1) > .state_tag',
+                    
+                    # 備用精確選擇器（可能有span包裝）
+                    '.order_list:nth-child(1) > .state_tag > span:nth-child(1)',
+                    '.order_list:nth-child(1) > .state_tag span',
+                    
+                    # 第二層備用選擇器
+                    '.order_list > .state_tag',
+                    '.state_tag',
+                    
+                    # 第三層備用選擇器
+                    '.dispatch > .state_tag'
+                ]
+                
+                print(f"  - 開始精確狀態檢測...")
+                
+                for selector in precise_state_selectors:
+                    try:
+                        state_element = record.query_selector(selector)
+                        if state_element:
+                            state_text = state_element.inner_text().strip()
+                            print(f"  - 精確選擇器 '{selector}' 找到狀態: '{state_text}'")
+                            
+                            # 檢查是否為派車狀態
                             if state_text == '派車':
                                 is_dispatch_status = True
                                 has_precise_dispatch_detection = True
-                                print(f"  - ✅ 通過備用選擇器檢測到派車狀態: .dispatch > .state_tag = '{state_text}'")
+                                found_state_element = state_element
+                                print(f"  - ✅ 通過精確選擇器檢測到派車狀態: '{selector}' = '{state_text}'")
+                                break
                             else:
-                                print(f"  - ❌ 備用選擇器檢測到非派車狀態: '{state_text}'")
+                                # 找到狀態元素但不是派車，記錄並跳出
+                                print(f"  - ❌ 精確選擇器檢測到非派車狀態: '{state_text}'")
+                                has_precise_dispatch_detection = True
+                                found_state_element = state_element
+                                break
                         else:
-                            print(f"  - 所有精確選擇器都未找到狀態元素")
-                except Exception as e:
-                    print(f"  - 精確選擇器檢測失敗: {e}")
-                    pass
+                            print(f"  - 精確選擇器 '{selector}' 未找到狀態元素")
+                    except Exception as e:
+                        print(f"  - 精確選擇器 '{selector}' 執行失敗: {e}")
+                        continue
                 
-                # 如果精確檢測確定不是派車狀態，直接跳過
-                if (precise_state_element or backup_state_element) and not has_precise_dispatch_detection:
-                    print(f"  - 精確檢測確認非派車狀態，跳過此記錄")
+                # 如果精確檢測找到了狀態元素且確定不是派車狀態，直接跳過
+                if has_precise_dispatch_detection and not is_dispatch_status:
+                    print(f"  - 精確檢測確認非派車狀態（狀態: '{state_text}'），跳過此記錄")
                     continue
                 
                 # 🔄 備用檢測方式（只在精確檢測無結果時使用）
                 if not has_precise_dispatch_detection:
-                    print(f"  - 使用備用檢測方式...")
+                    print(f"  - 精確檢測無結果，使用備用檢測方式...")
                     
-                    # 檢查CSS類別中的狀態
-                    if any(cls in record_classes for cls in ['dispatch', 'implement', 'finish']):
-                        is_dispatch_status = True
-                        print(f"  - 通過CSS類別檢測到派車狀態: {record_classes}")
-                    
-                    # 檢查文字內容中的狀態標示
                     record_text = record.inner_text()
-                    if any(keyword in record_text for keyword in ['派車', '執行', '完成', '已派車']):
-                        is_dispatch_status = True
-                        print(f"  - 通過文字內容檢測到派車狀態")
                     
-                    # 檢查是否有司機指派資訊（更精確的判定）
-                    has_driver_info = False
-                    driver_info_keywords = ['指派司機', '司機姓名', '車號', '聯絡電話', '駕駛']
-                    if any(keyword in record_text for keyword in driver_info_keywords):
-                        has_driver_info = True
-                        is_dispatch_status = True
-                        print(f"  - 檢測到司機指派資訊")
+                    # 先排除明確不是派車的狀態
+                    skip_keywords = ['媒合中', '成立', '取消', '已取消', '待確認', '等待中']
+                    skip_classes = ['accept', 'established', 'cancel', 'waiting']
                     
-                    # 跳過明確不是派車狀態的記錄（只在備用檢測時才檢查）
-                    if any(status in record_classes for status in ['accept', 'established', 'cancel']):
-                        print(f"  - 跳過非派車狀態記錄: {record_classes}")
+                    should_skip = False
+                    for keyword in skip_keywords:
+                        if keyword in record_text:
+                            print(f"  - 發現排除關鍵字 '{keyword}'，跳過此記錄")
+                            should_skip = True
+                            break
+                    
+                    if not should_skip:
+                        for cls in skip_classes:
+                            if cls in record_classes:
+                                print(f"  - 發現排除CSS類別 '{cls}'，跳過此記錄")
+                                should_skip = True
+                                break
+                    
+                    if should_skip:
                         continue
                     
-                    if any(keyword in record_text for keyword in ['媒合中', '成立', '取消', '已取消']):
-                        print(f"  - 跳過非派車狀態記錄")
-                        continue
+                    # 檢查派車相關的關鍵字和資訊
+                    dispatch_keywords = ['派車', '執行', '完成', '已派車', '指派司機', '車號']
+                    dispatch_classes = ['dispatch', 'implement', 'finish']
+                    
+                    # 檢查CSS類別
+                    for cls in dispatch_classes:
+                        if cls in record_classes:
+                            is_dispatch_status = True
+                            print(f"  - 通過CSS類別檢測到派車狀態: '{cls}'")
+                            break
+                    
+                    # 檢查文字內容
+                    if not is_dispatch_status:
+                        for keyword in dispatch_keywords:
+                            if keyword in record_text:
+                                is_dispatch_status = True
+                                print(f"  - 通過文字內容檢測到派車相關: '{keyword}'")
+                                break
                 
                 # 只處理確認為派車狀態的記錄
                 if not is_dispatch_status:
@@ -774,18 +862,23 @@ def fetch_dispatch_results():
                 }
                 
                 # 🎯 精確狀態判定
-                if has_precise_dispatch_detection:
-                    # 使用精確檢測的結果
-                    record_info['status'] = '已派車'
-                    print(f"  - 精確狀態判定: 已派車")
+                if has_precise_dispatch_detection and found_state_element:
+                    # 使用精確檢測找到的狀態
+                    record_info['status'] = state_text
+                    print(f"  - 精確狀態判定: {state_text}")
                 else:
-                    # 備用檢測方式
-                    if 'dispatch' in record_classes or '派車' in record_text:
+                    # 備用狀態判定邏輯
+                    record_text = record.inner_text()
+                    
+                    if '派車' in record_text or 'dispatch' in record_classes:
                         record_info['status'] = '已派車'
-                    elif 'implement' in record_classes or '執行' in record_text:
-                        record_info['status'] = '執行中'
-                    elif 'finish' in record_classes or '完成' in record_text:
+                    elif '執行' in record_text or 'implement' in record_classes:
+                        record_info['status'] = '執行中'  
+                    elif '完成' in record_text or 'finish' in record_classes:
                         record_info['status'] = '已完成'
+                    else:
+                        record_info['status'] = '派車相關'
+                    
                     print(f"  - 備用狀態判定: {record_info['status']}")
                 
                 # 嘗試提取時間資訊並轉換為台北時間
