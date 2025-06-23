@@ -458,98 +458,13 @@ def fetch_dispatch_results():
             
             driver['page'].on('response', handle_response)
             
-            # 改進的記錄載入邏輯：確保載入所有記錄
-            print("🎯 智能記錄載入：嘗試載入所有記錄...")
+            # 直接分析頁面已有記錄，不進行滾動載入
+            print("📊 分析頁面現有記錄（不進行滾動）")
             
             # 等待記錄載入
             driver['page'].wait_for_selector('.order_list', timeout=10000)
             
-            # 多次滾動和等待，確保載入所有記錄
-            print("📜 開始滾動載入所有記錄...")
-            
-            previous_count = 0
-            retry_count = 0
-            max_retries = 10
-            
-            while retry_count < max_retries:
-                # 獲取當前記錄數
-                current_elements = driver['page'].query_selector_all('.order_list')
-                current_count = len(current_elements)
-                
-                print(f"🔄 載入嘗試 {retry_count + 1}: 找到 {current_count} 筆記錄")
-                
-                # 如果記錄數沒有增加，可能已經載入完成
-                if current_count == previous_count and retry_count > 0:
-                    print("📊 記錄數量穩定，可能已載入完成")
-                    
-                    # 額外等待和重試，確保沒有更多記錄
-                    driver['page'].wait_for_timeout(2000)
-                    final_check_elements = driver['page'].query_selector_all('.order_list')
-                    final_count = len(final_check_elements)
-                    
-                    if final_count == current_count:
-                        print(f"✅ 最終確認：共載入 {final_count} 筆記錄")
-                        break
-                    else:
-                        print(f"🔄 發現新記錄，繼續載入... ({final_count} 筆)")
-                        current_count = final_count
-                
-                # 滾動到頁面底部，觸發懶載入
-                print("📜 滾動到頁面底部...")
-                driver['page'].evaluate('window.scrollTo(0, document.body.scrollHeight)')
-                driver['page'].wait_for_timeout(3000)
-                
-                # 嘗試尋找並點擊「載入更多」或「下一頁」按鈕
-                load_more_selectors = [
-                    'button:has-text("載入更多")',
-                    'button:has-text("更多")',
-                    'button:has-text("下一頁")',
-                    '.load-more',
-                    '.next-page',
-                    '.pagination .next',
-                    'a:has-text("下一頁")',
-                    'a:has-text("更多")'
-                ]
-                
-                load_more_clicked = False
-                for selector in load_more_selectors:
-                    try:
-                        element = driver['page'].locator(selector).first
-                        if element.count() > 0 and element.is_visible():
-                            print(f"🔗 找到載入更多按鈕: {selector}")
-                            element.click()
-                            driver['page'].wait_for_timeout(3000)
-                            load_more_clicked = True
-                            break
-                    except:
-                        continue
-                
-                if load_more_clicked:
-                    print("✅ 成功點擊載入更多按鈕")
-                else:
-                    print("🔍 未找到載入更多按鈕，嘗試其他方法...")
-                
-                # 嘗試觸發無限滾動
-                for scroll_attempt in range(3):
-                    print(f"📜 滾動嘗試 {scroll_attempt + 1}/3")
-                    driver['page'].evaluate('window.scrollTo(0, document.body.scrollHeight)')
-                    driver['page'].wait_for_timeout(1500)
-                    
-                    # 檢查是否有新記錄載入
-                    check_elements = driver['page'].query_selector_all('.order_list')
-                    if len(check_elements) > current_count:
-                        print(f"📈 發現新記錄: {len(check_elements)} > {current_count}")
-                        current_count = len(check_elements)
-                        break
-                
-                previous_count = current_count
-                retry_count += 1
-                
-                # 等待頁面穩定
-                driver['page'].wait_for_load_state("networkidle", timeout=5000)
-                driver['page'].wait_for_timeout(2000)
-            
-            # 最終獲取所有記錄
+            # 獲取所有可見記錄
             all_order_elements = driver['page'].query_selector_all('.order_list')
             total_elements_on_page = len(all_order_elements)
             print(f"🎯 載入完成！總共找到 {total_elements_on_page} 筆記錄")
@@ -559,8 +474,8 @@ def fetch_dispatch_results():
                 take_screenshot("no_records_found")
                 return False
             
-            # 強化的記錄檢測邏輯：全方位識別已派車記錄
-            print("🔍 開始分析所有記錄，尋找已派車狀態...")
+            # 基於JavaScript結構分析的記錄檢測邏輯
+            print("🔍 基於原始碼結構分析記錄狀態...")
             dispatch_records = []
             
             for i, element in enumerate(all_order_elements, 1):
@@ -570,83 +485,75 @@ def fetch_dispatch_results():
                         print(f"⚠️ 記錄 {i}: 不可見，跳過")
                         continue
                     
-                    print(f"\n🔍 詳細分析記錄 {i}:")
+                    print(f"\n🔍 分析記錄 {i}:")
                     
-                    # 分析 CSS 類別
+                    # 基於JavaScript代碼分析，狀態結構為：
+                    # Status: 0=媒合中(accept), 1=成立(established), 2=派車(dispatch), 3=執行(implement), 4=完成(finish), 5=取消(cancel)
+                    
+                    # 檢查狀態類別（基於JavaScript中的class定義）
                     class_list = element.get_attribute('class') or ''
                     print(f"   📋 CSS類別: '{class_list}'")
                     
-                    # 檢查各種訂單狀態標識
-                    is_cancelled = 'cancel' in class_list.lower()
-                    is_accept = 'accept' in class_list.lower()
-                    is_established = 'established' in class_list.lower()
-                    is_dispatch = 'dispatch' in class_list.lower()
-                    is_implement = 'implement' in class_list.lower()
-                    is_finish = 'finish' in class_list.lower()
-                    is_recently = 'recently' in class_list.lower()
+                    # 檢查各種狀態類別
+                    is_cancelled = 'cancel' in class_list.lower()  # Status == 5
+                    is_accept = 'accept' in class_list.lower()      # Status == 0  
+                    is_established = 'established' in class_list.lower()  # Status == 1
+                    is_dispatch = 'dispatch' in class_list.lower()  # Status == 2
+                    is_implement = 'implement' in class_list.lower()  # Status == 3
+                    is_finish = 'finish' in class_list.lower()      # Status == 4
                     
-                    print(f"   🏷️ 狀態分析: 取消={is_cancelled}, 接受={is_accept}, 確立={is_established}")
-                    print(f"   🎯 派車狀態: 派車={is_dispatch}, 執行={is_implement}, 完成={is_finish}, 最近={is_recently}")
+                    print(f"   🎯 狀態檢測: 取消={is_cancelled}, 媒合中={is_accept}, 成立={is_established}")
+                    print(f"   🚗 派車階段: 派車={is_dispatch}, 執行中={is_implement}, 完成={is_finish}")
                     
-                    # 提取記錄內的所有文字進行進一步分析
+                    # 檢查司機資訊區塊（根據JavaScript結構）
+                    has_driver_info = False
                     try:
+                        # 根據JavaScript模板，司機資訊包含在特定結構中
                         full_text = element.inner_text().strip()
                         
-                        # 檢查文字中是否包含派車相關關鍵字
-                        dispatch_keywords = ['已派車', '派車', '車號', '司機', '駕駛', '聯絡電話']
-                        status_keywords_in_text = [kw for kw in dispatch_keywords if kw in full_text]
-                        
-                        if status_keywords_in_text:
-                            print(f"   📝 文字分析: 找到派車關鍵字 {status_keywords_in_text}")
-                        else:
-                            print(f"   📝 文字分析: 無明顯派車關鍵字")
-                        
-                        # 檢查是否有明確的車輛資訊
-                        has_vehicle_info = False
-                        vehicle_selectors = [
-                            '.car_number', '.vehicle_number', '.car_info', '.vehicle_info',
-                            '.driver_name', '.driver_info', '.contact_phone', '.phone',
-                            '[class*="car"]', '[class*="vehicle"]', '[class*="driver"]'
+                        # 尋找司機資訊的關鍵標識
+                        driver_indicators = [
+                            '指派司機:', 
+                            'DriverName',
+                            'DriverPhone', 
+                            'LicensePlateNumber',
+                            '車號:'
                         ]
                         
-                        vehicle_info_found = []
-                        for v_sel in vehicle_selectors:
-                            try:
-                                v_elements = element.query_selector_all(v_sel)
-                                for v_elem in v_elements:
-                                    if v_elem and v_elem.is_visible():
-                                        v_text = v_elem.inner_text().strip()
-                                        if v_text and len(v_text) > 0:
-                                            vehicle_info_found.append(f"{v_sel}: {v_text}")
-                                            has_vehicle_info = True
-                            except:
-                                continue
+                        found_indicators = [indicator for indicator in driver_indicators if indicator in full_text]
+                        if found_indicators:
+                            has_driver_info = True
+                            print(f"   👨‍✈️ 找到司機資訊標識: {found_indicators}")
                         
-                        if vehicle_info_found:
-                            print(f"   🚗 車輛資訊: {vehicle_info_found[:3]}")  # 只顯示前3個
-                        else:
-                            print(f"   🚗 車輛資訊: 未找到")
+                        # 額外檢查：尋找電話號碼格式 (手機號碼格式 09xxxxxxxx)
+                        import re
+                        phone_pattern = r'09\d{8}'
+                        if re.search(phone_pattern, full_text):
+                            has_driver_info = True
+                            print(f"   📞 找到電話號碼格式")
                         
                     except Exception as e:
-                        print(f"   ⚠️ 文字分析失敗: {e}")
+                        print(f"   ⚠️ 司機資訊檢查失敗: {e}")
                         full_text = ""
-                        has_vehicle_info = False
                     
-                    # 決策邏輯：判斷是否為已派車記錄
+                    # 決策邏輯：根據JavaScript狀態定義判斷
                     is_dispatch_record = False
                     reason = ""
                     
                     if is_cancelled:
-                        reason = "已取消記錄，跳過"
+                        reason = "狀態=取消(Status==5)，跳過"
                     elif is_dispatch:
                         is_dispatch_record = True
-                        reason = "CSS類別明確顯示為已派車狀態"
-                    elif has_vehicle_info and not is_accept and not is_established:
+                        reason = "狀態=派車(Status==2)，已派車"
+                    elif is_implement:
                         is_dispatch_record = True
-                        reason = "包含車輛資訊且非初期狀態，判定為已派車"
-                    elif '已派車' in full_text or '車號' in full_text:
+                        reason = "狀態=執行中(Status==3)，已派車且執行中"  
+                    elif is_finish:
                         is_dispatch_record = True
-                        reason = "文字內容包含明確派車資訊"
+                        reason = "狀態=完成(Status==4)，已派車且完成"
+                    elif has_driver_info and not is_accept and not is_established:
+                        is_dispatch_record = True
+                        reason = "包含司機資訊且已超過初期階段，判定為已派車"
                     elif is_recently and has_vehicle_info:
                         is_dispatch_record = True
                         reason = "最近記錄且包含車輛資訊"
@@ -3131,6 +3038,303 @@ def test_status():
 # 全域變數用於儲存測試狀態
 test_logs = []
 test_status = "待機中"
+
+@app.route('/dispatch-screenshots')
+def dispatch_screenshots():
+    """查看尋找派車結果截圖"""
+    import os
+    import glob
+    
+    # 獲取所有派車截圖檔案（以 dispatch_ 開頭）
+    screenshot_files = glob.glob('dispatch_*.png')
+    screenshot_files.sort()
+    
+    html = '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>尋找派車結果截圖</title>
+        <meta charset="utf-8">
+        <style>
+            body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+            .container { max-width: 1200px; margin: 0 auto; }
+            .header { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+            .screenshot { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+            .screenshot img { max-width: 100%; height: auto; border: 1px solid #eee; border-radius: 4px; }
+            .screenshot h3 { margin: 5px 0 15px 0; color: #333; font-size: 18px; }
+            .back-button { 
+                background-color: #2196F3; 
+                color: white; 
+                padding: 10px 20px; 
+                text-decoration: none; 
+                border-radius: 4px; 
+                display: inline-block; 
+                margin-bottom: 20px; 
+            }
+            .back-button:hover { background-color: #1976D2; }
+            .no-screenshots { text-align: center; color: #666; padding: 40px; background: white; border-radius: 8px; }
+            .stats { background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <a href="/" class="back-button">返回首頁</a>
+                <h1>🔍 尋找派車結果截圖歷程</h1>
+                <p>這裡顯示抓取派車結果過程中的所有截圖，幫助了解執行流程和除錯。</p>
+            </div>
+    '''
+    
+    if screenshot_files:
+        html += f'''
+            <div class="stats">
+                <strong>📊 統計資訊：</strong>共找到 {len(screenshot_files)} 張派車抓取截圖
+            </div>
+        '''
+        
+        for file_path in screenshot_files:
+            filename = os.path.basename(file_path)
+            description = filename.replace('.png', '').replace('dispatch_', '').replace('_', ' ')
+            
+            # 美化描述文字
+            description_map = {
+                '001 page loaded': '步驟 1: 頁面載入完成',
+                '002 page complete': '步驟 2: 頁面完全載入', 
+                '003 popup closed': '步驟 3: 關閉彈窗',
+                '004 login form': '步驟 4: 登入表單載入',
+                '005 before login click': '步驟 5: 準備點擊登入',
+                '006 login clicked': '步驟 6: 登入按鈕已點擊',
+                '007 login success modal found': '步驟 7: 發現登入成功彈窗',
+                '008 login complete': '步驟 8: 登入流程完成',
+                'order list loaded': '✅ 訂單列表載入完成',
+                'records found': '🔍 找到訂單記錄',
+                'matching record found': '🎯 找到匹配的預約記錄',
+                'result saved': '💾 結果已儲存',
+                'no matching record': '❌ 未找到匹配記錄'
+            }
+            
+            display_description = description_map.get(description, description.title())
+            
+            html += f'''
+            <div class="screenshot">
+                <h3>{display_description}</h3>
+                <img src="/screenshot/{filename}" alt="{display_description}" loading="lazy">
+            </div>
+            '''
+    else:
+        html += '''
+        <div class="no-screenshots">
+            <h2>📭 暫無派車抓取截圖</h2>
+            <p>目前沒有派車抓取過程的截圖。</p>
+            <p>請先執行「🔄 抓取派車結果」功能來生成截圖。</p>
+        </div>
+        '''
+    
+    html += '''
+        </div>
+    </body>
+    </html>
+    '''
+    
+    return html
+
+@app.route('/latest-dispatch')
+def latest_dispatch():
+    """顯示最新派車結果"""
+    try:
+        with open('search_result.txt', 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        return f'''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>最新派車結果</title>
+            <meta charset="utf-8">
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }}
+                .container {{ max-width: 1000px; margin: 0 auto; }}
+                .header {{ background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
+                .content {{ background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
+                .back-button {{ 
+                    background-color: #2196F3; 
+                    color: white; 
+                    padding: 10px 20px; 
+                    text-decoration: none; 
+                    border-radius: 4px; 
+                    display: inline-block; 
+                    margin-bottom: 20px; 
+                }}
+                .back-button:hover {{ background-color: #1976D2; }}
+                .result {{ 
+                    background: #f8f9fa; 
+                    border: 1px solid #e9ecef; 
+                    border-radius: 6px; 
+                    padding: 20px; 
+                    font-family: 'Courier New', monospace; 
+                    white-space: pre-wrap; 
+                    word-wrap: break-word;
+                    line-height: 1.6;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <a href="/" class="back-button">返回首頁</a>
+                    <h1>📋 最新派車結果</h1>
+                    <p>顯示最近一次派車查詢的結果</p>
+                </div>
+                <div class="content">
+                    <div class="result">{content}</div>
+                </div>
+            </div>
+        </body>
+        </html>
+        '''
+        
+    except FileNotFoundError:
+        return '''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>最新派車結果</title>
+            <meta charset="utf-8">
+            <style>
+                body { font-family: Arial, sans-serif; margin: 20px; }
+                .back-button { 
+                    background-color: #2196F3; 
+                    color: white; 
+                    padding: 10px 20px; 
+                    text-decoration: none; 
+                    border-radius: 4px; 
+                    display: inline-block; 
+                    margin-bottom: 20px; 
+                }
+            </style>
+        </head>
+        <body>
+            <a href="/" class="back-button">返回首頁</a>
+            <h1>📋 最新派車結果</h1>
+            <p>❌ 暫無派車結果檔案，請先執行派車查詢</p>
+        </body>
+        </html>
+        '''
+
+@app.route('/dispatch-result-file')
+def dispatch_result_file():
+    """查看派車結果本地檔案"""
+    import os
+    from datetime import datetime
+    
+    html = '''
+    <!DOCTYPE html>
+    <html lang="zh-TW">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>派車結果本地檔案</title>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+            .container { max-width: 1000px; margin: 0 auto; }
+            .header { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+            .content { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+            .back-button { 
+                background-color: #2196F3; 
+                color: white; 
+                padding: 10px 20px; 
+                text-decoration: none; 
+                border-radius: 4px; 
+                display: inline-block; 
+                margin-bottom: 20px; 
+            }
+            .back-button:hover { background-color: #1976D2; }
+            .file-content { 
+                background: #f8f9fa; 
+                border: 1px solid #e9ecef; 
+                border-radius: 6px; 
+                padding: 20px; 
+                font-family: 'Courier New', monospace; 
+                white-space: pre-wrap; 
+                word-wrap: break-word;
+                line-height: 1.6;
+            }
+            .no-file { 
+                text-align: center; 
+                color: #666; 
+                padding: 40px; 
+                background: #fff3cd; 
+                border: 1px solid #ffeaa7; 
+                border-radius: 8px; 
+            }
+            .file-info {
+                background: #e3f2fd; 
+                padding: 15px; 
+                border-radius: 8px; 
+                margin-bottom: 20px;
+                font-size: 14px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <a href="/" class="back-button">返回首頁</a>
+                <h1>📄 派車結果本地檔案</h1>
+                <p>顯示 search_result.txt 檔案的內容，包含最新的派車查詢結果。</p>
+            </div>
+    '''
+    
+    try:
+        file_path = 'search_result.txt'
+        
+        if os.path.exists(file_path):
+            # 獲取檔案資訊
+            file_size = os.path.getsize(file_path)
+            modified_time = datetime.fromtimestamp(os.path.getmtime(file_path))
+            
+            html += f'''
+            <div class="file-info">
+                <strong>📁 檔案資訊：</strong><br>
+                📄 檔案名稱：{file_path}<br>
+                📏 檔案大小：{file_size} bytes<br>
+                🕒 最後修改：{modified_time.strftime("%Y-%m-%d %H:%M:%S")}
+            </div>
+            '''
+            
+            # 讀取檔案內容
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            html += f'''
+            <div class="content">
+                <div class="file-content">{content}</div>
+            </div>
+            '''
+        else:
+            html += '''
+            <div class="no-file">
+                <h2>📭 檔案不存在</h2>
+                <p>search_result.txt 檔案不存在。</p>
+                <p>請先執行「🔄 抓取派車結果」功能來生成檔案。</p>
+            </div>
+            '''
+            
+    except Exception as e:
+        html += f'''
+        <div class="no-file">
+            <h2>❌ 讀取檔案失敗</h2>
+            <p>無法讀取檔案：{str(e)}</p>
+        </div>
+        '''
+    
+    html += '''
+        </div>
+    </body>
+    </html>
+    '''
+    
+    return html
 
 if __name__ == '__main__':
     # Zeabur 環境變數
