@@ -38,8 +38,22 @@ def setup_driver():
             print(f"Playwright 模組載入失敗: {e}")
             return None
         
-        # 檢查瀏覽器是否可用（不嘗試安裝）
+        # 嘗試確保瀏覽器已安裝
         print("檢查 Playwright 瀏覽器可用性...")
+        try:
+            import subprocess
+            import sys
+            # 嘗試安裝瀏覽器
+            result = subprocess.run([sys.executable, '-m', 'playwright', 'install', 'chromium'], 
+                                  capture_output=True, text=True, timeout=120)
+            print(f"瀏覽器安裝結果: {result.returncode}")
+            if result.stdout:
+                print(f"安裝輸出: {result.stdout[:200]}")
+            if result.stderr:
+                print(f"安裝錯誤: {result.stderr[:200]}")
+        except Exception as e:
+            print(f"瀏覽器安裝嘗試失敗: {e}")
+            # 繼續嘗試，也許瀏覽器已經存在
         
         playwright = sync_playwright().start()
         
@@ -52,26 +66,20 @@ def setup_driver():
             '--disable-features=VizDisplayCompositor',
             '--disable-extensions',
             '--disable-plugins',
-            '--disable-images',
             '--disable-background-timer-throttling',
             '--disable-backgrounding-occluded-windows',
             '--disable-renderer-backgrounding',
             '--disable-features=TranslateUI',
             '--disable-ipc-flooding-protection',
             '--memory-pressure-off',
-            '--max_old_space_size=4096',
             '--disable-blink-features=AutomationControlled',
-            '--disable-features=VizDisplayCompositor'
+            '--disable-software-rasterizer',
+            '--single-process',
+            '--no-zygote',
+            '--disable-setuid-sandbox'
         ]
         
-        # 在容器環境中添加額外參數
-        if os.path.exists('/.dockerenv'):
-            browser_args.extend([
-                '--disable-software-rasterizer',
-                '--disable-background-timer-throttling',
-                '--disable-backgrounding-occluded-windows',
-                '--disable-renderer-backgrounding'
-            ])
+        print(f"瀏覽器啟動參數: {browser_args}")
         
         # 嘗試啟動瀏覽器，加入重試機制
         browser = None
@@ -83,7 +91,7 @@ def setup_driver():
                 browser = playwright.chromium.launch(
                     headless=True,
                     args=browser_args,
-                    timeout=30000  # 30秒超時
+                    timeout=60000  # 60秒超時
                 )
                 print("瀏覽器啟動成功")
                 break

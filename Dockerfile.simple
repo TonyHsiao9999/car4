@@ -1,25 +1,38 @@
-FROM ghcr.io/puppeteer/puppeteer:21.6.1
+FROM python:3.11-slim
 
-# 切換到 root 用戶
-USER root
-
-# 安裝 Python 和 pip
+# 安裝系統依賴
 RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-pip \
-    python3-venv \
+    wget \
+    gnupg \
+    ca-certificates \
+    fonts-liberation \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libatk1.0-0 \
+    libatspi2.0-0 \
+    libcups2 \
+    libdbus-1-3 \
+    libdrm2 \
+    libgtk-3-0 \
+    libnspr4 \
+    libnss3 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxkbcommon0 \
+    libxrandr2 \
+    xvfb \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 # 複製並安裝 Python 依賴
 COPY requirements.txt .
-RUN pip3 install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-# 安裝 Playwright（使用系統已有的 Chromium）
-RUN pip3 install playwright==1.41.2
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-ENV PLAYWRIGHT_BROWSERS_PATH=/usr/bin
+# 安裝 Playwright 和瀏覽器
+RUN playwright install chromium
+RUN playwright install-deps chromium
 
 # 複製應用程式檔案
 COPY app.py .
@@ -30,14 +43,20 @@ COPY static/ ./static/
 
 # 設置環境變數
 ENV PYTHONUNBUFFERED=1
+ENV DISPLAY=:99
 
 # 創建截圖目錄
 RUN mkdir -p /app/screenshots
 
+# 創建啟動腳本
+RUN echo '#!/bin/bash\n\
+# 啟動虛擬顯示器\n\
+Xvfb :99 -screen 0 1920x1080x24 -ac +extension GLX +render -noreset &\n\
+sleep 3\n\
+# 啟動應用\n\
+exec python app.py' > /app/start.sh && chmod +x /app/start.sh
+
 # 暴露端口
 EXPOSE $PORT
 
-# 切換到非特權用戶
-USER pptruser
-
-CMD ["python3", "app.py"] 
+CMD ["/app/start.sh"] 
